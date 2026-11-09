@@ -18,5 +18,6 @@ class Platform(models.TextChoices):
     INSTAGRAM = "instagram", "Instagram"
     MESSENGER = "messenger", "Facebook Messenger"
     WHATSAPP = "whatsapp", "WhatsApp"
+    WHATSAPP_EVOLUTION = "whatsapp_evolution", "WhatsApp (Evolution GO)"
     SMS = "sms", "SMS"
     EMAIL = "email", "Email"

@@ -68,13 +68,14 @@ class BroadcastStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     SCHEDULED = "scheduled", "Scheduled"
     SENDING = "sending", "Sending"
+    PAUSED = "paused", "Paused"
     SENT = "sent", "Sent"
     CANCELLED = "cancelled", "Cancelled"
 
 
 #: Statuses from which a broadcast still has work in the queue, and therefore the
 #: only ones :func:`apps.broadcasts.services.cancel_broadcast` accepts.
-LIVE_STATUSES: frozenset[str] = frozenset({BroadcastStatus.SCHEDULED, BroadcastStatus.SENDING})
+LIVE_STATUSES: frozenset[str] = frozenset({BroadcastStatus.SCHEDULED, BroadcastStatus.SENDING, BroadcastStatus.PAUSED})
 
 
 class RecipientStatus(models.TextChoices):

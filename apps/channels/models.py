@@ -51,6 +51,7 @@ __all__ = [
     "ChannelConnection",
     "ConnectionStatus",
     "EmailSuppression",
+    "EvolutionSession",
     "SuppressionReason",
     "FlowPreviewLink",
     "SmsSettings",
@@ -218,6 +219,58 @@ class ChannelConnection(WorkspaceScopedModel):
         if not presented or not self.webhook_secret_digest:
             return False
         return secrets.compare_digest(hmac_digest(presented), self.webhook_secret_digest)
+
+
+
+class EvolutionSession(models.Model):
+    """Operational session tracking for WhatsApp (Evolution GO).
+
+    Evolution GO manages the WhatsApp connection and session state. This model
+    stores the configuration (API URL, instance ID) and live connection state
+    (state, QR code, phone number, profile name, pairing errors).
+    """
+
+    connection = models.OneToOneField(
+        ChannelConnection,
+        on_delete=models.CASCADE,
+        related_name="evolution_session",
+    )
+    api_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Base URL for Evolution GO instance (e.g. https://evolution.domain.com).",
+    )
+    instance_id = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Evolution GO instance ID or instance name.",
+    )
+    state = models.CharField(
+        max_length=32,
+        default="disconnected",
+        help_text="Current state: disconnected, connecting, open, close, qrcode.",
+    )
+    qr_code_base64 = models.TextField(
+        blank=True,
+        default="",
+        help_text="Last retrieved base64-encoded QR code.",
+    )
+    pairing_code = models.CharField(max_length=64, blank=True, default="")
+    phone_number = models.CharField(max_length=64, blank=True, default="")
+    profile_name = models.CharField(max_length=200, blank=True, default="")
+    last_connected_at = models.DateTimeField(null=True, blank=True)
+    last_disconnected_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
+    risk_accepted_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "channels_evolution_session"
+
+    def __str__(self) -> str:
+        return f"EvolutionSession({self.instance_id}: {self.state})"
 
 
 class WebhookEventLog(BaseModel):

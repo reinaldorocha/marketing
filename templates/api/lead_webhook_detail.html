@@ -1,0 +1,153 @@
+{% extends "layouts/workspace_settings.html" %}
+{% load common_extras %}
+{% block title %}{{ webhook.name }} · BrightBean{% endblock %}
+{% block content_wrap %}{% endblock %}
+
+{% block content %}
+<div class="max-w-[1060px] w-full">
+    <div class="page-header mb-6">
+        <div class="page-header-text">
+            <h1 class="page-title">{{ webhook.name }}</h1>
+            <p class="page-lede">
+                URL de endpoint, credenciais de autenticação e logs de entregas.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <form method="post" action="{% url 'lead_webhooks:rotate_secret' workspace_id=request.workspace.id webhook_id=webhook.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-secondary text-xs">Rotacionar Segredo</button>
+            </form>
+            <form method="post" action="{% url 'lead_webhooks:delete' workspace_id=request.workspace.id webhook_id=webhook.id %}" onsubmit="return confirm('Tem certeza que deseja excluir este webhook?');">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-secondary text-xs" style="color: var(--error-700);">Excluir</button>
+            </form>
+        </div>
+    </div>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-3">Endpoint e Autenticação</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="field-label text-xs font-semibold">URL DO WEBHOOK (POST)</label>
+                <div class="flex items-center gap-2 mt-1">
+                    <input class="form-input-styled font-mono text-sm bg-gray-50 flex-1" readonly value="{{ endpoint_url }}">
+                </div>
+            </div>
+
+            <div>
+                <label class="field-label text-xs font-semibold">TOKEN DE AUTENTICAÇÃO (X-Webhook-Secret ou Bearer)</label>
+                <div class="flex items-center gap-2 mt-1">
+                    <input class="form-input-styled font-mono text-sm bg-gray-50 flex-1" readonly value="{{ webhook.secret_token }}">
+                </div>
+                <p class="field-hint mt-1">Envie este token no cabeçalho <code>X-Webhook-Secret: &lt;token&gt;</code> ou <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-3">Configurações Vinculadas</h2>
+        <div class="grid sm:grid-cols-2 gap-4 text-sm">
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <span class="text-xs font-semibold text-gray-500 uppercase">Fluxo Acionado</span>
+                <p class="font-medium text-gray-900 mt-1">{{ webhook.target_flow.name }}</p>
+            </div>
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <span class="text-xs font-semibold text-gray-500 uppercase">Canal de Envio</span>
+                <p class="font-medium text-gray-900 mt-1">
+                    {% if webhook.channel_connection %}
+                        {{ webhook.channel_connection.display_name }} ({{ webhook.channel_connection.get_platform_display }})
+                    {% else %}
+                        Nenhum (usa canal da execução)
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        {% if webhook.default_tags %}
+        <div class="mt-4">
+            <span class="text-xs font-semibold text-gray-500 uppercase">Tags automáticas:</span>
+            <div class="flex flex-wrap gap-1.5 mt-1">
+                {% for tag in webhook.default_tags %}
+                <span class="inline-block bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded font-medium">{{ tag }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-2">Exemplo de Requisição (cURL)</h2>
+        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto font-mono">curl -X POST "{{ endpoint_url }}" \
+  -H "Content-Type: application/json" \
+  -H "X-Webhook-Secret: {{ webhook.secret_token }}" \
+  -d '{
+    "name": "Maria Silva",
+    "phone": "+5511999999999",
+    "email": "maria@exemplo.com",
+    "tags": ["lead-campanha", "vip"],
+    "opt_in": true
+  }'</pre>
+    </section>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-3">Logs de Entregas Recentes</h2>
+        {% if logs %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead>
+                    <tr class="border-b text-xs text-gray-500 uppercase">
+                        <th class="py-2">Data/Hora</th>
+                        <th class="py-2">Status</th>
+                        <th class="py-2">Contato</th>
+                        <th class="py-2">Execução</th>
+                        <th class="py-2">Idempotência</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for log in logs %}
+                    <tr>
+                        <td class="py-2.5 text-xs font-mono text-gray-600">{{ log.received_at|date:"d/m/Y H:i:s" }}</td>
+                        <td class="py-2.5">
+                            {% if log.status == "success" %}
+                                <span class="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-semibold">Sucesso</span>
+                            {% elif log.status == "duplicate" %}
+                                <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded font-semibold">Duplicado</span>
+                            {% else %}
+                                <span class="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded font-semibold">{{ log.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5">
+                            {% if log.contact %}
+                                {{ log.contact.first_name }} {{ log.contact.last_name }} ({{ log.contact.phone|default:log.contact.email }})
+                            {% else %}
+                                <span class="text-gray-400">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 font-mono text-xs text-gray-600">
+                            {% if log.execution %}
+                                #{{ log.execution.pk|stringformat:".8s" }}
+                            {% else %}
+                                &mdash;
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 font-mono text-xs text-gray-500 truncate max-w-[150px]">{{ log.idempotency_key }}</td>
+                    </tr>
+                    {% if log.error_message %}
+                    <tr class="bg-red-50 text-xs text-red-700">
+                        <td colspan="5" class="py-1 px-2 font-mono">Erro: {{ log.error_message }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500 py-4 text-center">Nenhuma entrega recebida ainda.</p>
+        {% endif %}
+    </section>
+
+    <a class="cn-back" href="{% url 'lead_webhooks:list' workspace_id=request.workspace.id %}">
+        &larr; Voltar para webhooks de leads
+    </a>
+</div>
+{% endblock %}

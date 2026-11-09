@@ -22,7 +22,7 @@ __all__ = ["ADAPTER_MODULES", "load_adapters"]
 
 #: Adapter modules to import at startup, in order. Each is expected to call
 #: ``apps.channels.registry.register_adapter`` on import.
-ADAPTER_MODULES: tuple[str, ...] = ("telegram", "instagram", "messenger", "whatsapp", "sms", "email")
+ADAPTER_MODULES: tuple[str, ...] = ("telegram", "instagram", "messenger", "whatsapp", "whatsapp_evolution", "sms", "email")
 
 
 def load_adapters() -> None:

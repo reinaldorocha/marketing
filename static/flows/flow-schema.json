@@ -712,7 +712,8 @@
                       "messenger",
                       "sms",
                       "telegram",
-                      "whatsapp"
+                      "whatsapp",
+                      "whatsapp_evolution"
                     ],
                     "type": "string"
                   },

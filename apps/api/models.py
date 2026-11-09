@@ -36,6 +36,8 @@ __all__ = [
     "ApiKey",
     "ApiScope",
     "DeliveryStatus",
+    "InboundLeadWebhook",
+    "LeadWebhookLog",
     "OutboundWebhook",
     "WebhookDelivery",
 ]
@@ -281,3 +283,118 @@ def touch_last_used(api_key: ApiKey, *, now: datetime | None = None) -> None:
     # the key has named its workspace, so there is no reason to reach for the
     # escape hatch a second time.
     ApiKey.objects.for_workspace(api_key.workspace_id).filter(pk=api_key.pk).update(last_used_at=moment)
+
+
+
+class InboundLeadWebhook(WorkspaceScopedModel):
+    """External lead webhook endpoint mapping inbound payloads to contacts and flows."""
+
+    name = models.CharField(max_length=200)
+    target_flow = models.ForeignKey(
+        "flows.Flow",
+        on_delete=models.CASCADE,
+        related_name="inbound_lead_webhooks",
+        help_text="The flow initiated when a lead is received.",
+    )
+    channel_connection = models.ForeignKey(
+        "channels.ChannelConnection",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inbound_lead_webhooks",
+        help_text="Channel connection (e.g. Evolution GO WhatsApp) to bind to the contact and flow execution.",
+    )
+    secret_token = EncryptedTextField(
+        blank=True,
+        default="",
+        help_text="Secret token required in X-Webhook-Secret header or ?secret= param.",
+    )
+    secret_token_digest = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Queryable HMAC digest of secret_token.",
+    )
+    field_mapping = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping from payload keys to fields (e.g. {'name': 'nome', 'phone': 'telefone', 'email': 'email', 'tags': 'tags', 'opt_in': 'consentimento'}).",
+    )
+    default_tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of tag names automatically added to contacts created or updated via this webhook.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "api_inbound_lead_webhook"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.name} -> {self.target_flow.name}"
+
+    def rotate_secret(self) -> str:
+        import secrets
+        from apps.common.encryption import hmac_digest
+        secret = secrets.token_urlsafe(32)
+        self.secret_token = secret
+        self.secret_token_digest = hmac_digest(secret)
+        return secret
+
+    def verify_secret(self, presented: str) -> bool:
+        import secrets
+        if not presented or not self.secret_token_digest:
+            return False
+        from apps.common.encryption import hmac_digest
+        return secrets.compare_digest(hmac_digest(presented), self.secret_token_digest)
+
+
+class LeadWebhookLog(models.Model):
+    """Log of deliveries received via an InboundLeadWebhook."""
+
+    webhook = models.ForeignKey(
+        InboundLeadWebhook,
+        on_delete=models.CASCADE,
+        related_name="logs",
+    )
+    received_at = models.DateTimeField(default=timezone.now, db_index=True)
+    status = models.CharField(
+        max_length=32,
+        default="success",
+    )
+    idempotency_key = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    contact = models.ForeignKey(
+        "contacts.Contact",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lead_webhook_logs",
+    )
+    execution = models.ForeignKey(
+        "flows.FlowExecution",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lead_webhook_logs",
+    )
+    payload = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    error_message = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    class Meta:
+        db_table = "api_lead_webhook_log"
+        ordering = ["-received_at"]

@@ -17,6 +17,7 @@ from apps.channels import (
     views_sms,
     views_telegram,
     views_whatsapp,
+    views_whatsapp_evolution,
 )
 
 app_name = "channels"
@@ -82,6 +83,13 @@ urlpatterns = [
     # and the segment-count preview the send_sms panel and L6-B's composer
     # both call (issue #20). Declared before the ``<uuid:connection_id>``
     # routes for readability only — the converter would never match "sms".
+    path("whatsapp-evolution/connect/", views_whatsapp_evolution.whatsapp_evolution_connect, name="whatsapp_evolution_connect"),
+    path("<uuid:connection_id>/evolution/detail/", views_whatsapp_evolution.whatsapp_evolution_detail, name="whatsapp_evolution_detail"),
+    path("<uuid:connection_id>/evolution/qr/", views_whatsapp_evolution.whatsapp_evolution_qr, name="whatsapp_evolution_qr"),
+    path("<uuid:connection_id>/evolution/status/", views_whatsapp_evolution.whatsapp_evolution_status, name="whatsapp_evolution_status"),
+    path("<uuid:connection_id>/evolution/reconnect/", views_whatsapp_evolution.whatsapp_evolution_reconnect, name="whatsapp_evolution_reconnect"),
+    path("<uuid:connection_id>/evolution/disconnect/", views_whatsapp_evolution.whatsapp_evolution_disconnect, name="whatsapp_evolution_disconnect"),
+    path("<uuid:connection_id>/evolution/webhook/", views_whatsapp_evolution.whatsapp_evolution_webhook, name="whatsapp_evolution_webhook"),
     path("sms/connect/", views_sms.sms_connect, name="sms_connect"),
     path("sms/settings/", views_sms.sms_settings, name="sms_settings"),
     path("sms/settings/update/", views_sms.sms_settings_update, name="sms_settings_update"),

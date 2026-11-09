@@ -332,6 +332,20 @@ CAPABILITIES: dict[str, Capabilities] = {
         # Inline images only; the other kinds are False above.
         max_image_bytes=25 * _MB,
     ),
+    Platform.WHATSAPP_EVOLUTION: Capabilities(
+        image=True,
+        audio=True,
+        video=True,
+        file=True,
+        buttons=True,
+        proactive_send=True,
+        broadcast_allowed=True,
+        max_text_len=4096,
+        max_image_bytes=25 * _MB,
+        max_audio_bytes=25 * _MB,
+        max_video_bytes=25 * _MB,
+        max_file_bytes=100 * _MB,
+    ),
 }
 
 

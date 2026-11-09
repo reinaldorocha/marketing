@@ -1,0 +1,82 @@
+{% extends "layouts/workspace_settings.html" %}
+{% load common_extras %}
+{% block title %}WhatsApp não oficial (Evolution GO) · BrightBean{% endblock %}
+{% block content_wrap %}{% endblock %}
+
+{% block content %}
+{% with platform_key="whatsapp_evolution" %}
+<div class="cn-page">
+    <div class="flex items-start gap-4 mb-7">
+        <span class="pi-chip pi-chip-hero {{ platform_key|platform_class }}">{% include "partials/_platform_icon.html" with platform=platform_key size="lg" only %}</span>
+        <div class="min-w-0">
+            <h1 class="page-title">Conectar WhatsApp não oficial — Evolution GO</h1>
+            <p class="page-lede mt-1.5">Conecte um número de WhatsApp via QR Code utilizando o gateway Evolution GO.</p>
+        </div>
+    </div>
+
+    <div class="rounded-[14px] p-4 mb-5" style="background: var(--warning-50);" role="note">
+        <p class="text-sm font-semibold" style="color: var(--warning-700);">Aviso de Canal Não Oficial</p>
+        <p class="text-sm mt-1" style="color: var(--warning-700);">{{ risk_notice }}</p>
+    </div>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-3">Como funciona a conexão</h2>
+        <ol class="cn-steps" role="list">
+            <li class="cn-step">Informe a URL da sua Evolution GO e a chave de API (global ou token da instância).</li>
+            <li class="cn-step">O sistema vinculará o webhook para receber mensagens, mídias e status em tempo real.</li>
+            <li class="cn-step">Na próxima tela, você verá o QR Code atualizado para escanear com seu WhatsApp no celular.</li>
+        </ol>
+    </section>
+
+    <form class="card p-6 mb-5" method="post">
+        {% csrf_token %}
+        <h2 class="section-title mb-4">Configurações da Evolution GO</h2>
+
+        <div class="field mb-4">
+            <label class="field-label" for="display_name">Nome do Canal</label>
+            <input class="form-input-styled" id="display_name" name="display_name" maxlength="200" value="WhatsApp não oficial — Evolution GO" autocomplete="off" required>
+            <p class="field-hint mt-1">Nome para identificar este número no BrightBean.</p>
+        </div>
+
+        <div class="field mb-4">
+            <label class="field-label" for="api_url">URL da Evolution GO</label>
+            <input class="form-input-styled" id="api_url" name="api_url" type="url" placeholder="https://evolution.profjonathanrocha.com.br" value="https://evolution.profjonathanrocha.com.br" required>
+            <p class="field-hint mt-1">URL base da API Evolution GO sem barra final.</p>
+        </div>
+
+        <div class="field mb-4">
+            <label class="field-label" for="api_key">Chave de API (Global API Key ou Token)</label>
+            <input class="form-input-styled" id="api_key" name="api_key" type="password" placeholder="Sua chave de API da Evolution GO" required autocomplete="off">
+            <p class="field-hint mt-1">Usada para autenticar e gerenciar a instância na Evolution GO.</p>
+        </div>
+
+        <div class="field mb-4">
+            <label class="field-label" for="instance_name">Nome da Instância (opcional)</label>
+            <input class="form-input-styled" id="instance_name" name="instance_name" placeholder="whatsapp-atendimento" autocomplete="off">
+            <p class="field-hint mt-1">Identificador amigável na Evolution GO. Se vazio, usará o nome do canal.</p>
+        </div>
+
+        <div class="field mb-4">
+            <label class="field-label" for="instance_id">Instance ID (opcional)</label>
+            <input class="form-input-styled" id="instance_id" name="instance_id" placeholder="Deixe em branco para gerar automaticamente" autocomplete="off">
+            <p class="field-hint mt-1">Se você já possui uma instância criada na Evolution GO, informe o ID aqui.</p>
+        </div>
+
+        <label class="flex items-start gap-3 mt-6 text-sm" style="color: var(--text-secondary);">
+            <input class="mt-1" type="checkbox" name="accept_risk" value="yes" required>
+            <span>Estou ciente de que esta é uma conexão não oficial do WhatsApp, sem vínculo com a Meta, sujeita às políticas do WhatsApp.</span>
+        </label>
+
+        <div class="form-actions mt-6">
+            <button type="submit" class="btn-pill-primary">Salvar e Obter QR Code</button>
+            <a class="btn-pill-secondary" href="{{ list_url }}">Cancelar</a>
+        </div>
+    </form>
+
+    <a class="cn-back" href="{{ list_url }}">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Voltar para canais
+    </a>
+</div>
+{% endwith %}
+{% endblock %}

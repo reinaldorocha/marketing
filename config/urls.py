@@ -140,6 +140,7 @@ urlpatterns = [
     # Outbound webhooks are workspace-scoped (SPEC §5), unlike the API keys
     # above: their url, secret and subscriptions belong to one workspace's data.
     path("w/<uuid:workspace_id>/settings/webhooks/", include("apps.api.urls_webhooks")),
+    path("w/<uuid:workspace_id>/settings/lead-webhooks/", include("apps.api.urls_lead_webhooks")),
     path("w/<uuid:workspace_id>/media/", include("apps.media_library.urls")),
     # The inbox (issue #14) replaces the placeholder that used to sit in
     # _WORKSPACE_STUBS above. A deep prefix, so it joins this group rather than

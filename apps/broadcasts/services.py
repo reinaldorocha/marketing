@@ -87,6 +87,8 @@ __all__ = [
     "Counters",
     "WINDOW_DENIALS",
     "cancel_broadcast",
+    "pause_broadcast",
+    "resume_broadcast",
     "content_graph",
     "counters",
     "fanout_outstanding",
@@ -601,6 +603,38 @@ def _require_draft(broadcast: Broadcast) -> None:
 # ---------------------------------------------------------------------------
 # Cancellation
 # ---------------------------------------------------------------------------
+
+
+
+def pause_broadcast(broadcast: Broadcast) -> Broadcast:
+    """Pause an active or scheduled broadcast."""
+    with transaction.atomic():
+        locked = Broadcast.objects.for_workspace(broadcast.workspace_id).select_for_update().get(pk=broadcast.pk)
+        if locked.status not in (BroadcastStatus.SCHEDULED, BroadcastStatus.SENDING):
+            raise BroadcastError("Only scheduled or sending broadcasts can be paused.")
+        locked.status = BroadcastStatus.PAUSED
+        locked.save(update_fields=["status", "updated_at"])
+    broadcast.refresh_from_db()
+    return broadcast
+
+
+def resume_broadcast(broadcast: Broadcast) -> Broadcast:
+    """Resume a paused broadcast."""
+    with transaction.atomic():
+        locked = Broadcast.objects.for_workspace(broadcast.workspace_id).select_for_update().get(pk=broadcast.pk)
+        if locked.status != BroadcastStatus.PAUSED:
+            raise BroadcastError("Only paused broadcasts can be resumed.")
+        locked.status = BroadcastStatus.SENDING
+        locked.save(update_fields=["status", "updated_at"])
+        schedule(
+            ActionType.BROADCAST_FANOUT,
+            timezone.now(),
+            {"broadcast_id": str(locked.pk)},
+            workspace=locked.workspace,
+            idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(timezone.now().timestamp())}",
+        )
+    broadcast.refresh_from_db()
+    return broadcast
 
 
 def cancel_broadcast(broadcast: Broadcast) -> Broadcast:

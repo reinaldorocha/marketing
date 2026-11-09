@@ -85,6 +85,7 @@ CONNECT_HINTS: dict[str, str] = {
     Platform.TELEGRAM: "Paste a BotFather token and we do the rest.",
     Platform.INSTAGRAM: "Sign in with the Instagram account and grant the messaging permissions.",
     Platform.WHATSAPP: "Paste your Cloud API ids and system user token; we verify them with Meta first.",
+    Platform.WHATSAPP_EVOLUTION: "Conecte seu WhatsApp não oficial via QR Code usando a Evolution GO.",
     Platform.MESSENGER: "Sign in with Facebook and pick the page to connect.",
     Platform.SMS: "Paste your Twilio account SID, auth token and number.",
     Platform.EMAIL: "Pick SMTP, Resend or SES; we check the credentials before saving them.",
@@ -137,6 +138,8 @@ def _webhook_url(request: WorkspaceRequest, connection: ChannelConnection) -> st
             "webhook_email",
             kwargs={"provider": _email_provider(connection), "connection_id": connection.pk},
         )
+    elif connection.platform == Platform.WHATSAPP_EVOLUTION:
+        path = reverse("webhook_whatsapp_evolution", kwargs={"connection_id": connection.pk})
     else:
         path = reverse("webhook_platform", kwargs={"platform": connection.platform})
     return request.build_absolute_uri(path)
