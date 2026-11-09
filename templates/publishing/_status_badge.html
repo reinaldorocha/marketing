@@ -1,0 +1,29 @@
+<div id="post-status-badge-{{ post.id }}" class="inline-flex items-center gap-1.5">
+    {% if post.status == "published" %}
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Publicado
+        </span>
+    {% elif post.status == "publishing" %}
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 animate-pulse">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Processando na Meta
+        </span>
+    {% elif post.status == "failed" %}
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Falha
+        </span>
+    {% else %}
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Rascunho
+        </span>
+    {% endif %}
+
+    {% if post.status == "publishing" %}
+        <button type="button"
+                hx-post="{% url 'publishing:refresh' workspace_id=request.workspace.id post_id=post.id %}"
+                hx-target="#post-status-badge-{{ post.id }}"
+                hx-swap="outerHTML"
+                class="text-[11px] text-primary hover:underline ml-1">
+            Atualizar
+        </button>
+    {% endif %}
+</div>

@@ -83,6 +83,29 @@ Never renders the webhook secret — see the views module docstring.
         </div>
     </section>
 
+    {% if connection.platform == "instagram" %}
+    <section class="card p-6 mb-5 space-y-6">
+        <div class="border-b border-gray-100 dark:border-gray-800 pb-3">
+            <h2 class="section-title">Gerenciamento Avançado do Instagram</h2>
+            <p class="section-note mt-1">Diagnóstico em tempo real, trava de seguidor, iniciadores de conversa e menu persistente no Direct.</p>
+        </div>
+
+        {% include "channels/_instagram_diagnostics.html" with connection=connection settings=connection.instagram_settings diagnostics=connection.instagram_settings.last_diagnostics only %}
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-5">
+            {% include "channels/_instagram_follower_gate.html" with connection=connection settings=connection.instagram_settings only %}
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-5">
+            {% include "channels/_instagram_ice_breakers.html" with connection=connection settings=connection.instagram_settings ice_breakers=connection.instagram_settings.ice_breakers only %}
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-5">
+            {% include "channels/_instagram_menu.html" with connection=connection settings=connection.instagram_settings menu_items=connection.instagram_settings.persistent_menu only %}
+        </div>
+    </section>
+    {% endif %}
+
     {% if connection.platform == "email" %}
     {% comment %}
     The test posts to a JSON endpoint that answers 200 even when the send fails.

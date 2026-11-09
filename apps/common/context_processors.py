@@ -472,6 +472,14 @@ MAIN_NAV: list[NavGroup] = [
                 workspace_scoped=True,
             ),
             NavItem(
+                key="publishing",
+                label="Posts & Reels",
+                icon="image",
+                url_name="publishing:list",
+                url_names=frozenset({"publishing:list", "publishing:create", "publishing:detail"}),
+                workspace_scoped=True,
+            ),
+            NavItem(
                 key="contacts",
                 label="Contacts",
                 icon="contacts",

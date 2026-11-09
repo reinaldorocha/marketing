@@ -110,7 +110,24 @@ __all__ = [
     "COMMENT_REPLY_ACTION",
     "InstagramAdapter",
     "call",
+    "check_is_follower",
+    "create_carousel_container",
+    "create_carousel_item",
+    "create_media_container",
+    "delete_ice_breakers",
+    "delete_persistent_menu",
+    "get_container_status",
+    "get_instagram_profile",
+    "get_instagram_user_profile",
+    "get_messenger_profile",
+    "get_published_media",
+    "get_subscribed_apps",
+    "publish_container",
     "recent_media",
+    "run_instagram_diagnostics",
+    "send_follower_gate_message",
+    "set_ice_breakers",
+    "set_persistent_menu",
     "wire_messages",
 ]
 
@@ -1094,6 +1111,40 @@ def _message_events(
     ]
 
 
+def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payload_str: str) -> None:
+    """Handle postback ig_follow_check:<row_pk> to re-verify follow status and resume flow."""
+    parts = payload_str.split(":", 1)
+    row_pk = parts[1] if len(parts) > 1 else ""
+    token = access_token(connection)
+    is_now_follower = check_is_follower(sender_id, token)
+
+    settings = getattr(connection, "instagram_settings", None)
+    if settings is None:
+        try:
+            from apps.channels.models import InstagramProfileSettings
+            settings = InstagramProfileSettings.objects.filter(connection=connection).first()
+        except Exception:
+            settings = None
+
+    if is_now_follower:
+        logger.info("Instagram: user %s confirmed follower status, unblocking flow.", sender_id)
+        from apps.flows.models import HandledComment
+        row = HandledComment.objects.unscoped().filter(pk=row_pk).first() if row_pk else None
+        if row:
+            # Deliver flow by dispatching _open_thread
+            _open_thread(connection, row, {"comment_text": ""})
+        else:
+            # Send direct message confirmation
+            call(token, "me/messages", payload={
+                "recipient": {"id": sender_id},
+                "message": {"text": "Obrigado por nos seguir! 🎉 Seu acesso foi liberado com sucesso."},
+            })
+    else:
+        # Prompt again with follower gate buttons
+        recipient = {"id": sender_id}
+        send_follower_gate_message(connection, recipient, row_pk, settings)
+
+
 def _postback_events(
     connection: ChannelConnection,
     item: dict[str, Any],
@@ -1104,6 +1155,10 @@ def _postback_events(
     payload = _text(postback.get("payload"), MAX_PAYLOAD_CHARS)
     mid = _platform_id(postback.get("mid"))
     if not payload:
+        return []
+
+    if payload.startswith("ig_follow_check:"):
+        _handle_follow_recheck(connection, sender_id, payload)
         return []
     extra: dict[str, Any] = {"payload": payload}
     # An ig.me link that opened the thread carries its ref on the postback.
@@ -1552,6 +1607,27 @@ def _answer_comment(payload: dict[str, Any], action: Any) -> None:
 
     config = row.trigger.config_json if isinstance(row.trigger.config_json, dict) else {}
     _send_public_reply(connection, row, config)
+
+    # Check Follower Gate (Phase 2)
+    settings = getattr(connection, "instagram_settings", None)
+    if settings is None:
+        try:
+            from apps.channels.models import InstagramProfileSettings
+            settings = InstagramProfileSettings.objects.filter(connection=connection).first()
+        except Exception:
+            settings = None
+
+    if settings and settings.require_follower:
+        token = access_token(connection)
+        if not check_is_follower(row.commenter_ref, token):
+            logger.info("Instagram: commenter %s is not following, sending follower gate prompt.", row.commenter_ref)
+            recipient = {"comment_id": row.comment_id}
+            try:
+                send_follower_gate_message(connection, recipient, str(row.pk), settings)
+            except Exception as exc:
+                logger.warning("Instagram: failed to send follower gate message: %s", exc)
+            return
+
     if payload.get("open_thread", True):
         _open_thread(connection, row, payload)
 
@@ -1684,6 +1760,385 @@ def recent_media(connection: ChannelConnection, *, limit: int = MEDIA_PAGE_SIZE)
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Diagnostics, Messenger Profile & Follower Check (Phase 1 & 2)
+# ---------------------------------------------------------------------------
+
+
+def get_instagram_profile(token: str) -> dict[str, Any]:
+    """Get connected account's profile info (user_id, username, name, picture)."""
+    return call(token, "me", params={"fields": "user_id,username,name,profile_picture_url"}, method="GET")
+
+
+def get_instagram_user_profile(user_id: str, token: str) -> dict[str, Any]:
+    """Get public user profile including follower status."""
+    try:
+        return call(
+            token,
+            user_id,
+            params={"fields": "name,username,profile_pic,follower_count,is_user_follow_business,is_business_follow_user"},
+            method="GET",
+        )
+    except APIError as exc:
+        logger.warning("Instagram: could not fetch profile for user %s: %s", user_id, exc)
+        return {}
+
+
+def check_is_follower(user_id: str, token: str) -> bool:
+    """Return True if the user follows the business account, according to Meta Graph API."""
+    profile = get_instagram_user_profile(user_id, token)
+    return profile.get("is_user_follow_business") is True
+
+
+def get_subscribed_apps(ig_user_id: str, token: str) -> list[dict[str, Any]]:
+    """Return apps/webhooks subscribed to this Instagram account."""
+    try:
+        res = call(token, f"{ig_user_id}/subscribed_apps", method="GET")
+        data = res.get("data")
+        return data if isinstance(data, list) else []
+    except Exception as exc:
+        logger.warning("Instagram: error checking subscribed_apps for %s: %s", ig_user_id, exc)
+        return []
+
+
+def get_messenger_profile(ig_user_id: str, token: str, fields: str) -> dict[str, Any]:
+    """Read persistent_menu or ice_breakers from Meta."""
+    return call(token, f"{ig_user_id}/messenger_profile", params={"fields": fields}, method="GET")
+
+
+def set_persistent_menu(ig_user_id: str, token: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Set persistent menu for Instagram Direct."""
+    call_to_actions = []
+    for item in items:
+        kind = item.get("type", "postback")
+        title = str(item.get("title", ""))[:30]
+        if kind == "web_url":
+            call_to_actions.append({
+                "type": "web_url",
+                "title": title,
+                "url": item.get("url", ""),
+                "webview_height_ratio": "full",
+            })
+        else:
+            call_to_actions.append({
+                "type": "postback",
+                "title": title,
+                "payload": str(item.get("payload", ""))[:1000] or title,
+            })
+
+    body = {
+        "platform": "instagram",
+        "persistent_menu": [
+            {
+                "locale": "default",
+                "composer_input_disabled": False,
+                "call_to_actions": call_to_actions,
+            }
+        ],
+    }
+    return call(token, f"{ig_user_id}/messenger_profile", payload=body, method="POST")
+
+
+def delete_persistent_menu(ig_user_id: str, token: str) -> dict[str, Any]:
+    """Delete persistent menu for Instagram Direct."""
+    return call(token, f"{ig_user_id}/messenger_profile", params={"fields": "['persistent_menu']"}, method="DELETE")
+
+
+def set_ice_breakers(ig_user_id: str, token: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Set up to 4 ice breakers for Instagram Direct."""
+    call_to_actions = [
+        {
+            "question": str(item.get("question", ""))[:80],
+            "payload": str(item.get("payload", ""))[:1000] or str(item.get("question", ""))[:80],
+        }
+        for item in items[:4]
+        if item.get("question")
+    ]
+    body = {
+        "platform": "instagram",
+        "ice_breakers": [
+            {
+                "locale": "default",
+                "call_to_actions": call_to_actions,
+            }
+        ],
+    }
+    return call(token, f"{ig_user_id}/messenger_profile", payload=body, method="POST")
+
+
+def delete_ice_breakers(ig_user_id: str, token: str) -> dict[str, Any]:
+    """Delete ice breakers for Instagram Direct."""
+    return call(token, f"{ig_user_id}/messenger_profile", params={"fields": "['ice_breakers']"}, method="DELETE")
+
+
+def run_instagram_diagnostics(connection: ChannelConnection) -> dict[str, Any]:
+    """Run real-time diagnostics on the connection and return structured checks."""
+    from apps.channels.instagram_oauth import token_expires_at
+
+    token = access_token(connection)
+    expires_at = token_expires_at(connection)
+    checks: list[dict[str, Any]] = []
+
+    # 1. Token Expiry Check
+    if expires_at:
+        now = timezone.now()
+        days_left = (expires_at - now).days
+        if days_left <= 0:
+            checks.append({
+                "key": "token",
+                "label": "Validade do Token",
+                "status": "error",
+                "detail": "Token expirado. É necessário reconectar a conta.",
+            })
+        elif days_left <= 7:
+            checks.append({
+                "key": "token",
+                "label": "Validade do Token",
+                "status": "warn",
+                "detail": f"Expira em {days_left} dias. Renove ou reconecte em breve.",
+            })
+        else:
+            checks.append({
+                "key": "token",
+                "label": "Validade do Token",
+                "status": "ok",
+                "detail": f"Token ativo e válido por mais {days_left} dias.",
+            })
+    else:
+        checks.append({
+            "key": "token",
+            "label": "Validade do Token",
+            "status": "warn",
+            "detail": "Data de expiração não registrada.",
+        })
+
+    # 2. Account Profile & Graph Connectivity
+    ig_user_id = connection.external_id
+    try:
+        profile = get_instagram_profile(token)
+        username = profile.get("username", "")
+        checks.append({
+            "key": "profile",
+            "label": "Perfil e Conectividade",
+            "status": "ok",
+            "detail": f"Conectado com sucesso à conta @{username} (ID: {profile.get('user_id', ig_user_id)}).",
+        })
+    except Exception as exc:
+        checks.append({
+            "key": "profile",
+            "label": "Perfil e Conectividade",
+            "status": "error",
+            "detail": f"Falha ao consultar perfil na Meta: {exc}",
+        })
+
+    # 3. Webhook Subscriptions Check
+    try:
+        apps = get_subscribed_apps(ig_user_id, token)
+        if apps:
+            checks.append({
+                "key": "webhook",
+                "label": "Inscrição de Webhook",
+                "status": "ok",
+                "detail": f"Inscrição ativa na Meta ({len(apps)} app(s) inscrito(s)).",
+            })
+        else:
+            checks.append({
+                "key": "webhook",
+                "label": "Inscrição de Webhook",
+                "status": "warn",
+                "detail": "Nenhum aplicativo retornado em subscribed_apps pela Meta.",
+            })
+    except Exception as exc:
+        checks.append({
+            "key": "webhook",
+            "label": "Inscrição de Webhook",
+            "status": "warn",
+            "detail": f"Não foi possível verificar webhooks: {exc}",
+        })
+
+    # 4. Messenger Profile: Menu & Ice Breakers
+    try:
+        menu_res = get_messenger_profile(ig_user_id, token, "persistent_menu")
+        has_menu = bool(menu_res.get("data") and menu_res["data"][0].get("persistent_menu"))
+        checks.append({
+            "key": "menu",
+            "label": "Menu Persistente",
+            "status": "ok" if has_menu else "warn",
+            "detail": "Menu publicado ativo na Meta." if has_menu else "Nenhum menu persistente publicado na Meta.",
+        })
+    except Exception:
+        checks.append({
+            "key": "menu",
+            "label": "Menu Persistente",
+            "status": "warn",
+            "detail": "Não foi possível consultar menu persistente.",
+        })
+
+    try:
+        ib_res = get_messenger_profile(ig_user_id, token, "ice_breakers")
+        has_ib = bool(ib_res.get("data") and ib_res["data"][0].get("ice_breakers"))
+        checks.append({
+            "key": "ice_breakers",
+            "label": "Ice Breakers (Perguntas Frequentes)",
+            "status": "ok" if has_ib else "warn",
+            "detail": "Perguntas frequentes publicadas na Meta." if has_ib else "Nenhum iniciador de conversa publicado.",
+        })
+    except Exception:
+        checks.append({
+            "key": "ice_breakers",
+            "label": "Ice Breakers (Perguntas Frequentes)",
+            "status": "warn",
+            "detail": "Não foi possível consultar iniciadores de conversa.",
+        })
+
+    # Summary
+    errors = sum(1 for c in checks if c["status"] == "error")
+    warns = sum(1 for c in checks if c["status"] == "warn")
+    overall = "error" if errors else ("warn" if warns else "ok")
+
+    return {
+        "checked_at": timezone.now().isoformat(),
+        "overall": overall,
+        "checks": checks,
+    }
+
+
+def send_follower_gate_message(
+    connection: ChannelConnection,
+    recipient: dict[str, str],
+    row_pk: str,
+    settings: Any,
+) -> None:
+    """Send follower gate prompt with 'Seguir' link button and 'Já segui' postback button."""
+    token = access_token(connection)
+    username = (connection.display_name or "").strip("@")
+    follow_url = f"https://www.instagram.com/{username}/" if username else "https://www.instagram.com/"
+
+    text = (settings.non_follower_message if settings else "") or (
+        "Primeiro você precisa me seguir para receber o acesso! Siga nosso perfil e clique no botão abaixo para continuar."
+    )
+    follow_label = (settings.follow_button_label if settings else "") or "Seguir no Instagram"
+    confirm_label = (settings.confirm_button_label if settings else "") or "Já estou seguindo ✅"
+
+    body = {
+        "recipient": recipient,
+        "message": {
+            "attachment": {
+                "type": "template",
+                "payload": {
+                    "template_type": "button",
+                    "text": text[:1000],
+                    "buttons": [
+                        {
+                            "type": "web_url",
+                            "url": follow_url,
+                            "title": follow_label[:20],
+                        },
+                        {
+                            "type": "postback",
+                            "title": confirm_label[:20],
+                            "payload": f"ig_follow_check:{row_pk}"[:1000],
+                        },
+                    ],
+                },
+            }
+        },
+    }
+    call(token, "me/messages", payload=body, method="POST")
+
+
+# ---------------------------------------------------------------------------
+# Content Publishing API (Feed, Reels, Stories, Carousel) - Phase 3
+# ---------------------------------------------------------------------------
+
+
+def create_media_container(
+    ig_user_id: str,
+    token: str,
+    publish_type: str,
+    media_url: str,
+    caption: str = "",
+    cover_url: str | None = None,
+) -> str:
+    """Create a single media container on Meta Graph API and return its container ID."""
+    body: dict[str, Any] = {"caption": caption or ""}
+
+    if publish_type == "reel_video":
+        body["media_type"] = "REELS"
+        body["video_url"] = media_url
+        body["share_to_feed"] = True
+        if cover_url:
+            body["cover_url"] = cover_url
+    elif publish_type == "story_video":
+        body["media_type"] = "STORIES"
+        body["video_url"] = media_url
+    elif publish_type == "story_image":
+        body["media_type"] = "STORIES"
+        body["image_url"] = media_url
+    elif publish_type == "feed_video":
+        body["media_type"] = "VIDEO"
+        body["video_url"] = media_url
+        if cover_url:
+            body["cover_url"] = cover_url
+    else:  # feed_image default
+        body["image_url"] = media_url
+
+    res = call(token, f"{ig_user_id}/media", payload=body, method="POST")
+    return str(res.get("id", ""))
+
+
+def create_carousel_item(
+    ig_user_id: str,
+    token: str,
+    item_type: str,
+    url: str,
+    cover_url: str | None = None,
+) -> str:
+    """Create one item container for a carousel."""
+    body: dict[str, Any] = {"is_carousel_item": True}
+    if item_type == "video":
+        body["media_type"] = "VIDEO"
+        body["video_url"] = url
+        if cover_url:
+            body["cover_url"] = cover_url
+    else:
+        body["image_url"] = url
+
+    res = call(token, f"{ig_user_id}/media", payload=body, method="POST")
+    return str(res.get("id", ""))
+
+
+def create_carousel_container(
+    ig_user_id: str,
+    token: str,
+    children_ids: list[str],
+    caption: str = "",
+) -> str:
+    """Create a parent CAROUSEL container combining multiple item container IDs."""
+    body = {
+        "media_type": "CAROUSEL",
+        "children": ",".join(children_ids),
+        "caption": caption or "",
+    }
+    res = call(token, f"{ig_user_id}/media", payload=body, method="POST")
+    return str(res.get("id", ""))
+
+
+def get_container_status(container_id: str, token: str) -> dict[str, Any]:
+    """Check processing status of a container on Meta (FINISHED, IN_PROGRESS, ERROR, EXPIRED)."""
+    return call(token, container_id, params={"fields": "id,status_code,status"}, method="GET")
+
+
+def publish_container(ig_user_id: str, token: str, container_id: str) -> str:
+    """Publish a finished media container to Instagram and return the published media ID."""
+    res = call(token, f"{ig_user_id}/media_publish", payload={"creation_id": container_id}, method="POST")
+    return str(res.get("id", ""))
+
+
+def get_published_media(media_id: str, token: str) -> dict[str, Any]:
+    """Get published media details including permalink and timestamp."""
+    return call(token, media_id, params={"fields": "id,permalink,media_type,timestamp"}, method="GET")
+
 # Registration
 # ---------------------------------------------------------------------------
 

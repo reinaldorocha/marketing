@@ -155,6 +155,7 @@ urlpatterns = [
     # permission the placeholder used — so the nav entry's target moves from a
     # stub view to a real one and nothing else about the route changes.
     path("w/<uuid:workspace_id>/broadcasts/", include("apps.broadcasts.urls")),
+    path("w/<uuid:workspace_id>/publishing/", include("apps.publishing.urls")),
     # The analytics pages (issue #26). A deep prefix like the ones above it, and
     # separate from the /c/ and /o/ routes at the site root: those are public
     # token routes with no workspace in the URL at all. Guarded for the reason

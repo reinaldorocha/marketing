@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes da Publicação · BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[900px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>Publicação no Instagram</span>
+            {% include "publishing/_status_badge.html" with post=post only %}
+        </h1>
+        <p class="page-lede">
+            Conta: <strong>{{ post.connection.display_name }}</strong> · Formato: <strong>{{ post.get_publish_type_display }}</strong>
+        </p>
+    </div>
+    <div class="page-header-actions flex items-center gap-2">
+        {% if post.permalink %}
+        <a href="{{ post.permalink }}" target="_blank" rel="noopener" class="btn-pill-primary inline-flex items-center gap-1.5">
+            Ver no Instagram ↗
+        </a>
+        {% endif %}
+        <a href="{% url 'publishing:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+            Voltar
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[900px] space-y-6">
+
+    {% if post.last_error %}
+    <div class="p-4 bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-900 rounded-xl">
+        <h3 class="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wide">Mensagem de Erro da Meta</h3>
+        <p class="text-xs text-rose-700 dark:text-rose-200 mt-1 font-mono">{{ post.last_error }}</p>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- Left Column: Media Preview -->
+        <div class="card p-4 space-y-3">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase">Mídia</h3>
+            <div class="rounded-lg overflow-hidden bg-black/5 dark:bg-black/40 border border-gray-200 dark:border-gray-800 aspect-square flex items-center justify-center">
+                {% if post.publish_type == "carousel" %}
+                    <div class="p-4 text-center">
+                        <span class="text-4xl">📚</span>
+                        <p class="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-2">Carrossel com {{ post.media_items|length }} itens</p>
+                    </div>
+                {% elif "video" in post.publish_type or post.publish_type == "reel_video" %}
+                    <video src="{{ post.media_url }}" controls poster="{{ post.cover_url|default:'' }}" class="w-full h-full object-contain"></video>
+                {% elif post.media_url %}
+                    <img src="{{ post.media_url }}" alt="Preview" class="w-full h-full object-contain">
+                {% else %}
+                    <span class="text-gray-400 text-xs">Sem mídia</span>
+                {% endif %}
+            </div>
+
+            {% if post.publish_type == "carousel" and post.media_items %}
+            <div class="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <p class="text-[11px] font-semibold text-gray-500">Itens do Carrossel:</p>
+                {% for item in post.media_items %}
+                <div class="text-[11px] text-gray-600 dark:text-gray-400 flex items-center justify-between">
+                    <span>#{{ forloop.counter }} · {{ item.type }}</span>
+                    <a href="{{ item.url }}" target="_blank" rel="noopener" class="text-primary hover:underline truncate max-w-[150px]">Abrir URL ↗</a>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Metadata & Details -->
+        <div class="md:col-span-2 card p-6 space-y-5">
+            <div>
+                <h3 class="text-xs font-semibold text-gray-500 uppercase">Legenda</h3>
+                <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-800 text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                    {{ post.caption|default:"(Nenhuma legenda informada)" }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 pt-2">
+                <div>
+                    <span class="text-xs text-gray-400 block">Criado em:</span>
+                    <span class="text-xs font-medium text-gray-900 dark:text-white">{{ post.created_at|date:"d/m/Y H:i:s" }}</span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block">Publicado em:</span>
+                    <span class="text-xs font-medium text-gray-900 dark:text-white">
+                        {% if post.published_at %}{{ post.published_at|date:"d/m/Y H:i:s" }}{% else %}—{% endif %}
+                    </span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block">Container ID (Meta):</span>
+                    <span class="text-xs font-mono text-gray-700 dark:text-gray-300">{{ post.container_id|default:"—" }}</span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block">Media ID Publicado (Meta):</span>
+                    <span class="text-xs font-mono text-gray-700 dark:text-gray-300">{{ post.published_media_id|default:"—" }}</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+                <form method="post" action="{% url 'publishing:delete' workspace_id=request.workspace.id post_id=post.id %}"
+                      onsubmit="return confirm('Tem certeza que deseja excluir o registro desta publicação?');">
+                    {% csrf_token %}
+                    <button type="submit" class="text-xs text-rose-600 hover:text-rose-700 font-medium">
+                        Excluir do Histórico
+                    </button>
+                </form>
+
+                {% if post.status == "publishing" %}
+                <form hx-post="{% url 'publishing:refresh' workspace_id=request.workspace.id post_id=post.id %}"
+                      hx-swap="none"
+                      class="flex gap-2">
+                    {% csrf_token %}
+                    <button type="submit" onclick="setTimeout(() => window.location.reload(), 1000)" class="btn-pill-primary text-xs">
+                        Consultar Status na Meta Agora
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

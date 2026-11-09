@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% load common_extras %}
+
+{% block title %}Publicações no Instagram · BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[1100px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>Posts & Reels no Instagram</span>
+        </h1>
+        <p class="page-lede">
+            Crie, publique e acompanhe posts de Feed, Reels de vídeo, Stories e Carrosséis direto no Instagram.
+        </p>
+    </div>
+    {% if has_instagram %}
+    <div class="page-header-actions">
+        <a href="{% url 'publishing:create' workspace_id=request.workspace.id %}" class="btn-pill-primary inline-flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Nova Publicação
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[1100px] space-y-6">
+
+    {% if not has_instagram %}
+    <div class="p-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl flex items-center justify-between gap-4">
+        <div>
+            <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-200">Nenhum canal de Instagram conectado</h3>
+            <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">Conecte uma conta profissional do Instagram para começar a publicar Feed, Reels e Stories.</p>
+        </div>
+        <a href="{% url 'channels:instagram_connect' workspace_id=request.workspace.id %}" class="btn-pill-primary text-xs">
+            Conectar Instagram
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Counters / Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <p class="text-xs font-semibold text-gray-500">Total de Posts</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.total }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Publicados com Sucesso</p>
+            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.published }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold text-amber-600 dark:text-amber-400">Em Processamento na Meta</p>
+            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{{ stats.publishing }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold text-rose-600 dark:text-rose-400">Falhas de Publicação</p>
+            <p class="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">{{ stats.failed }}</p>
+        </div>
+    </div>
+
+    <!-- Filters Toolbar -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-3 flex-1">
+                <input type="text" name="q" placeholder="Buscar por legenda..." value="{{ q }}"
+                       class="form-input-styled text-xs w-64">
+
+                <select name="status" class="form-input-styled bb-select text-xs w-44" onchange="this.form.submit()">
+                    <option value="all" {% if status_filter == "all" %}selected{% endif %}>Todos os status</option>
+                    <option value="published" {% if status_filter == "published" %}selected{% endif %}>Publicados</option>
+                    <option value="publishing" {% if status_filter == "publishing" %}selected{% endif %}>Processando</option>
+                    <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>Falhas</option>
+                    <option value="draft" {% if status_filter == "draft" %}selected{% endif %}>Rascunhos</option>
+                </select>
+
+                <select name="type" class="form-input-styled bb-select text-xs w-44" onchange="this.form.submit()">
+                    <option value="all" {% if type_filter == "all" %}selected{% endif %}>Todos os tipos</option>
+                    <option value="feed_image" {% if type_filter == "feed_image" %}selected{% endif %}>Feed Imagem</option>
+                    <option value="reel_video" {% if type_filter == "reel_video" %}selected{% endif %}>Reel Vídeo</option>
+                    <option value="carousel" {% if type_filter == "carousel" %}selected{% endif %}>Carrossel</option>
+                    <option value="story_image" {% if type_filter == "story_image" %}selected{% endif %}>Story Imagem</option>
+                    <option value="story_video" {% if type_filter == "story_video" %}selected{% endif %}>Story Vídeo</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn-pill-secondary text-xs">Filtrar</button>
+        </form>
+    </div>
+
+    <!-- Posts Table -->
+    <div class="card overflow-hidden">
+        <table class="w-full text-left text-xs">
+            <thead class="bg-gray-50/80 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 text-gray-500 font-semibold">
+                <tr>
+                    <th class="px-4 py-3">Tipo & Mídia</th>
+                    <th class="px-4 py-3">Conta / Canal</th>
+                    <th class="px-4 py-3">Legenda</th>
+                    <th class="px-4 py-3">Status</th>
+                    <th class="px-4 py-3">Data</th>
+                    <th class="px-4 py-3 text-right">Ações</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                {% for post in posts %}
+                <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition">
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0 flex items-center justify-center border border-gray-200 dark:border-gray-700">
+                                {% if post.media_url and not "video" in post.publish_type %}
+                                    <img src="{{ post.media_url }}" alt="Thumbnail" class="w-full h-full object-cover">
+                                {% elif post.cover_url %}
+                                    <img src="{{ post.cover_url }}" alt="Cover" class="w-full h-full object-cover">
+                                {% else %}
+                                    <span class="text-base">
+                                        {% if "reel" in post.publish_type or "video" in post.publish_type %}🎬{% elif post.publish_type == "carousel" %}📚{% else %}📸{% endif %}
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <p class="font-semibold text-gray-900 dark:text-white">{{ post.get_publish_type_display }}</p>
+                                {% if post.publish_type == "carousel" %}
+                                    <p class="text-[10px] text-gray-400">{{ post.media_items|length }} itens</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 font-medium text-gray-700 dark:text-gray-300">
+                        {{ post.connection.display_name }}
+                    </td>
+                    <td class="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-xs truncate">
+                        {{ post.caption|default:"(Sem legenda)"|truncatechars:60 }}
+                    </td>
+                    <td class="px-4 py-3">
+                        {% include "publishing/_status_badge.html" with post=post only %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-500">
+                        {{ post.created_at|date:"d/m/Y H:i" }}
+                    </td>
+                    <td class="px-4 py-3 text-right space-x-2">
+                        {% if post.permalink %}
+                            <a href="{{ post.permalink }}" target="_blank" rel="noopener"
+                               class="text-xs text-primary hover:underline font-medium inline-flex items-center gap-1">
+                                Ver no Insta ↗
+                            </a>
+                        {% endif %}
+                        <a href="{% url 'publishing:detail' workspace_id=request.workspace.id post_id=post.id %}"
+                           class="btn-pill-secondary text-xs px-2.5 py-1">
+                            Detalhes
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                        Nenhuma publicação encontrada para os filtros selecionados.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}

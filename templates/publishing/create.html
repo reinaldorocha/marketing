@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Publicação no Instagram · BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[900px]">
+    <div class="page-header-text">
+        <h1 class="page-title">Nova Publicação no Instagram</h1>
+        <p class="page-lede">
+            Publique no Feed, Reels, Stories ou Carrossel utilizando a API oficial da Meta.
+        </p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{% url 'publishing:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+            Voltar para Lista
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[900px]">
+    <form method="post" class="card p-6 space-y-6" id="publish-form">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="field">
+                <label class="field-label" for="connection_id">Conta do Instagram</label>
+                <select name="connection_id" id="connection_id" class="form-input-styled bb-select w-full" required>
+                    {% for conn in connections %}
+                    <option value="{{ conn.id }}">{{ conn.display_name }} ({{ conn.external_id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="publish_type">Formato da Publicação</label>
+                <select name="publish_type" id="publish_type" class="form-input-styled bb-select w-full" onchange="togglePublishType(this.value)" required>
+                    <option value="feed_image">Feed — Foto Única</option>
+                    <option value="reel_video">Reels — Vídeo com Feed</option>
+                    <option value="carousel">Carrossel — De 2 a 10 Fotos/Vídeos</option>
+                    <option value="story_image">Story — Foto (24h)</option>
+                    <option value="story_video">Story — Vídeo (24h)</option>
+                    <option value="feed_video">Feed — Vídeo Tradicional</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Single Media Inputs -->
+        <div id="single-media-fields" class="space-y-4">
+            <div class="field">
+                <label class="field-label" for="media_url">URL Pública da Mídia (Imagem ou Vídeo)</label>
+                <input type="url" name="media_url" id="media_url" placeholder="https://dominio.com/foto.jpg ou mp4"
+                       class="form-input-styled w-full">
+                <p class="field-hint text-xs mt-1">A Meta precisa conseguir baixar o arquivo via HTTP/HTTPS direto sem login ou captcha.</p>
+            </div>
+
+            <div class="field" id="cover-url-field">
+                <label class="field-label" for="cover_url">URL da Capa / Thumbnail (Opcional para Vídeo/Reels)</label>
+                <input type="url" name="cover_url" id="cover_url" placeholder="https://dominio.com/capa.jpg"
+                       class="form-input-styled w-full">
+            </div>
+
+            <!-- Quick picker from media library -->
+            {% if recent_assets %}
+            <div class="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800">
+                <p class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Usar arquivo da Biblioteca de Mídia:</p>
+                <div class="flex flex-wrap gap-2">
+                    {% for asset in recent_assets %}
+                    <button type="button" onclick="document.getElementById('media_url').value = '{{ asset.file.url }}';"
+                            class="px-2.5 py-1 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:border-primary transition truncate max-w-[200px]"
+                            title="{{ asset.name }}">
+                        📎 {{ asset.name }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Carousel Items Inputs -->
+        <div id="carousel-fields" class="space-y-3 hidden">
+            <div class="flex items-center justify-between">
+                <label class="field-label">Itens do Carrossel (Mínimo 2, Máximo 10)</label>
+                <button type="button" onclick="addCarouselItem()" class="text-xs text-primary font-semibold hover:underline">
+                    + Adicionar Slide
+                </button>
+            </div>
+
+            <div id="carousel-items-list" class="space-y-3">
+                <div class="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800 flex gap-3 items-center">
+                    <span class="text-xs font-bold text-gray-400">#1</span>
+                    <select name="carousel_type" class="form-input-styled text-xs w-28">
+                        <option value="image">Imagem</option>
+                        <option value="video">Vídeo</option>
+                    </select>
+                    <input type="url" name="carousel_url" placeholder="URL pública da imagem/vídeo" class="form-input-styled text-xs flex-1">
+                    <input type="url" name="carousel_cover" placeholder="Capa (vídeo)" class="form-input-styled text-xs w-44">
+                </div>
+                <div class="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800 flex gap-3 items-center">
+                    <span class="text-xs font-bold text-gray-400">#2</span>
+                    <select name="carousel_type" class="form-input-styled text-xs w-28">
+                        <option value="image">Imagem</option>
+                        <option value="video">Vídeo</option>
+                    </select>
+                    <input type="url" name="carousel_url" placeholder="URL pública da imagem/vídeo" class="form-input-styled text-xs flex-1">
+                    <input type="url" name="carousel_cover" placeholder="Capa (vídeo)" class="form-input-styled text-xs w-44">
+                </div>
+            </div>
+        </div>
+
+        <!-- Caption Field -->
+        <div class="field" id="caption-field">
+            <label class="field-label" for="caption">Legenda da Publicação</label>
+            <textarea name="caption" id="caption" rows="5" placeholder="Escreva a legenda com hashtags e emojis..."
+                      class="form-input-styled w-full"></textarea>
+            <p class="field-hint text-xs mt-1">Stories não aceitam legenda no feed (aparecem como texto se aplicável).</p>
+        </div>
+
+        <div class="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+            <button type="submit" name="action" value="draft" class="btn-pill-secondary">
+                Salvar como Rascunho
+            </button>
+            <button type="submit" name="action" value="publish" class="btn-pill-primary inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                Publicar no Instagram Agora
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function togglePublishType(type) {
+    const singleFields = document.getElementById('single-media-fields');
+    const carouselFields = document.getElementById('carousel-fields');
+    const coverField = document.getElementById('cover-url-field');
+
+    if (type === 'carousel') {
+        singleFields.classList.add('hidden');
+        carouselFields.classList.remove('hidden');
+    } else {
+        singleFields.classList.remove('hidden');
+        carouselFields.classList.add('hidden');
+        if (type.includes('video') || type === 'reel_video') {
+            coverField.classList.remove('hidden');
+        }
+    }
+}
+
+function addCarouselItem() {
+    const container = document.getElementById('carousel-items-list');
+    const count = container.children.length + 1;
+    if (count > 10) {
+        alert('O Instagram permite no máximo 10 itens no carrossel.');
+        return;
+    }
+    const div = document.createElement('div');
+    div.className = 'p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800 flex gap-3 items-center';
+    div.innerHTML = `
+        <span class="text-xs font-bold text-gray-400">#${count}</span>
+        <select name="carousel_type" class="form-input-styled text-xs w-28">
+            <option value="image">Imagem</option>
+            <option value="video">Vídeo</option>
+        </select>
+        <input type="url" name="carousel_url" placeholder="URL pública da imagem/vídeo" class="form-input-styled text-xs flex-1">
+        <input type="url" name="carousel_cover" placeholder="Capa (vídeo)" class="form-input-styled text-xs w-44">
+        <button type="button" onclick="this.closest('div').remove()" class="text-gray-400 hover:text-rose-500 text-xs p-1">✕</button>
+    `;
+    container.appendChild(div);
+}
+</script>
+{% endblock %}

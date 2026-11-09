@@ -174,6 +174,11 @@ def _connection_context(
     so the page is complete for a platform whose adapter has not shipped —
     which, in this layer, is all of them (ROADMAP contract 4).
     """
+    if connection.platform == Platform.INSTAGRAM.value:
+        from apps.channels.models import InstagramProfileSettings
+        settings, _ = InstagramProfileSettings.objects.get_or_create(connection=connection)
+        connection.instagram_settings = settings
+
     return {
         "connection": connection,
         "label": PLATFORM_LABELS.get(connection.platform, connection.platform),

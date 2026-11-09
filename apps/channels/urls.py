@@ -73,6 +73,10 @@ urlpatterns = [
     # id and lives in ``urls_oauth.py`` at the deployment root instead.
     path("instagram/connect/", views_instagram.instagram_connect, name="instagram_connect"),
     path("instagram/posts/", views_instagram.instagram_posts, name="instagram_posts"),
+    path("<uuid:connection_id>/instagram/diagnostics/", views_instagram.instagram_diagnostics, name="instagram_diagnostics"),
+    path("<uuid:connection_id>/instagram/ice-breakers/", views_instagram.instagram_ice_breakers, name="instagram_ice_breakers"),
+    path("<uuid:connection_id>/instagram/menu/", views_instagram.instagram_persistent_menu, name="instagram_persistent_menu"),
+    path("<uuid:connection_id>/instagram/follower-gate/", views_instagram.instagram_follower_settings, name="instagram_follower_settings"),
     # Messenger's guided connect (issue #18), the page chooser, and the comment
     # trigger's post picker. Its OAuth callback is not here either, and for the
     # same reason.
