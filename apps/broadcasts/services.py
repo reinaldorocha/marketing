@@ -627,43 +627,62 @@ def pause_broadcast(broadcast: Broadcast) -> Broadcast:
 
 
 def resume_broadcast(broadcast: Broadcast) -> Broadcast:
-    """Resume a paused broadcast."""
+    """Resume a paused broadcast.
+
+    Preserves future scheduled execution: if scheduled_at is still in the future,
+    returns status to SCHEDULED and schedules the fanout action for scheduled_at
+    rather than sending immediately.
+    """
     with transaction.atomic():
         locked = Broadcast.objects.for_workspace(broadcast.workspace_id).select_for_update().get(pk=broadcast.pk)
         if locked.status != BroadcastStatus.PAUSED:
             raise BroadcastError("Only paused broadcasts can be resumed.")
-        locked.status = BroadcastStatus.SENDING
-        locked.save(update_fields=["status", "updated_at"])
 
         now = timezone.now()
-        rate = buckets.rate_for(locked.platform)
-        pending_recipients = list(
-            BroadcastRecipient.objects.for_workspace(locked.workspace_id).filter(
-                broadcast=locked,
-                status=RecipientStatus.PENDING,
-            )
-        )
-        for index, recipient in enumerate(pending_recipients):
-            schedule(
-                ActionType.BROADCAST_SEND,
-                now + timedelta(seconds=index / rate),
-                {
-                    "broadcast_id": str(locked.pk),
-                    "recipient_id": str(recipient.pk),
-                    "contact_id": str(recipient.contact_id),
-                },
-                workspace=locked.workspace,
-                contact=recipient.contact_id,
-                idempotency_key=f"broadcast:{locked.pk}:contact:{recipient.contact_id}:resume:{int(now.timestamp())}",
-            )
+        is_future = bool(locked.scheduled_at and locked.scheduled_at > now)
 
-        schedule(
-            ActionType.BROADCAST_FANOUT,
-            timezone.now(),
-            {"broadcast_id": str(locked.pk)},
-            workspace=locked.workspace,
-            idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(now.timestamp())}",
-        )
+        if is_future:
+            locked.status = BroadcastStatus.SCHEDULED
+            locked.save(update_fields=["status", "updated_at"])
+            schedule(
+                ActionType.BROADCAST_FANOUT,
+                locked.scheduled_at,
+                {"broadcast_id": str(locked.pk)},
+                workspace=locked.workspace,
+                idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(now.timestamp())}",
+            )
+        else:
+            locked.status = BroadcastStatus.SENDING
+            locked.save(update_fields=["status", "updated_at"])
+
+            rate = buckets.rate_for(locked.platform)
+            pending_recipients = list(
+                BroadcastRecipient.objects.for_workspace(locked.workspace_id).filter(
+                    broadcast=locked,
+                    status=RecipientStatus.PENDING,
+                )
+            )
+            for index, recipient in enumerate(pending_recipients):
+                schedule(
+                    ActionType.BROADCAST_SEND,
+                    now + timedelta(seconds=index / rate),
+                    {
+                        "broadcast_id": str(locked.pk),
+                        "recipient_id": str(recipient.pk),
+                        "contact_id": str(recipient.contact_id),
+                    },
+                    workspace=locked.workspace,
+                    contact=recipient.contact_id,
+                    idempotency_key=f"broadcast:{locked.pk}:contact:{recipient.contact_id}:resume:{int(now.timestamp())}",
+                )
+
+            schedule(
+                ActionType.BROADCAST_FANOUT,
+                now,
+                {"broadcast_id": str(locked.pk)},
+                workspace=locked.workspace,
+                idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(now.timestamp())}",
+            )
     broadcast.refresh_from_db()
     return broadcast
 

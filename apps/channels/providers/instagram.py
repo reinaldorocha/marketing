@@ -1130,7 +1130,7 @@ def _message_events(
     ]
 
 
-def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payload_str: str) -> None:
+def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payload_str: str, *, event_id: str = "", when: datetime | None = None) -> None:
     """Handle postback ig_follow_check to re-verify follow status and resume flow."""
     if not payload_str.startswith("ig_follow_check:"):
         return
@@ -1173,12 +1173,14 @@ def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payloa
                 logger.warning("Instagram: error sending DM confirmation to %s: %s", sender_id, exc)
 
             if original_text:
+                import hashlib
+                clean_id = event_id.replace(":", "_") if event_id else hashlib.sha256(payload_str.encode()).hexdigest()[:16]
                 event = NormalizedEvent(
                     type=EventType.MESSAGE,
                     connection=connection,
                     platform_user_id=sender_id,
-                    provider_event_id=f"ig:dm_foll:{sender_id}:{int(timezone.now().timestamp())}",
-                    timestamp=timezone.now(),
+                    provider_event_id=f"ig:dm_foll:{sender_id}:{clean_id}",
+                    timestamp=when or timezone.now(),
                     payload=EventPayload(text=original_text),
                     raw={"simulated_resume": True},
                 )
@@ -1219,8 +1221,22 @@ def _postback_events(
     if not payload:
         return []
 
+    event_id = _event_id(item, mid, "ig:pb:")
     if payload.startswith("ig_follow_check:"):
-        _handle_follow_recheck(connection, sender_id, payload)
+        from django.db import IntegrityError, transaction
+        from apps.channels.models import WebhookEventLog
+        try:
+            with transaction.atomic():
+                WebhookEventLog.objects.create(
+                    connection=connection,
+                    platform=connection.platform,
+                    provider_event_id=event_id,
+                    raw={"type": "postback", "payload": payload},
+                )
+        except IntegrityError:
+            logger.info("Instagram: skipped duplicate follow recheck postback %s", event_id)
+            return []
+        _handle_follow_recheck(connection, sender_id, payload, event_id=event_id, when=when)
         return []
     extra: dict[str, Any] = {"payload": payload}
     # An ig.me link that opened the thread carries its ref on the postback.

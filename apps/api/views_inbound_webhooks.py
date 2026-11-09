@@ -259,9 +259,20 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
         first_name = parts[0][:150]
         last_name = parts[1][:150] if len(parts) > 1 else ""
 
-    # 5. Find or create Contact in workspace
-    contact = None
-    if norm_phone:
+    # 5. Find or create Contact in workspace (reconciling with existing channel identity)
+    conn = webhook.channel_connection
+    channel_user_id = (norm_phone if norm_phone.startswith("+") else f"+{norm_phone}") if (conn and norm_phone) else ""
+    existing_identity = None
+    if conn and channel_user_id:
+        existing_identity = (
+            ContactChannelIdentity.objects.for_workspace(webhook.workspace)
+            .filter(channel_connection=conn, platform_user_id=channel_user_id)
+            .select_related("contact")
+            .first()
+        )
+
+    contact = existing_identity.contact if existing_identity else None
+    if not contact and norm_phone:
         contact = (
             Contact.objects.for_workspace(webhook.workspace)
             .filter(phone=norm_phone)
@@ -271,6 +282,16 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
         contact = (
             Contact.objects.for_workspace(webhook.workspace)
             .filter(email=norm_email)
+            .first()
+        )
+
+    # Check if a different contact matches email when identity contact was chosen
+    email_contact = None
+    if contact and norm_email and existing_identity:
+        email_contact = (
+            Contact.objects.for_workspace(webhook.workspace)
+            .filter(email=norm_email)
+            .exclude(pk=contact.pk)
             .first()
         )
 
@@ -285,7 +306,14 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                     email=norm_email,
                 )
             else:
-                # Update existing contact if data is missing
+                # Merge duplicate contact if email matched another existing contact
+                if email_contact:
+                    try:
+                        contact = contact_services.merge_contacts(primary=contact, duplicate=email_contact)
+                    except Exception as exc:
+                        logger.warning("Could not merge contacts during lead webhook: %s", exc)
+
+                # Update contact with any newly provided fields
                 update_kwargs: dict[str, Any] = {}
                 if not contact.first_name and first_name:
                     update_kwargs["first_name"] = first_name
@@ -311,37 +339,23 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                     contact_services.add_tag(contact, tag_obj)
 
             # 6. Bind channel identity (WhatsApp)
-            identity = None
-            if webhook.channel_connection and norm_phone:
-                conn = webhook.channel_connection
-                user_id = norm_phone if norm_phone.startswith("+") else f"+{norm_phone}"
+            identity = existing_identity
+            if conn and channel_user_id and identity is None:
                 identity = (
                     ContactChannelIdentity.objects.for_workspace(webhook.workspace)
                     .filter(
+                        contact=contact,
                         channel_connection=conn,
-                        platform_user_id=user_id,
                     )
                     .first()
                 )
-                if identity is None:
-                    identity = (
-                        ContactChannelIdentity.objects.for_workspace(webhook.workspace)
-                        .filter(
-                            contact=contact,
-                            channel_connection=conn,
-                        )
-                        .first()
-                    )
                 if identity is None:
                     identity = ContactChannelIdentity.objects.for_workspace(webhook.workspace).create(
                         contact=contact,
                         channel_connection=conn,
                         platform=conn.platform,
-                        platform_user_id=user_id,
+                        platform_user_id=channel_user_id,
                     )
-                elif identity.contact_id != contact.pk:
-                    identity.contact = contact
-                    identity.save(update_fields=["contact", "updated_at"])
 
             # 7. Consent / Opt-in registration
             # "Não marque o contato como autorizado automaticamente apenas porque recebeu um telefone.

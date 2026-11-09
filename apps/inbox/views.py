@@ -1525,13 +1525,15 @@ def _attachments(request: WorkspaceRequest, conversation: Conversation, dropped:
             continue
         if item_str.startswith("http://") or item_str.startswith("https://") or item_str.startswith("/"):
             split_url = urlsplit(item_str)
-            parsed_path = split_url.path.lower()
+            raw_path = split_url.path
+            parsed_path = raw_path.lower()
             lower = item_str.lower()
 
             # 1. Check if internal signed delivery URL (/m/<token>/)
+            # Token signature is case-sensitive, so extract directly from raw_path
             kind = ""
-            if "/m/" in parsed_path:
-                token = parsed_path.split("/m/")[1].strip("/").split("/")[0]
+            if "/m/" in raw_path:
+                token = raw_path.split("/m/")[1].strip("/").split("/")[0]
                 if token:
                     try:
                         asset_pk, _ = read_token(token)

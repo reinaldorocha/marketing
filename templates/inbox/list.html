@@ -493,7 +493,7 @@ inert.
               name: mediaName,
               url: mediaUrl,
               is_ptt: !!reply.is_ptt,
-              media_type: reply.media_type || (reply.is_ptt ? 'audio' : 'image'),
+              media_type: reply.media_type || (reply.is_ptt ? 'audio' : ''),
             });
           }
         }
