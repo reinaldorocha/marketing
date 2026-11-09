@@ -1,0 +1,60 @@
+<div class="flex items-center justify-between border-b dark:border-gray-800 pb-3">
+    <div>
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <span>Ação Agendada #{{ action.pk|stringformat:".8s" }}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold {% if action.status == 'failed' %}bg-rose-100 text-rose-800{% elif action.status == 'done' %}bg-emerald-100 text-emerald-800{% else %}bg-indigo-100 text-indigo-800{% endif %}">
+                {{ action.get_status_display }}
+            </span>
+        </h3>
+        <p class="text-xs text-gray-500 font-mono mt-0.5">{{ action.type }}</p>
+    </div>
+    <button type="button" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+</div>
+
+<div class="space-y-4 text-xs">
+    <div class="grid grid-cols-2 gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <div>
+            <span class="text-gray-500">Executar em (run_at):</span>
+            <p class="font-mono font-medium text-gray-900 dark:text-white mt-0.5">{{ action.run_at|date:"d/m/Y H:i:s" }}</p>
+        </div>
+        <div>
+            <span class="text-gray-500">Tentativas Realizadas:</span>
+            <p class="font-medium text-gray-900 dark:text-white mt-0.5">{{ action.attempts }} de {{ action.max_attempts }}</p>
+        </div>
+        <div>
+            <span class="text-gray-500">Chave de Idempotência:</span>
+            <p class="font-mono text-[11px] text-gray-700 dark:text-gray-300 mt-0.5 break-all">{{ action.idempotency_key|default:"(sem chave)" }}</p>
+        </div>
+        <div>
+            <span class="text-gray-500">Contato Vinculado:</span>
+            <p class="font-mono text-[11px] text-gray-700 dark:text-gray-300 mt-0.5">{{ action.contact_id|default:"(nenhum)" }}</p>
+        </div>
+    </div>
+
+    {% if action.last_error %}
+    <div>
+        <label class="block font-semibold text-rose-700 dark:text-rose-400 mb-1">Último Erro Registrado:</label>
+        <pre class="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-rose-900 dark:text-rose-200 p-3 rounded-lg font-mono text-[11px] overflow-x-auto whitespace-pre-wrap">{{ action.last_error }}</pre>
+    </div>
+    {% endif %}
+
+    <div>
+        <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Payload da Ação (JSON):</label>
+        <pre class="bg-gray-900 text-gray-100 p-3 rounded-lg font-mono text-[11px] overflow-x-auto max-h-[220px]">{{ payload_pretty }}</pre>
+    </div>
+</div>
+
+<div class="flex items-center justify-end gap-2 border-t dark:border-gray-800 pt-3">
+    <button type="button" onclick="closeModal()" class="btn-pill-secondary text-xs">Fechar</button>
+    {% if action.status == "failed" or action.status == "cancelled" %}
+    <form method="post" action="{% url 'operations:action_retry' workspace_id=request.workspace.id action_id=action.id %}">
+        {% csrf_token %}
+        <button type="submit" class="btn-pill-primary text-xs flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Reprocessar Esta Ação
+        </button>
+    </form>
+    {% endif %}
+</div>

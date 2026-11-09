@@ -117,13 +117,48 @@
             <p class="field-hint text-xs mt-1">Stories não aceitam legenda no feed (aparecem como texto se aplicável).</p>
         </div>
 
+        <!-- Publication Mode / Scheduling -->
+        <div class="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3">
+            <label class="field-label text-sm font-semibold">Quando publicar?</label>
+            <div class="grid sm:grid-cols-3 gap-3">
+                <label class="p-3 bg-white dark:bg-gray-900 border rounded-lg flex items-start gap-2.5 cursor-pointer hover:border-indigo-500 transition">
+                    <input type="radio" name="action" value="publish" {% if not preset_datetime %}checked{% endif %} onchange="document.getElementById('schedule-picker').classList.add('hidden')" class="mt-0.5">
+                    <div>
+                        <span class="block text-xs font-semibold text-gray-900 dark:text-white">Publicar Agora</span>
+                        <span class="block text-[11px] text-gray-500">Envia para a Meta e publica imediatamente</span>
+                    </div>
+                </label>
+                <label class="p-3 bg-white dark:bg-gray-900 border rounded-lg flex items-start gap-2.5 cursor-pointer hover:border-indigo-500 transition">
+                    <input type="radio" name="action" value="schedule" {% if preset_datetime %}checked{% endif %} onchange="document.getElementById('schedule-picker').classList.remove('hidden')" class="mt-0.5">
+                    <div>
+                        <span class="block text-xs font-semibold text-gray-900 dark:text-white">Agendar Post</span>
+                        <span class="block text-[11px] text-gray-500">Escolha dia e hora para disparo automático</span>
+                    </div>
+                </label>
+                <label class="p-3 bg-white dark:bg-gray-900 border rounded-lg flex items-start gap-2.5 cursor-pointer hover:border-indigo-500 transition">
+                    <input type="radio" name="action" value="draft" onchange="document.getElementById('schedule-picker').classList.add('hidden')" class="mt-0.5">
+                    <div>
+                        <span class="block text-xs font-semibold text-gray-900 dark:text-white">Salvar Rascunho</span>
+                        <span class="block text-[11px] text-gray-500">Edite ou agende mais tarde no calendário</span>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Datetime picker for scheduled option -->
+            <div id="schedule-picker" class="{% if not preset_datetime %}hidden{% endif %} pt-2">
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1" for="scheduled_at">Data e Hora da Publicação</label>
+                <input type="datetime-local" name="scheduled_at" id="scheduled_at" value="{{ preset_datetime }}" class="form-input-styled text-xs max-w-xs">
+                <p class="field-hint text-[11px] mt-1">O worker da fila executará a publicação no horário agendado de forma automática.</p>
+            </div>
+        </div>
+
         <div class="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
-            <button type="submit" name="action" value="draft" class="btn-pill-secondary">
-                Salvar como Rascunho
-            </button>
-            <button type="submit" name="action" value="publish" class="btn-pill-primary inline-flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                Publicar no Instagram Agora
+            <a href="{% url 'publishing:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary text-xs">
+                Cancelar
+            </a>
+            <button type="submit" class="btn-pill-primary inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Confirmar e Salvar
             </button>
         </div>
     </form>

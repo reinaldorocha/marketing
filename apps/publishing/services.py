@@ -1,13 +1,80 @@
+"""Business services for Instagram publishing: scheduling, drafts, execution, and polling."""
+from __future__ import annotations
+
 import logging
+from datetime import datetime, timedelta
 from typing import Any
+
+from django.db import transaction
 from django.utils import timezone
 
 from apps.channels import instagram_oauth
 from apps.channels.providers import instagram
 from apps.channels.providers.exceptions import APIError
 from apps.publishing.models import ContentPost, PostStatus, PublishType
+from apps.queueing.registry import cancel_pending, schedule
 
 logger = logging.getLogger(__name__)
+
+
+def schedule_post(post: ContentPost, scheduled_at: datetime) -> ContentPost:
+    """Schedule a post for automatic future publication.
+
+    - Updates post.status to SCHEDULED.
+    - Preserves scheduled_at.
+    - Enqueues action publish_content_post in the queue for scheduled_at.
+    """
+    if scheduled_at <= timezone.now():
+        # If scheduled time has already passed, publish immediately
+        return publish_post(post)
+
+    with transaction.atomic():
+        post.status = PostStatus.SCHEDULED
+        post.scheduled_at = scheduled_at
+        post.last_error = ""
+        post.save(update_fields=["status", "scheduled_at", "last_error", "updated_at"])
+
+        idempotency_key = f"publishing:post:{post.pk}:{int(scheduled_at.timestamp())}"
+        try:
+            schedule(
+                "publish_content_post",
+                scheduled_at,
+                {"post_id": str(post.pk)},
+                workspace=post.workspace,
+                idempotency_key=idempotency_key,
+            )
+            logger.info("schedule_post: scheduled post %s for %s", post.pk, scheduled_at)
+        except Exception as exc:
+            logger.warning("Could not enqueue scheduled post action: %s", exc)
+
+    return post
+
+
+def cancel_schedule(post: ContentPost) -> ContentPost:
+    """Cancel a scheduled post, returning it to DRAFT."""
+    with transaction.atomic():
+        post.status = PostStatus.DRAFT
+        post.save(update_fields=["status", "updated_at"])
+
+        # Cancel any pending queue action
+        try:
+            cancel_pending(
+                workspace=post.workspace,
+                action_type="publish_content_post",
+            )
+        except Exception:
+            pass
+
+    return post
+
+
+def retry_post(post: ContentPost) -> ContentPost:
+    """Retry a failed post, re-creating the Meta container and attempting publication."""
+    post.container_id = ""
+    post.last_error = ""
+    post.status = PostStatus.DRAFT
+    post.save(update_fields=["container_id", "last_error", "status", "updated_at"])
+    return publish_post(post)
 
 
 def publish_post(post: ContentPost) -> ContentPost:
@@ -59,8 +126,21 @@ def publish_post(post: ContentPost) -> ContentPost:
         post.container_id = container_id
         post.save(update_fields=["container_id", "status", "last_error", "updated_at"])
 
-        # Step 2: Immediate check if ready
-        _poll_and_finish_container(post, ig_user_id, token, container_id)
+        # Step 2: Check if immediately ready (images are often immediate)
+        finished = _poll_and_finish_container(post, ig_user_id, token, container_id)
+
+        # If still in progress (video/reel/carousel), schedule automatic background check
+        if not finished and post.status == PostStatus.PUBLISHING:
+            try:
+                schedule(
+                    "poll_publishing_container",
+                    timezone.now() + timedelta(seconds=30),
+                    {"post_id": str(post.pk), "container_id": container_id, "check_count": 1},
+                    workspace=post.workspace,
+                    idempotency_key=f"publishing:poll:{post.pk}:{container_id}:1",
+                )
+            except Exception as exc:
+                logger.warning("Could not schedule poll_publishing_container: %s", exc)
 
     except APIError as exc:
         post.status = PostStatus.FAILED
@@ -102,7 +182,7 @@ def _poll_and_finish_container(post: ContentPost, ig_user_id: str, token: str, c
 
     # Otherwise still IN_PROGRESS
     post.status = PostStatus.PUBLISHING
-    post.last_error = "A Meta está processando o vídeo/carrossel. Clique em 'Atualizar Status' em instantes."
+    post.last_error = "A Meta está processando o vídeo/carrossel. O status será atualizado automaticamente em instantes."
     return False
 
 

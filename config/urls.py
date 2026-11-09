@@ -157,6 +157,7 @@ urlpatterns = [
     path("w/<uuid:workspace_id>/broadcasts/", include("apps.broadcasts.urls")),
     path("w/<uuid:workspace_id>/groups/", include("apps.whatsapp_groups.urls")),
     path("w/<uuid:workspace_id>/publishing/", include("apps.publishing.urls")),
+    path("w/<uuid:workspace_id>/operations/", include("apps.operations.urls")),
     # The analytics pages (issue #26). A deep prefix like the ones above it, and
     # separate from the /c/ and /o/ routes at the site root: those are public
     # token routes with no workspace in the URL at all. Guarded for the reason

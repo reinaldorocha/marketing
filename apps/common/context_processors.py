@@ -500,7 +500,16 @@ MAIN_NAV: list[NavGroup] = [
                 label="Posts & Reels",
                 icon="image",
                 url_name="publishing:list",
-                url_names=frozenset({"publishing:list", "publishing:create", "publishing:detail"}),
+                url_names=frozenset({"publishing:list", "publishing:create", "publishing:detail", "publishing:calendar", "publishing:edit"}),
+                workspace_scoped=True,
+            ),
+            NavItem(
+                key="operations",
+                permission="manage_workspace_settings",
+                label="Central Operacional",
+                icon="activity",
+                url_name="operations:dashboard",
+                url_names=frozenset({"operations:dashboard"}),
                 workspace_scoped=True,
             ),
             NavItem(

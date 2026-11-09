@@ -1,0 +1,53 @@
+{% load common_extras %}
+<tr id="action-row-{{ action.id }}">
+    <td class="py-2.5 px-3">
+        <span class="font-mono text-[11px] font-semibold text-gray-900 dark:text-gray-100">{{ action.type }}</span>
+        {% if action.contact_id %}
+        <span class="block text-[10px] text-gray-500 font-mono">Contato: {{ action.contact_id|stringformat:".8s" }}...</span>
+        {% endif %}
+    </td>
+    <td class="py-2.5 px-3">
+        {% if action.status == "pending" %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">Pendente</span>
+        {% elif action.status == "running" %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 animate-pulse">Executando</span>
+        {% elif action.status == "done" %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Concluído</span>
+        {% elif action.status == "failed" %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">Falha</span>
+        {% elif action.status == "cancelled" %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">Cancelado</span>
+        {% endif %}
+    </td>
+    <td class="py-2.5 px-3 font-mono text-[11px] text-gray-600 dark:text-gray-300">
+        {{ action.run_at|date:"d/m/Y H:i:s" }}
+    </td>
+    <td class="py-2.5 px-3 text-gray-500">
+        {{ action.attempts }} / {{ action.max_attempts }}
+    </td>
+    <td class="py-2.5 px-3 font-mono text-[10px] text-gray-500 truncate max-w-[150px]" title="{{ action.idempotency_key }}">
+        {{ action.idempotency_key|default:"&mdash;" }}
+    </td>
+    <td class="py-2.5 px-3 text-right">
+        <div class="inline-flex items-center gap-1.5">
+            <button type="button" onclick="openDetailModal('{{ action.pk }}')" class="btn-pill-secondary text-[11px] py-1 px-2" title="Inspecionar Payload e Erros">
+                Detalhes
+            </button>
+            {% if action.status == "failed" or action.status == "cancelled" %}
+            <form method="post" action="{% url 'operations:action_retry' workspace_id=request.workspace.id action_id=action.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-primary text-[11px] py-1 px-2.5" title="Reprocessar com proteção contra duplicidade">
+                    Reprocessar
+                </button>
+            </form>
+            {% elif action.status == "pending" %}
+            <form method="post" action="{% url 'operations:action_cancel' workspace_id=request.workspace.id action_id=action.id %}" onsubmit="return confirm('Deseja cancelar esta tarefa agendada?');">
+                {% csrf_token %}
+                <button type="submit" class="text-rose-600 hover:text-rose-800 text-[11px] font-medium py-1 px-2">
+                    Cancelar
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </td>
+</tr>

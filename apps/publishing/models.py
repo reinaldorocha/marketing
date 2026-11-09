@@ -17,6 +17,7 @@ class PublishType(models.TextChoices):
 
 class PostStatus(models.TextChoices):
     DRAFT = "draft", "Rascunho"
+    SCHEDULED = "scheduled", "Agendado"
     PUBLISHING = "publishing", "Processando na Meta"
     PUBLISHED = "published", "Publicado"
     FAILED = "failed", "Falha"

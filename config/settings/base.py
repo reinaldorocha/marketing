@@ -158,6 +158,7 @@ LOCAL_APPS = [
     "apps.campaigns",
     "apps.broadcasts",
     "apps.publishing",
+    "apps.operations",
     "apps.whatsapp_groups",
     "apps.inbox",
     "apps.notifications",

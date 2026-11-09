@@ -1,0 +1,65 @@
+<div id="channel-card-{{ conn.id }}" class="card p-4 space-y-3">
+    <div class="flex items-start justify-between">
+        <div>
+            <div class="flex items-center gap-2">
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ conn.display_name }}</h4>
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                    {{ conn.platform }}
+                </span>
+            </div>
+            <p class="text-xs text-gray-500 font-mono mt-0.5">{{ conn.external_id }}</p>
+        </div>
+        <div>
+            {% if conn.status == "active" %}
+                <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Ativo</span>
+            {% elif conn.status == "needs_reauth" %}
+                <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">Reconexão Necessária</span>
+            {% else %}
+                <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-800">{{ conn.get_status_display }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- WhatsApp Evolution details -->
+    {% if conn.evolution_session %}
+    <div class="p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-lg text-xs space-y-1">
+        <div class="flex items-center justify-between">
+            <span class="text-gray-500">Sessão WhatsApp:</span>
+            <span class="font-semibold uppercase {% if conn.evolution_session.state == 'open' %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">
+                {{ conn.evolution_session.state }}
+            </span>
+        </div>
+        {% if conn.evolution_session.phone_number %}
+        <div class="flex items-center justify-between">
+            <span class="text-gray-500">Telefone:</span>
+            <span class="font-mono text-gray-800 dark:text-gray-200">{{ conn.evolution_session.phone_number }}</span>
+        </div>
+        {% endif %}
+        {% if conn.evolution_session.last_error %}
+        <div class="text-rose-600 dark:text-rose-400 font-mono text-[11px] pt-1">
+            Erro: {{ conn.evolution_session.last_error }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="flex items-center justify-between pt-1 text-xs">
+        <form method="post" action="{% url 'operations:channel_test' workspace_id=request.workspace.id connection_id=conn.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-pill-secondary text-xs flex items-center gap-1.5 py-1 px-3">
+                <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Testar & Sincronizar
+            </button>
+        </form>
+
+        {% if conn.platform == "whatsapp" and conn.evolution_session %}
+        <a href="{% url 'channels:whatsapp_evolution_detail' workspace_id=request.workspace.id connection_id=conn.id %}" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+            Configurar Instância &rarr;
+        </a>
+        {% elif conn.platform == "instagram" %}
+        <a href="{% url 'channels:instagram_connect' workspace_id=request.workspace.id %}" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+            Reconectar Meta &rarr;
+        </a>
+        {% endif %}
+    </div>
+</div>

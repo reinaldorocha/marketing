@@ -1,0 +1,562 @@
+{% extends "base.html" %}
+{% load common_extras %}
+
+{% block title %}Central Operacional · BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[1200px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>Central Operacional</span>
+        </h1>
+        <p class="page-lede">
+            Monitoramento de filas em tempo real, canais desconectados, histórico de webhooks e reprocessamento seguro com proteção contra duplicidade.
+        </p>
+    </div>
+    <div class="page-header-actions flex items-center gap-2">
+        {% if overview.queues.failed > 0 %}
+        <form method="post" action="{% url 'operations:bulk_retry' workspace_id=request.workspace.id %}" onsubmit="return confirm('Deseja reprocessar todas as tarefas falhas do workspace com proteção contra duplicação?');">
+            {% csrf_token %}
+            <button type="submit" class="btn-pill-primary text-xs flex items-center gap-1.5" style="background-color: var(--error-600, #dc2626);">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Reprocessar Falhas ({{ overview.queues.failed }})
+            </button>
+        </form>
+        {% endif %}
+        <a href="{% url 'operations:dashboard' workspace_id=request.workspace.id %}?tab={{ tab }}" class="btn-pill-secondary text-xs flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Atualizar
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[1200px] space-y-6">
+
+    {% if overview.has_critical_alerts %}
+    <div class="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl flex items-start justify-between gap-3 text-rose-900 dark:text-rose-200">
+        <div class="flex items-start gap-2.5">
+            <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <div>
+                <p class="text-sm font-semibold">Atenção Operacional Detectada</p>
+                <div class="text-xs text-rose-700 dark:text-rose-300 mt-0.5 space-y-0.5">
+                    {% if overview.queues.delayed > 0 %}
+                    <p>• {{ overview.queues.delayed }} tarefa(s) pendentes com atraso de execução na fila.</p>
+                    {% endif %}
+                    {% if overview.channels.disconnected_count > 0 %}
+                    <p>• {{ overview.channels.disconnected_count }} canal(is) desconectado(s) ou aguardando reconexão.</p>
+                    {% endif %}
+                    {% if overview.channels.evolution_unhealthy_count > 0 %}
+                    <p>• {{ overview.channels.evolution_unhealthy_count }} instância(s) do WhatsApp Evolution fora do estado aberto.</p>
+                    {% endif %}
+                    {% if overview.queues.failed > 0 %}
+                    <p>• {{ overview.queues.failed }} tarefa(s) em fila de falha necessitando de inspeção/reprocessamento.</p>
+                    {% endif %}
+                    {% if overview.campaigns.stuck_broadcasts > 0 %}
+                    <p>• {{ overview.campaigns.stuck_broadcasts }} campanha(s) em envio sem atividade recente.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if overview.queues.failed > 0 %}
+            <a href="?tab=failures" class="text-xs font-semibold px-2.5 py-1 bg-rose-600 text-white rounded-lg hover:bg-rose-700">Ver Falhas</a>
+            {% elif overview.channels.disconnected_count > 0 %}
+            <a href="?tab=channels" class="text-xs font-semibold px-2.5 py-1 bg-rose-600 text-white rounded-lg hover:bg-rose-700">Ver Canais</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Top Navigation Tabs -->
+    <div class="border-b border-gray-200 dark:border-gray-800">
+        <nav class="flex gap-4 -mb-px text-sm font-medium">
+            <a href="?tab=overview" class="py-2.5 px-3 border-b-2 flex items-center gap-1.5 {% if tab == 'overview' %}border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold{% else %}border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400{% endif %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+                Visão Geral
+            </a>
+            <a href="?tab=queues" class="py-2.5 px-3 border-b-2 flex items-center gap-1.5 {% if tab == 'queues' %}border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold{% else %}border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400{% endif %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                Filas & Tarefas
+                {% if overview.queues.pending > 0 %}
+                <span class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold">{{ overview.queues.pending }}</span>
+                {% endif %}
+            </a>
+            <a href="?tab=failures" class="py-2.5 px-3 border-b-2 flex items-center gap-1.5 {% if tab == 'failures' %}border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold{% else %}border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400{% endif %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Falhas & Reprocessamento
+                {% if overview.queues.failed > 0 %}
+                <span class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold">{{ overview.queues.failed }}</span>
+                {% endif %}
+            </a>
+            <a href="?tab=channels" class="py-2.5 px-3 border-b-2 flex items-center gap-1.5 {% if tab == 'channels' %}border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold{% else %}border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400{% endif %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+                Saúde dos Canais
+                {% if overview.channels.disconnected_count > 0 %}
+                <span class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold">{{ overview.channels.disconnected_count }}</span>
+                {% endif %}
+            </a>
+            <a href="?tab=webhooks" class="py-2.5 px-3 border-b-2 flex items-center gap-1.5 {% if tab == 'webhooks' %}border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold{% else %}border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400{% endif %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Webhooks & Integrações
+                {% if overview.webhooks.inbound_failed > 0 or overview.webhooks.lead_failed > 0 %}
+                <span class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-rose-100 text-rose-700 font-bold">!</span>
+                {% endif %}
+            </a>
+        </nav>
+    </div>
+
+    <!-- TAB 1: VISÃO GERAL -->
+    {% if tab == "overview" %}
+    <div class="space-y-6">
+        <!-- 4 Metric Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500">Tarefas em Espera</span>
+                    <span class="w-2.5 h-2.5 rounded-full {% if overview.queues.delayed > 0 %}bg-amber-500 animate-pulse{% else %}bg-indigo-500{% endif %}"></span>
+                </div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ overview.queues.pending }}</p>
+                <p class="text-xs text-gray-500 mt-1">
+                    {% if overview.queues.delayed > 0 %}
+                        <span class="text-amber-600 font-medium">{{ overview.queues.delayed }} com atraso</span>
+                    {% else %}
+                        0 com atraso
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500">Falhas em Fila</span>
+                    <span class="w-2.5 h-2.5 rounded-full {% if overview.queues.failed > 0 %}bg-rose-500{% else %}bg-emerald-500{% endif %}"></span>
+                </div>
+                <p class="text-2xl font-bold {% if overview.queues.failed > 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %} mt-1">
+                    {{ overview.queues.failed }}
+                </p>
+                <p class="text-xs text-gray-500 mt-1">
+                    {{ overview.queues.done_recent }} concluídas nas últimas 24h
+                </p>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500">Canais Ativos</span>
+                    <span class="w-2.5 h-2.5 rounded-full {% if overview.channels.disconnected_count > 0 %}bg-amber-500{% else %}bg-emerald-500{% endif %}"></span>
+                </div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                    {{ overview.channels.active }} <span class="text-sm font-normal text-gray-400">/ {{ overview.channels.total }}</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-1">
+                    {% if overview.channels.disconnected_count > 0 %}
+                        <span class="text-rose-600 font-medium">{{ overview.channels.disconnected_count }} desconectado(s)</span>
+                    {% else %}
+                        100% dos canais operacionais
+                    {% endif %}
+                </p>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-500">Eventos Webhook (24h)</span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                </div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                    {{ overview.webhooks.inbound_total }}
+                </p>
+                <p class="text-xs text-gray-500 mt-1">
+                    {{ overview.webhooks.inbound_duplicates }} descartados por duplicidade
+                </p>
+            </div>
+        </div>
+
+        <!-- 2 Side-by-side diagnostic cards -->
+        <div class="grid md:grid-cols-2 gap-5">
+            <!-- Channels Quick Health -->
+            <div class="card p-5 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+                        Status dos Canais
+                    </h3>
+                    <a href="?tab=channels" class="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline">Ver Todos</a>
+                </div>
+                {% if overview.channels.disconnected_list %}
+                <div class="space-y-2">
+                    {% for conn in overview.channels.disconnected_list %}
+                    <div class="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex items-center justify-between text-xs">
+                        <div>
+                            <span class="font-medium text-gray-900 dark:text-white">{{ conn.display_name }}</span>
+                            <span class="text-gray-500 capitalize">({{ conn.platform }})</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                            {{ conn.get_status_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-xs text-gray-500 py-3 text-center">Todos os canais de mensagens estão saudáveis e conectados.</p>
+                {% endif %}
+            </div>
+
+            <!-- Queue Health & Watchdog -->
+            <div class="card p-5 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        Proteção contra Travamento de Campanhas
+                    </h3>
+                    <a href="?tab=queues" class="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline">Inspecionar Fila</a>
+                </div>
+                <div class="text-xs space-y-2 text-gray-600 dark:text-gray-300">
+                    <div class="flex items-center justify-between py-1 border-b dark:border-gray-800">
+                        <span>Disparos de Transmissão Parados:</span>
+                        <span class="font-semibold {% if overview.campaigns.stuck_broadcasts > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                            {{ overview.campaigns.stuck_broadcasts }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b dark:border-gray-800">
+                        <span>Posts com Falha na Meta:</span>
+                        <span class="font-semibold {% if overview.campaigns.failed_posts > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                            {{ overview.campaigns.failed_posts }}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between py-1">
+                        <span>Leads com Erro de Entrada (24h):</span>
+                        <span class="font-semibold {% if overview.webhooks.lead_failed > 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">
+                            {{ overview.webhooks.lead_failed }}
+                        </span>
+                    </div>
+                </div>
+                <div class="pt-2">
+                    <a href="?tab=failures" class="btn-pill-secondary text-xs w-full text-center block">
+                        Examinar Dead-Letter e Histórico de Erros
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- TAB 2: FILAS & TAREFAS -->
+    {% if tab == "queues" %}
+    <div class="space-y-4">
+        <!-- Filter bar -->
+        <form method="get" class="card p-4 flex flex-wrap items-center gap-3 text-xs">
+            <input type="hidden" name="tab" value="queues">
+            <div class="flex-1 min-w-[200px]">
+                <input type="text" name="q" value="{{ q }}" placeholder="Buscar por ID da ação, contato ou tipo..." class="form-input-styled w-full text-xs">
+            </div>
+            <div>
+                <select name="status" class="form-select-styled text-xs">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos os Status</option>
+                    {% for val, label in action_statuses %}
+                    <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <select name="type" class="form-select-styled text-xs">
+                    <option value="all" {% if type_filter == 'all' %}selected{% endif %}>Todos os Tipos de Ação</option>
+                    {% for t in available_types %}
+                    <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn-pill-primary text-xs">Filtrar</button>
+            {% if status_filter != 'all' or type_filter != 'all' or q %}
+            <a href="?tab=queues" class="text-gray-500 hover:text-gray-700 text-xs">Limpar</a>
+            {% endif %}
+        </form>
+
+        <!-- Queue Actions Table -->
+        <div class="card overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b dark:border-gray-800 text-[11px] text-gray-500 uppercase bg-gray-50/50 dark:bg-gray-800/30">
+                            <th class="py-2.5 px-3">Tipo da Ação</th>
+                            <th class="py-2.5 px-3">Status</th>
+                            <th class="py-2.5 px-3">Executar Em</th>
+                            <th class="py-2.5 px-3">Tentativas</th>
+                            <th class="py-2.5 px-3">Idempotência</th>
+                            <th class="py-2.5 px-3 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y dark:divide-gray-800">
+                        {% for action in actions %}
+                            {% include "operations/_action_row.html" with action=action %}
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-8 text-gray-500">
+                                Nenhuma ação em fila encontrada para os filtros selecionados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- TAB 3: FALHAS & REPROCESSAMENTO -->
+    {% if tab == "failures" %}
+    <div class="space-y-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Dead-Letter Queue e Histórico de Erros</h3>
+                <p class="text-xs text-gray-500">Examine causas de erro e reexecute tarefas com salvaguardas atômicas contra duplicidade.</p>
+            </div>
+            {% if failed_actions %}
+            <form method="post" action="{% url 'operations:bulk_retry' workspace_id=request.workspace.id %}" onsubmit="return confirm('Reprocessar todas as tarefas com falha com proteção contra duplicidade?');">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-primary text-xs flex items-center gap-1.5" style="background-color: var(--error-600, #dc2626);">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Reprocessar Todas as Falhas em Lote ({{ failed_actions|length }})
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if failed_actions %}
+        <div class="card overflow-hidden">
+            <div class="p-3 bg-rose-50 dark:bg-rose-950/20 border-b border-rose-200 dark:border-rose-900 text-xs font-semibold text-rose-900 dark:text-rose-200">
+                Tarefas Agendadas com Falha ({{ failed_actions|length }})
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b dark:border-gray-800 text-[11px] text-gray-500 uppercase">
+                            <th class="py-2.5 px-3">Tipo</th>
+                            <th class="py-2.5 px-3">Tentativas</th>
+                            <th class="py-2.5 px-3">Erro Reportado</th>
+                            <th class="py-2.5 px-3">Horário</th>
+                            <th class="py-2.5 px-3 text-right">Reprocessamento</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y dark:divide-gray-800">
+                        {% for action in failed_actions %}
+                        <tr>
+                            <td class="py-2.5 px-3 font-mono text-[11px] text-gray-900 dark:text-gray-100">{{ action.type }}</td>
+                            <td class="py-2.5 px-3 text-gray-500">{{ action.attempts }} / {{ action.max_attempts }}</td>
+                            <td class="py-2.5 px-3 text-rose-700 dark:text-rose-400 font-mono text-[11px] max-w-[400px] truncate">
+                                {{ action.last_error }}
+                            </td>
+                            <td class="py-2.5 px-3 text-gray-500">{{ action.updated_at|date:"d/m H:i:s" }}</td>
+                            <td class="py-2.5 px-3 text-right">
+                                <div class="inline-flex items-center gap-1.5">
+                                    <button type="button" onclick="openDetailModal('{{ action.pk }}')" class="btn-pill-secondary text-[11px] py-1 px-2">
+                                        Detalhes
+                                    </button>
+                                    <form method="post" action="{% url 'operations:action_retry' workspace_id=request.workspace.id action_id=action.id %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-pill-primary text-[11px] py-1 px-2.5">
+                                            Reprocessar
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="card p-6 text-center text-sm text-gray-500">
+            Nenhuma tarefa agendada em estado de falha no momento. A fila está limpa.
+        </div>
+        {% endif %}
+
+        {% if failed_posts %}
+        <div class="card overflow-hidden">
+            <div class="p-3 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-900 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                Publicações no Instagram com Falha ({{ failed_posts|length }})
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b dark:border-gray-800 text-[11px] text-gray-500 uppercase">
+                            <th class="py-2.5 px-3">Tipo de Post</th>
+                            <th class="py-2.5 px-3">Legenda / Conteúdo</th>
+                            <th class="py-2.5 px-3">Erro da Meta</th>
+                            <th class="py-2.5 px-3 text-right">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y dark:divide-gray-800">
+                        {% for post in failed_posts %}
+                        <tr>
+                            <td class="py-2.5 px-3 font-semibold">{{ post.get_publish_type_display }}</td>
+                            <td class="py-2.5 px-3 text-gray-600 dark:text-gray-300 max-w-[250px] truncate">{{ post.caption|default:"(sem legenda)" }}</td>
+                            <td class="py-2.5 px-3 text-rose-700 dark:text-rose-400 font-mono text-[11px] max-w-[350px] truncate">{{ post.last_error }}</td>
+                            <td class="py-2.5 px-3 text-right">
+                                <a href="{% url 'publishing:detail' workspace_id=request.workspace.id post_id=post.pk %}" class="btn-pill-secondary text-[11px] py-1 px-2.5">
+                                    Abrir Post
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- TAB 4: SAÚDE DOS CANAIS -->
+    {% if tab == "channels" %}
+    <div class="space-y-4">
+        <div>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Conexões de Mensageria e Redes Sociais</h3>
+            <p class="text-xs text-gray-500">Monitore sessões ativas do WhatsApp Evolution, credenciais do Instagram e execute testes ao vivo.</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+            {% for conn in connections %}
+                {% include "operations/_channel_card.html" with conn=conn %}
+            {% empty %}
+            <div class="col-span-2 card p-8 text-center text-sm text-gray-500">
+                Nenhum canal configurado neste workspace.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- TAB 5: WEBHOOKS & INTEGRAÇÕES -->
+    {% if tab == "webhooks" %}
+    <div class="space-y-6">
+        <div>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Auditoria de Webhooks Inbound e Outbound</h3>
+            <p class="text-xs text-gray-500">Entregas de eventos em tempo real, deduplicação de mensagens e rastreamento de entregas.</p>
+        </div>
+
+        <!-- Inbound Lead Webhooks -->
+        <div class="card overflow-hidden">
+            <div class="p-3 bg-gray-50 dark:bg-gray-800/40 border-b dark:border-gray-800 text-xs font-semibold flex items-center justify-between">
+                <span>Leads Inbound Recebidos (api_lead_webhook_log)</span>
+                <span class="text-gray-500 font-normal">Últimos 40 registros</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b dark:border-gray-800 text-[11px] text-gray-500 uppercase">
+                            <th class="py-2 px-3">Data/Hora</th>
+                            <th class="py-2 px-3">Webhook</th>
+                            <th class="py-2 px-3">Status</th>
+                            <th class="py-2 px-3">Contato</th>
+                            <th class="py-2 px-3">Idempotência</th>
+                            <th class="py-2 px-3">Detalhes / Erro</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y dark:divide-gray-800">
+                        {% for log in lead_logs %}
+                        <tr>
+                            <td class="py-2 px-3 text-gray-500 font-mono text-[11px]">{{ log.received_at|date:"d/m/Y H:i:s" }}</td>
+                            <td class="py-2 px-3 font-medium">{{ log.webhook.name }}</td>
+                            <td class="py-2 px-3">
+                                {% if log.status == "success" %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Sucesso</span>
+                                {% elif log.status == "duplicate" %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">Duplicado</span>
+                                {% else %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">{{ log.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3 text-gray-600 dark:text-gray-300">
+                                {% if log.contact %}
+                                    {{ log.contact.display_name }}
+                                {% else %}
+                                    <span class="text-gray-400">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3 font-mono text-[10px] text-gray-500 truncate max-w-[120px]">{{ log.idempotency_key }}</td>
+                            <td class="py-2 px-3 text-rose-600 dark:text-rose-400 font-mono text-[11px] truncate max-w-[200px]">{{ log.error_message|default:"&mdash;" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center py-4 text-gray-500">Nenhum log de lead registrado.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Inbound Raw Webhook Events -->
+        <div class="card overflow-hidden">
+            <div class="p-3 bg-gray-50 dark:bg-gray-800/40 border-b dark:border-gray-800 text-xs font-semibold flex items-center justify-between">
+                <span>Eventos Recebidos das Plataformas (channels_webhook_event_log)</span>
+                <span class="text-gray-500 font-normal">Deduplicação e Replay Protection</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b dark:border-gray-800 text-[11px] text-gray-500 uppercase">
+                            <th class="py-2 px-3">Data/Hora</th>
+                            <th class="py-2 px-3">Canal</th>
+                            <th class="py-2 px-3">Plataforma</th>
+                            <th class="py-2 px-3">Status</th>
+                            <th class="py-2 px-3">Provider Event ID</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y dark:divide-gray-800">
+                        {% for event in inbound_events %}
+                        <tr>
+                            <td class="py-2 px-3 text-gray-500 font-mono text-[11px]">{{ event.received_at|date:"d/m/Y H:i:s" }}</td>
+                            <td class="py-2 px-3 font-medium">{{ event.connection.display_name }}</td>
+                            <td class="py-2 px-3 capitalize">{{ event.platform }}</td>
+                            <td class="py-2 px-3">
+                                {% if event.status == "processed" %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Processado</span>
+                                {% elif event.status == "skipped_duplicate" %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">Duplicata Ignorada</span>
+                                {% elif event.status == "failed" %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">Falha</span>
+                                {% else %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-800">{{ event.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3 font-mono text-[11px] text-gray-600 dark:text-gray-300 truncate max-w-[250px]">{{ event.provider_event_id }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-4 text-gray-500">Nenhum evento registrado.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Dynamic Modal Container for Action Details -->
+<div id="modal-container" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div id="modal-content" class="card max-w-[650px] w-full max-h-[85vh] overflow-y-auto p-6 space-y-4 shadow-xl">
+        <!-- Injected via JS / Fetch -->
+    </div>
+</div>
+
+<script>
+function openDetailModal(actionId) {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = '<div class="py-8 text-center text-sm text-gray-500">Carregando detalhes...</div>';
+    container.classList.remove('hidden');
+
+    fetch("{% url 'operations:dashboard' workspace_id=request.workspace.id %}actions/" + actionId + "/detail/")
+        .then(res => res.text())
+        .then(html => {
+            content.innerHTML = html;
+        })
+        .catch(err => {
+            content.innerHTML = '<div class="text-rose-600 text-sm">Erro ao carregar detalhes: ' + err + '</div>';
+        });
+}
+
+function closeModal() {
+    document.getElementById('modal-container').classList.add('hidden');
+}
+</script>
+{% endblock %}
