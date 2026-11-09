@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% load common_extras %}
+
+{% block title %}{{ group.name|default:"Detalhes do Grupo" }} — BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[1100px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>{{ group.name|default:"(Grupo sem nome)" }}</span>
+            {% if group.is_admin %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                Você é Admin
+            </span>
+            {% endif %}
+            {% if group.is_announce %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                Apenas Admins enviam
+            </span>
+            {% endif %}
+        </h1>
+        <p class="page-lede font-mono text-xs text-gray-500">
+            JID: {{ group.jid }} • Conexão: {{ group.connection.name }}
+        </p>
+    </div>
+    <div class="page-header-actions flex items-center gap-2">
+        <a href="{% url 'whatsapp_groups:broadcast_compose' workspace_id=request.workspace.id %}?group={{ group.id }}" class="btn-pill-primary inline-flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+            Disparar Mensagem neste Grupo
+        </a>
+        <a href="{% url 'whatsapp_groups:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+            Voltar
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[1100px] space-y-6">
+
+    <!-- Top Cards: Invite Link & Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- Invite Link Box -->
+        <div class="md:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                    Link de Convite do Grupo
+                </h3>
+                <div class="flex items-center gap-2">
+                    <form method="post" action="{% url 'whatsapp_groups:refresh_invite' workspace_id=request.workspace.id group_id=group.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="revoke" value="0">
+                        <button type="submit" class="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">
+                            Obter Link
+                        </button>
+                    </form>
+                    <span class="text-gray-300">|</span>
+                    <form method="post" action="{% url 'whatsapp_groups:refresh_invite' workspace_id=request.workspace.id group_id=group.id %}" onsubmit="return confirm('Revogar o link atual gerará um novo e cancelará o anterior. Continuar?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="revoke" value="1">
+                        <button type="submit" class="text-xs text-rose-600 hover:underline">
+                            Revogar e Gerar Novo
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {% if group.invite_link %}
+            <div class="flex items-center gap-2">
+                <input type="text" readonly id="inviteInput" value="{{ group.invite_link }}" class="w-full text-xs font-mono bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300">
+                <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('inviteInput').value); alert('Link copiado!');" class="btn-pill-secondary text-xs flex-shrink-0">
+                    Copiar
+                </button>
+            </div>
+            {% else %}
+            <p class="text-xs text-gray-500">
+                Nenhum link gerado ainda. Clique em "Obter Link" acima para consultar a Evolution GO (exige que o bot seja administrador do grupo).
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- Participants Counter -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 flex flex-col justify-between">
+            <div>
+                <div class="text-xs font-medium text-gray-500 dark:text-gray-400">Total de Participantes</div>
+                <div class="text-3xl font-extrabold text-gray-900 dark:text-white mt-2">{{ group.participants_count }}</div>
+            </div>
+            <div class="text-xs text-gray-400 mt-4">
+                Última sincronização: {{ group.last_synced_at|date:"d/m/Y H:i"|default:"Nunca" }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Group Settings Form -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 space-y-6">
+        <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+            Configurações e Etiquetas do Grupo
+        </h3>
+
+        <form method="post" action="{% url 'whatsapp_groups:edit' workspace_id=request.workspace.id group_id=group.id %}" class="space-y-5">
+            {% csrf_token %}
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Nome / Assunto do Grupo
+                </label>
+                <input type="text" name="name" value="{{ group.name }}" maxlength="100" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500">
+                <p class="text-xs text-gray-500 mt-1">Alterar aqui atualizará o nome do grupo diretamente no WhatsApp (se for admin).</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Descrição do Grupo (Tópico)
+                </label>
+                <textarea name="description" rows="3" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500">{{ group.description }}</textarea>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <input type="checkbox" id="announceCheckbox" name="is_announce" {% if group.is_announce %}checked{% endif %} class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                <label for="announceCheckbox" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Apenas administradores podem enviar mensagens (Modo Anúncio)
+                </label>
+            </div>
+
+            {% if all_tags %}
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Etiquetas de Segmentação
+                </label>
+                <div class="flex flex-wrap gap-2">
+                    {% for tag in all_tags %}
+                    <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900">
+                        <input type="checkbox" name="tags" value="{{ tag.id }}" {% if tag in group.tags.all %}checked{% endif %} class="rounded text-emerald-600 focus:ring-emerald-500">
+                        <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: {{ tag.color }};"></span>
+                        <span class="text-xs text-gray-800 dark:text-gray-200">{{ tag.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="pt-4 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-end">
+                <button type="submit" class="btn-pill-primary">
+                    Salvar Alterações
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Participants Preview -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 space-y-4">
+        <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center justify-between">
+            <span>Participantes em Cache ({{ group.participants_count }})</span>
+            <span class="text-xs font-normal text-gray-500">Utilizados para @everyone</span>
+        </h3>
+        <div class="max-h-60 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
+            {% for p in group.participants_cache %}
+            <div class="py-2 flex items-center justify-between text-xs">
+                <span class="font-mono text-gray-700 dark:text-gray-300">{{ p.JID|default:p.jid|default:p }}</span>
+                {% if p.IsAdmin or p.isAdmin or p.IsSuperAdmin %}
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200">Admin</span>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="text-center py-4 text-xs text-gray-400">
+                Nenhum participante em cache. Execute "Sincronizar Grupos" para atualizar.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Danger Zone: Leave Group -->
+    <div class="p-6 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20 flex items-center justify-between">
+        <div>
+            <h4 class="text-sm font-semibold text-rose-800 dark:text-rose-300">Sair do Grupo</h4>
+            <p class="text-xs text-rose-600 dark:text-rose-400 mt-0.5">
+                O bot se desconectará e sairá permanentemente deste grupo do WhatsApp.
+            </p>
+        </div>
+        <form method="post" action="{% url 'whatsapp_groups:leave' workspace_id=request.workspace.id group_id=group.id %}" onsubmit="return confirm('Tem certeza de que deseja que o bot saia deste grupo do WhatsApp?');">
+            {% csrf_token %}
+            <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white transition-colors">
+                Sair do Grupo
+            </button>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

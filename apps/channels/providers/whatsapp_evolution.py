@@ -37,15 +37,27 @@ logger = logging.getLogger(__name__)
 _CAPABILITIES = capabilities_for(Platform.WHATSAPP_EVOLUTION)
 
 
-def _clean_phone(raw: str) -> str:
-    """Strip @s.whatsapp.net, + and non-digits to get the WhatsApp destination number."""
+def _clean_recipient(raw: str) -> str:
+    """Format recipient for WhatsApp. Keeps group JIDs (@g.us) intact, or strips phone to digits."""
     if not raw:
         return ""
+    raw = raw.strip()
+    if "@g.us" in raw:
+        # It's a group JID: e.g. 120363024849201948@g.us
+        return raw.split(":")[0] if ":" in raw else raw
+    # It's an individual phone number
     val = raw.split("@")[0].split(":")[0]
     return re.sub(r"\D", "", val)
 
 
+def _clean_phone(raw: str) -> str:
+    """Strip @s.whatsapp.net, + and non-digits to get the WhatsApp destination number."""
+    return _clean_recipient(raw)
+
+
 def _is_supported_recipient(recipient: str) -> bool:
+    if recipient and "@g.us" in recipient:
+        return True
     cleaned = _clean_phone(recipient)
     return 5 <= len(cleaned) <= 20
 
@@ -155,16 +167,19 @@ class EvolutionClient:
         text: str,
         quoted: dict[str, Any] | None = None,
         delay: int | None = None,
+        mentions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Call POST /send/text."""
         payload: dict[str, Any] = {
-            "number": _clean_phone(number),
+            "number": _clean_recipient(number),
             "text": text,
         }
         if quoted:
             payload["quoted"] = quoted
         if delay is not None:
             payload["delay"] = delay
+        if mentions:
+            payload["mentions"] = [_clean_recipient(m) for m in mentions if m]
         return request_json(
             "POST",
             f"{self.api_url}/send/text",
@@ -181,14 +196,14 @@ class EvolutionClient:
         caption: str = "",
         filename: str = "",
         delay: int | None = None,
+        mentions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Call POST /send/media."""
-        # Evolution GO accepts: image, video, audio, document
         clean_type = media_type.lower()
         if clean_type == "file":
             clean_type = "document"
         payload: dict[str, Any] = {
-            "number": _clean_phone(number),
+            "number": _clean_recipient(number),
             "type": clean_type,
             "url": url,
             "caption": caption,
@@ -196,6 +211,8 @@ class EvolutionClient:
         }
         if delay is not None:
             payload["delay"] = delay
+        if mentions:
+            payload["mentions"] = [_clean_recipient(m) for m in mentions if m]
         return request_json(
             "POST",
             f"{self.api_url}/send/media",
@@ -203,6 +220,318 @@ class EvolutionClient:
             json=payload,
             timeout=25.0,
         )
+
+    # -----------------------------------------------------------------------
+    # Formatos Especiais da Evolution GO (Item 3)
+    # -----------------------------------------------------------------------
+
+    def send_sticker(self, number: str, url: str) -> dict[str, Any]:
+        """Call POST /send/sticker (WebP image/sticker)."""
+        payload = {
+            "number": _clean_recipient(number),
+            "sticker": url,
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/send/sticker",
+            headers=self._headers(),
+            json=payload,
+            timeout=25.0,
+        )
+
+    def send_poll(
+        self,
+        number: str,
+        question: str,
+        options: list[str],
+        max_answers: int = 1,
+    ) -> dict[str, Any]:
+        """Call POST /send/poll (Interactive Poll/Enquete)."""
+        clean_options = [str(opt).strip() for opt in options if str(opt).strip()]
+        if len(clean_options) < 2:
+            raise ValueError("Enquete precisa de ao menos 2 opções de resposta.")
+        payload = {
+            "number": _clean_recipient(number),
+            "question": question[:255],
+            "options": clean_options[:12],
+            "maxAnswer": max(1, min(len(clean_options), max_answers)),
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/send/poll",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def send_location(
+        self,
+        number: str,
+        latitude: float,
+        longitude: float,
+        name: str = "",
+        address: str = "",
+    ) -> dict[str, Any]:
+        """Call POST /send/location (GPS Location pin)."""
+        payload: dict[str, Any] = {
+            "number": _clean_recipient(number),
+            "latitude": float(latitude),
+            "longitude": float(longitude),
+        }
+        if name:
+            payload["name"] = name
+        if address:
+            payload["address"] = address
+        return request_json(
+            "POST",
+            f"{self.api_url}/send/location",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def send_contact(
+        self,
+        number: str,
+        full_name: str,
+        phone: str,
+        organization: str = "",
+    ) -> dict[str, Any]:
+        """Call POST /send/contact (vCard contact card)."""
+        payload = {
+            "number": _clean_recipient(number),
+            "vcard": {
+                "fullName": full_name,
+                "phone": _clean_phone(phone),
+                "organization": organization or None,
+            },
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/send/contact",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def send_buttons(
+        self,
+        number: str,
+        title: str,
+        description: str,
+        footer: str,
+        buttons: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Call POST /send/button."""
+        payload = {
+            "number": _clean_recipient(number),
+            "title": title,
+            "description": description,
+            "footer": footer,
+            "buttons": buttons,
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/send/button",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def send_list(
+        self,
+        number: str,
+        title: str,
+        description: str,
+        footer_text: str,
+        button_text: str,
+        sections: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Call POST /send/list."""
+        payload = {
+            "number": _clean_recipient(number),
+            "title": title,
+            "description": description,
+            "footerText": footer_text,
+            "buttonText": button_text or "Ver Opções",
+            "sections": sections,
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/send/list",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    # -----------------------------------------------------------------------
+    # API de Gerenciamento de Grupos da Evolution GO (Item 2)
+    # -----------------------------------------------------------------------
+
+    def list_groups(self) -> list[dict[str, Any]]:
+        """Call GET /group/list or /group/fetchAllGroups and normalize returned groups."""
+        for endpoint in ("/group/list", "/group/fetchAllGroups"):
+            try:
+                res = request_json(
+                    "GET",
+                    f"{self.api_url}{endpoint}",
+                    headers=self._headers(),
+                    timeout=20.0,
+                )
+                raw_list = []
+                if isinstance(res, list):
+                    raw_list = res
+                elif isinstance(res, dict):
+                    raw_list = res.get("data") or res.get("groups") or res.get("result") or []
+
+                if isinstance(raw_list, list):
+                    groups: list[dict[str, Any]] = []
+                    for item in raw_list:
+                        if not isinstance(item, dict):
+                            continue
+                        jid = str(item.get("JID") or item.get("Jid") or item.get("jid") or item.get("id") or "")
+                        if not jid or "@g.us" not in jid:
+                            continue
+                        name = str(item.get("Name") or item.get("name") or item.get("Subject") or item.get("subject") or jid)
+                        topic = str(item.get("Topic") or item.get("Description") or item.get("description") or "")
+                        owner = str(item.get("OwnerJID") or item.get("owner") or "")
+                        announce = bool(item.get("Announce") or item.get("announce") or False)
+                        participants = item.get("Participants") or item.get("participants") or []
+
+                        groups.append({
+                            "jid": jid,
+                            "name": name,
+                            "description": topic,
+                            "owner": owner,
+                            "is_announce": announce,
+                            "participants_count": len(participants) if isinstance(participants, list) else 0,
+                            "participants": participants if isinstance(participants, list) else [],
+                        })
+                    return groups
+            except Exception as exc:
+                logger.info("EvolutionClient: endpoint %s returned error: %s", endpoint, exc)
+                continue
+        return []
+
+    def get_group_info(self, group_jid: str) -> dict[str, Any]:
+        """Fetch details of one specific group."""
+        try:
+            res = request_json(
+                "GET",
+                f"{self.api_url}/group/info",
+                headers=self._headers(),
+                params={"groupJid": group_jid},
+                timeout=15.0,
+            )
+            return res if isinstance(res, dict) else {}
+        except Exception as exc:
+            logger.warning("EvolutionClient: could not fetch group info for %s: %s", group_jid, exc)
+            return {}
+
+    def create_group(self, group_name: str, participants: list[str]) -> dict[str, Any]:
+        """Call POST /group/create to form a new WhatsApp group."""
+        payload = {
+            "groupName": group_name,
+            "participants": [_clean_phone(p) for p in participants if p],
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/group/create",
+            headers=self._headers(),
+            json=payload,
+            timeout=20.0,
+        )
+
+    def update_group_subject(self, group_jid: str, subject: str) -> dict[str, Any]:
+        """Call POST /group/updateSubject to rename a group."""
+        payload = {
+            "groupJid": group_jid,
+            "groupName": subject[:100],
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/group/updateSubject",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def update_group_description(self, group_jid: str, description: str) -> dict[str, Any]:
+        """Call POST /group/updateDescription to update description."""
+        payload = {
+            "groupJid": group_jid,
+            "description": description,
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/group/updateDescription",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def update_group_settings(self, group_jid: str, action: str) -> dict[str, Any]:
+        """Call POST /group/updateSetting (action: 'announcement' or 'not_announcement')."""
+        payload = {
+            "groupJid": group_jid,
+            "action": action,
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/group/updateSetting",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def leave_group(self, group_jid: str) -> dict[str, Any]:
+        """Call POST /group/leaveGroup."""
+        payload = {
+            "groupJid": group_jid,
+        }
+        return request_json(
+            "POST",
+            f"{self.api_url}/group/leaveGroup",
+            headers=self._headers(),
+            json=payload,
+            timeout=15.0,
+        )
+
+    def get_group_invite_code(self, group_jid: str) -> str:
+        """Fetch invite code / link for the group."""
+        try:
+            res = request_json(
+                "GET",
+                f"{self.api_url}/group/inviteCode",
+                headers=self._headers(),
+                params={"groupJid": group_jid},
+                timeout=15.0,
+            )
+            code = ""
+            if isinstance(res, dict):
+                code = str(res.get("code") or res.get("inviteCode") or res.get("link") or "")
+            return code
+        except Exception as exc:
+            logger.warning("EvolutionClient: could not get invite code for %s: %s", group_jid, exc)
+            return ""
+
+    def revoke_group_invite_code(self, group_jid: str) -> str:
+        """Revoke current invite link and generate a new one."""
+        try:
+            res = request_json(
+                "POST",
+                f"{self.api_url}/group/revokeInviteCode",
+                headers=self._headers(),
+                json={"groupJid": group_jid},
+                timeout=15.0,
+            )
+            code = ""
+            if isinstance(res, dict):
+                code = str(res.get("code") or res.get("inviteCode") or res.get("link") or "")
+            return code
+        except Exception as exc:
+            logger.warning("EvolutionClient: could not revoke invite code for %s: %s", group_jid, exc)
+            return ""
 
 
 class WhatsAppEvolutionAdapter(Adapter):

@@ -472,6 +472,22 @@ MAIN_NAV: list[NavGroup] = [
                 workspace_scoped=True,
             ),
             NavItem(
+                key="whatsapp_groups",
+                label="Grupos WhatsApp",
+                icon="users",
+                url_name="whatsapp_groups:list",
+                url_names=frozenset({
+                    "whatsapp_groups:list",
+                    "whatsapp_groups:detail",
+                    "whatsapp_groups:create",
+                    "whatsapp_groups:broadcast_list",
+                    "whatsapp_groups:broadcast_compose",
+                    "whatsapp_groups:broadcast_detail",
+                    "whatsapp_groups:tags_manage",
+                }),
+                workspace_scoped=True,
+            ),
+            NavItem(
                 key="publishing",
                 label="Posts & Reels",
                 icon="image",
