@@ -1506,27 +1506,69 @@ def _attachments(request: WorkspaceRequest, conversation: Conversation, dropped:
     ``dropped``, so the caller can say so — a silent drop leaves an agent
     referring in the text to a document that was never sent.
     """
+    import mimetypes
+    from urllib.parse import urlsplit
+    from apps.media_library.delivery import read_token
+    from apps.media_library.models import MediaAsset
+
     ids = [value for value in request.POST.getlist("media")[:MAX_ATTACHMENTS] if value]
     urls = [value for value in request.POST.getlist("media_url")[:MAX_ATTACHMENTS] if value]
+    raw_types = request.POST.getlist("media_type")
     raw_items = ids + [u for u in urls if u not in ids]
     if not raw_items:
         return []
     capabilities = _capabilities_for(conversation)
     blocks: list[Any] = []
-    for item in raw_items[:MAX_ATTACHMENTS]:
+    for idx, item in enumerate(raw_items[:MAX_ATTACHMENTS]):
         item_str = str(item).strip()
         if not item_str:
             continue
         if item_str.startswith("http://") or item_str.startswith("https://") or item_str.startswith("/"):
+            split_url = urlsplit(item_str)
+            parsed_path = split_url.path.lower()
             lower = item_str.lower()
-            if "ptt=1" in lower or "voice" in lower or lower.endswith((".ogg", ".opus", ".mp3", ".wav", ".m4a", ".aac")):
-                kind = "audio"
-            elif lower.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
-                kind = "image"
-            elif lower.endswith((".mp4", ".mov", ".avi", ".webm", ".mkv")):
-                kind = "video"
-            else:
-                kind = "file"
+
+            # 1. Check if internal signed delivery URL (/m/<token>/)
+            kind = ""
+            if "/m/" in parsed_path:
+                token = parsed_path.split("/m/")[1].strip("/").split("/")[0]
+                if token:
+                    try:
+                        asset_pk, _ = read_token(token)
+                        asset = MediaAsset.objects.for_workspace(request.workspace).filter(pk=asset_pk).first()
+                        if asset:
+                            kind = str(asset.kind)
+                    except Exception:
+                        pass
+
+            # 2. Check explicit metadata from composer form
+            if not kind and idx < len(raw_types) and raw_types[idx] in ("image", "audio", "video", "file"):
+                kind = raw_types[idx]
+
+            # 3. Detect from path extension without query parameters
+            if not kind:
+                audio_exts = (".ogg", ".opus", ".mp3", ".wav", ".m4a", ".aac")
+                image_exts = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg")
+                video_exts = (".mp4", ".mov", ".avi", ".webm", ".mkv", ".3gp")
+                if "ptt=1" in lower or "voice" in lower or parsed_path.endswith(audio_exts):
+                    kind = "audio"
+                elif parsed_path.endswith(image_exts):
+                    kind = "image"
+                elif parsed_path.endswith(video_exts):
+                    kind = "video"
+                else:
+                    guessed_mime, _ = mimetypes.guess_type(parsed_path)
+                    if guessed_mime:
+                        if guessed_mime.startswith("image/"):
+                            kind = "image"
+                        elif guessed_mime.startswith("audio/"):
+                            kind = "audio"
+                        elif guessed_mime.startswith("video/"):
+                            kind = "video"
+                        else:
+                            kind = "file"
+                    else:
+                        kind = "file"
 
             if capabilities is not None and not capabilities.supports_block(kind):
                 dropped.add(kind)

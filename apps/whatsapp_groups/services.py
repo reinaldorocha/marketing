@@ -1,6 +1,7 @@
 import logging
 import time
 from typing import Any
+from django.db import transaction
 from django.utils import timezone
 
 from apps.channels.models import ChannelConnection, ConnectionStatus
@@ -186,7 +187,10 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
     # Resolve target groups
     target_groups_qs = WhatsAppGroup.objects.none()
     if broadcast.target_mode == BroadcastTargetMode.SELECTED:
-        target_groups_qs = broadcast.target_groups.all()
+        target_groups_qs = broadcast.target_groups.filter(
+            workspace=broadcast.workspace,
+            connection=connection,
+        )
     elif broadcast.target_mode == BroadcastTargetMode.BY_TAG:
         target_groups_qs = (
             WhatsAppGroup.objects.for_workspace(broadcast.workspace)
@@ -305,17 +309,41 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
     }
 
 
+def claim_group_broadcast_for_sending(broadcast_id: Any) -> GroupBroadcast | None:
+    """Atomically transition a scheduled group broadcast to sending status.
+
+    Guarantees that between concurrent queue workers and hourly housekeeping,
+    only one caller can claim and execute the broadcast.
+    """
+    with transaction.atomic():
+        updated = (
+            GroupBroadcast.objects.unscoped()
+            .filter(pk=broadcast_id, status=BroadcastStatus.SCHEDULED)
+            .update(status=BroadcastStatus.SENDING, updated_at=timezone.now())
+        )
+        if not updated:
+            return None
+        return GroupBroadcast.objects.unscoped().get(pk=broadcast_id)
+
+
 def process_scheduled_broadcasts() -> int:
     """Check for scheduled group broadcasts whose execution time has arrived."""
-    pending = GroupBroadcast.objects.unscoped().filter(
-        status=BroadcastStatus.SCHEDULED,
-        scheduled_at__lte=timezone.now(),
+    pending_ids = list(
+        GroupBroadcast.objects.unscoped()
+        .filter(
+            status=BroadcastStatus.SCHEDULED,
+            scheduled_at__lte=timezone.now(),
+        )
+        .values_list("pk", flat=True)
     )
     processed = 0
-    for broadcast in pending:
+    for broadcast_id in pending_ids:
+        broadcast = claim_group_broadcast_for_sending(broadcast_id)
+        if not broadcast:
+            continue
         try:
             dispatch_group_broadcast(broadcast)
             processed += 1
         except Exception as exc:
-            logger.error("Error processing scheduled broadcast %s: %s", broadcast.id, exc)
+            logger.error("Error processing scheduled broadcast %s: %s", broadcast_id, exc)
     return processed

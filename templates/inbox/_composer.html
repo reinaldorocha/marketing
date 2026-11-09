@@ -161,6 +161,9 @@ thread above keeps its height.
             <template x-if="item.url">
               <input type="hidden" name="media_url" :value="item.url">
             </template>
+            <template x-if="item.media_type">
+              <input type="hidden" name="media_type" :value="item.media_type">
+            </template>
             <button type="button" class="btn-icon-hover" @click="drop(item.id)"
                     :aria-label="'Remove attachment ' + item.name">×</button>
           </span>

@@ -712,11 +712,12 @@ class WhatsAppEvolutionAdapter(Adapter):
             status_val = (data.get("status") or data.get("receipt") or "").lower()
             if msg_id and status_val:
                 mapped_status = "read" if "read" in status_val or "play" in status_val else "delivered"
+                receipt_phone = _clean_phone(key.get("remoteJid", ""))
                 return [
                     NormalizedEvent(
                         type=EventType.DELIVERY_STATUS,
                         connection=connection,
-                        platform_user_id=_clean_phone(key.get("remoteJid", "")),
+                        platform_user_id=f"+{receipt_phone}" if receipt_phone else key.get("remoteJid", ""),
                         provider_event_id=f"receipt:{msg_id}:{mapped_status}",
                         timestamp=timezone.now(),
                         payload=EventPayload(
@@ -785,7 +786,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                 NormalizedEvent(
                     type=EventType.MESSAGE,
                     connection=connection,
-                    platform_user_id=remote_jid,
+                    platform_user_id=f"+{phone}" if phone else remote_jid,
                     provider_event_id=msg_id,
                     timestamp=ts,
                     payload=EventPayload(

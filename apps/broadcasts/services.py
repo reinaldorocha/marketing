@@ -50,7 +50,7 @@ seconds does not put an UPDATE on a GET.
 
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.db import transaction
@@ -73,6 +73,7 @@ from apps.contacts import conditions
 from apps.flows import services as flow_services
 from apps.flows.models import Flow, FlowStatus, FlowVersion
 from apps.flows.schema import validate_graph
+from apps.messaging import buckets
 from apps.messaging.codes import Denial
 from apps.messaging.models import MessageStatus
 from apps.queueing.models import ActionStatus, ActionType, ScheduledAction
@@ -614,7 +615,12 @@ def pause_broadcast(broadcast: Broadcast) -> Broadcast:
             raise BroadcastError("Only scheduled or sending broadcasts can be paused.")
         locked.status = BroadcastStatus.PAUSED
         locked.save(update_fields=["status", "updated_at"])
-        _cancel_deferred_sends(locked)
+        ScheduledAction.objects.for_workspace(locked.workspace_id).filter(
+            type__in=[ActionType.BROADCAST_SEND, ActionType.BROADCAST_FANOUT],
+            status=ActionStatus.PENDING,
+            payload__broadcast_id=str(locked.pk),
+        ).update(status=ActionStatus.CANCELLED, updated_at=timezone.now())
+        _cancel_deferred_sends(locked, mark_recipient_cancelled=False)
         release_stats(locked)
     broadcast.refresh_from_db()
     return broadcast
@@ -711,7 +717,7 @@ def cancel_broadcast(broadcast: Broadcast) -> Broadcast:
     return broadcast
 
 
-def _cancel_deferred_sends(broadcast: Broadcast) -> int:
+def _cancel_deferred_sends(broadcast: Broadcast, *, mark_recipient_cancelled: bool = True) -> int:
     """Stop the sends the facade accepted but the token bucket never released.
 
     The gap this closes is small and real. A ``broadcast_send`` that ran while
@@ -762,17 +768,15 @@ def _cancel_deferred_sends(broadcast: Broadcast) -> int:
         payload__message_id__in=sorted(stoppable),
     ).update(status=ActionStatus.CANCELLED, updated_at=timezone.now())
 
-    # **Only** the recipients whose retry this call actually stopped. A retry
-    # that was already ``running`` is out of reach — ``handle_send_retry`` knows
-    # nothing about broadcasts and will finish its provider call — so marking its
-    # recipient ``cancelled`` would record as stopped a message that is on its
-    # way to somebody's phone, and take a count out of ``sent`` for a send that
-    # happened. Those stay ``sent``, which is what they are.
+    # When cancelling permanently, mark recipients as cancelled.
+    # When pausing, reset them to PENDING so resume_broadcast can resend them.
+    new_status = RecipientStatus.CANCELLED if mark_recipient_cancelled else RecipientStatus.PENDING
     BroadcastRecipient.objects.for_workspace(broadcast.workspace_id).filter(
         pk__in=[stalled[message_id] for message_id in stoppable]
-    ).update(status=RecipientStatus.CANCELLED, updated_at=timezone.now())
+    ).update(status=new_status, updated_at=timezone.now())
 
-    logger.info("Broadcast %s: stopped %s deferred send(s) on cancellation", broadcast.pk, len(stoppable))
+    action_label = "cancellation" if mark_recipient_cancelled else "pause"
+    logger.info("Broadcast %s: stopped %s deferred send(s) on %s", broadcast.pk, len(stoppable), action_label)
     return len(stoppable)
 
 

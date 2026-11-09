@@ -3,7 +3,7 @@ import logging
 from apps.broadcasts.models import BroadcastStatus
 from apps.queueing.registry import register_handler
 from apps.whatsapp_groups.models import GroupBroadcast
-from apps.whatsapp_groups.services import dispatch_group_broadcast
+from apps.whatsapp_groups.services import claim_group_broadcast_for_sending, dispatch_group_broadcast
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +14,10 @@ def handle_group_broadcast_send(payload: dict, action) -> None:
     broadcast_id = payload.get("broadcast_id")
     if not broadcast_id:
         return
-    try:
-        broadcast = GroupBroadcast.objects.unscoped().get(pk=broadcast_id)
-    except GroupBroadcast.DoesNotExist:
-        logger.warning("GroupBroadcast %s does not exist", broadcast_id)
-        return
 
-    if broadcast.status != BroadcastStatus.SCHEDULED:
+    broadcast = claim_group_broadcast_for_sending(broadcast_id)
+    if not broadcast:
+        # Already claimed or no longer scheduled
         return
 
     try:

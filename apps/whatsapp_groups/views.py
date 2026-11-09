@@ -331,10 +331,14 @@ def broadcast_compose(request: WorkspaceRequest, workspace_id: str) -> HttpRespo
         # Attach target groups or tags
         if target_mode == BroadcastTargetMode.SELECTED:
             group_ids = request.POST.getlist("target_groups")
-            broadcast.target_groups.set(group_ids)
+            valid_groups = WhatsAppGroup.objects.for_workspace(workspace).filter(
+                connection=connection, pk__in=group_ids
+            )
+            broadcast.target_groups.set(valid_groups)
         elif target_mode == BroadcastTargetMode.BY_TAG:
             tag_ids = request.POST.getlist("target_tags")
-            broadcast.target_tags.set(tag_ids)
+            valid_tags = WhatsAppGroupTag.objects.for_workspace(workspace).filter(pk__in=tag_ids)
+            broadcast.target_tags.set(valid_tags)
 
         # Handle scheduling vs immediate sending
         if schedule_time_raw:

@@ -314,16 +314,24 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
             identity = None
             if webhook.channel_connection and norm_phone:
                 conn = webhook.channel_connection
-                # User ID on WhatsApp is typically the phone number digits or JID
-                user_id = norm_phone.lstrip("+")
+                user_id = norm_phone if norm_phone.startswith("+") else f"+{norm_phone}"
                 identity = (
                     ContactChannelIdentity.objects.for_workspace(webhook.workspace)
                     .filter(
-                        contact=contact,
                         channel_connection=conn,
+                        platform_user_id=user_id,
                     )
                     .first()
                 )
+                if identity is None:
+                    identity = (
+                        ContactChannelIdentity.objects.for_workspace(webhook.workspace)
+                        .filter(
+                            contact=contact,
+                            channel_connection=conn,
+                        )
+                        .first()
+                    )
                 if identity is None:
                     identity = ContactChannelIdentity.objects.for_workspace(webhook.workspace).create(
                         contact=contact,
@@ -331,6 +339,9 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                         platform=conn.platform,
                         platform_user_id=user_id,
                     )
+                elif identity.contact_id != contact.pk:
+                    identity.contact = contact
+                    identity.save(update_fields=["contact", "updated_at"])
 
             # 7. Consent / Opt-in registration
             # "Não marque o contato como autorizado automaticamente apenas porque recebeu um telefone.

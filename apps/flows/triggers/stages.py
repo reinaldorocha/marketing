@@ -226,6 +226,9 @@ def _claim_comment(context: RoutingContext, trigger: Trigger, variables: dict[st
         # claim was written in and hand the guard straight back.
         comments.respond(context, trigger, row)
 
+    if context.notes.get("awaiting_follower"):
+        return Consumed(f"{trigger.type} trigger, awaiting follower confirmation")
+
     if context.contact is None:
         return Consumed(f"{trigger.type} trigger, awaiting a contact")
 

@@ -1131,10 +1131,25 @@ def _message_events(
 
 
 def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payload_str: str) -> None:
-    """Handle postback ig_follow_check:<row_pk>:<comment_text> to re-verify follow status and resume flow."""
-    parts = payload_str.split(":", 2)
-    row_pk = parts[1] if len(parts) > 1 else ""
-    comment_text = parts[2] if len(parts) > 2 else ""
+    """Handle postback ig_follow_check to re-verify follow status and resume flow."""
+    if not payload_str.startswith("ig_follow_check:"):
+        return
+    rest = payload_str[len("ig_follow_check:"):]
+    is_dm = False
+    row_pk = ""
+    comment_text = ""
+    original_text = ""
+    if rest.startswith("dm:"):
+        is_dm = True
+        dm_parts = rest.split(":", 2)
+        target_sender_id = dm_parts[1] if len(dm_parts) > 1 else sender_id
+        original_text = dm_parts[2] if len(dm_parts) > 2 else ""
+        row_pk = f"dm:{target_sender_id}"
+    else:
+        parts = rest.split(":", 1)
+        row_pk = parts[0]
+        comment_text = parts[1] if len(parts) > 1 else ""
+
     token = access_token(connection)
     is_now_follower = check_is_follower(sender_id, token)
 
@@ -1148,21 +1163,48 @@ def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payloa
 
     if is_now_follower:
         logger.info("Instagram: user %s confirmed follower status, unblocking flow.", sender_id)
-        from apps.flows.models import HandledComment
-        row = HandledComment.objects.unscoped().filter(pk=row_pk).first() if (row_pk and not row_pk.startswith("dm:")) else None
-        if row:
-            # Deliver flow by dispatching _open_thread preserving comment keyword
-            _open_thread(connection, row, {"comment_text": comment_text})
+        if is_dm:
+            try:
+                call(token, "me/messages", payload={
+                    "recipient": {"id": sender_id},
+                    "message": {"text": "Obrigado por nos seguir! 🎉 Seu acesso foi liberado com sucesso."},
+                })
+            except Exception as exc:
+                logger.warning("Instagram: error sending DM confirmation to %s: %s", sender_id, exc)
+
+            if original_text:
+                event = NormalizedEvent(
+                    type=EventType.MESSAGE,
+                    connection=connection,
+                    platform_user_id=sender_id,
+                    provider_event_id=f"ig:dm_foll:{sender_id}:{int(timezone.now().timestamp())}",
+                    timestamp=timezone.now(),
+                    payload=EventPayload(text=original_text),
+                    raw={"simulated_resume": True},
+                )
+                channels_ingest.process_events(connection, (event,))
         else:
-            # Send direct message confirmation
-            call(token, "me/messages", payload={
-                "recipient": {"id": sender_id},
-                "message": {"text": "Obrigado por nos seguir! 🎉 Seu acesso foi liberado com sucesso."},
-            })
+            from apps.flows.models import HandledComment
+            row = HandledComment.objects.unscoped().filter(pk=row_pk).first() if row_pk else None
+            if row:
+                _open_thread(connection, row, {"comment_text": comment_text})
+            else:
+                try:
+                    call(token, "me/messages", payload={
+                        "recipient": {"id": sender_id},
+                        "message": {"text": "Obrigado por nos seguir! 🎉 Seu acesso foi liberado com sucesso."},
+                    })
+                except Exception as exc:
+                    logger.warning("Instagram: error sending confirmation to %s: %s", sender_id, exc)
     else:
-        # Prompt again with follower gate buttons
         recipient = {"id": sender_id}
-        send_follower_gate_message(connection, recipient, row_pk, settings, comment_text=comment_text)
+        send_follower_gate_message(
+            connection,
+            recipient,
+            row_pk,
+            settings,
+            comment_text=(original_text if is_dm else comment_text),
+        )
 
 
 def _postback_events(
@@ -1563,6 +1605,29 @@ def _respond_to_comment(context: Any, trigger: Any, row: Any) -> None:
     an author who configured one wants it for repeat customers too.
     """
     from apps.queueing.registry import schedule as queue_schedule
+
+    connection = context.connection
+    settings = getattr(connection, "instagram_settings", None)
+    if settings is None:
+        try:
+            from apps.channels.models import InstagramProfileSettings
+            settings = InstagramProfileSettings.objects.filter(connection=connection).first()
+        except Exception:
+            settings = None
+
+    if settings and settings.require_follower:
+        token = access_token(connection)
+        if not check_is_follower(row.commenter_ref, token):
+            logger.info("Instagram: commenter %s is not following, sending follower gate prompt.", row.commenter_ref)
+            recipient = {"comment_id": row.comment_id}
+            cmt_text = _text(context.event.payload.text, MAX_INBOUND_TEXT_CHARS)
+            try:
+                send_follower_gate_message(connection, recipient, str(row.pk), settings, comment_text=cmt_text)
+            except Exception as exc:
+                logger.warning("Instagram: failed to send follower gate message: %s", exc)
+            if hasattr(context, "notes") and isinstance(context.notes, dict):
+                context.notes["awaiting_follower"] = True
+            return
 
     try:
         queue_schedule(

@@ -82,6 +82,7 @@ ADDRESS_PLATFORMS: dict[str, str] = {
     # Issue #19. A WhatsApp platform_user_id is "+" plus the wa_id, which is
     # E.164 — see the module docstring for why the plus is the whole story.
     Platform.WHATSAPP.value: "phone",
+    Platform.WHATSAPP_EVOLUTION.value: "phone",
 }
 
 #: Longest ``platform_user_id`` the column holds.
