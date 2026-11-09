@@ -1,0 +1,102 @@
+<div id="inbox-quick-reply-rows"
+     hx-get="{% url 'inbox:quick_reply_rows' workspace_id=request.workspace.id %}"
+     hx-trigger="quickRepliesChanged from:body"
+     hx-swap="outerHTML">
+  {% if replies %}
+  <div class="card overflow-hidden divide-y divide-border">
+    {% for qr in replies %}
+    <div class="list-row flex-wrap items-start py-4 gap-3" x-data="{ ...bbRowMenu(), editing: false }">
+      <div class="flex items-center gap-2 min-w-[120px]">
+        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          /{{ qr.shortcut }}
+        </span>
+      </div>
+
+      <div class="flex-1 min-w-[200px]">
+        <div class="flex items-center gap-2">
+          <span class="list-row-title font-semibold text-ink">{{ qr.title }}</span>
+          {% if qr.is_ptt %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+              🎙️ PTT Voice Note
+            </span>
+          {% endif %}
+          {% if qr.media_url %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-surface-raised dark:bg-zinc-800 text-muted">
+              📎 Mídia anexa
+            </span>
+          {% endif %}
+        </div>
+        <div class="list-row-meta text-xs text-muted mt-1 whitespace-pre-line line-clamp-2">{{ qr.body|default:"(Sem texto - apenas mídia)" }}</div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0 ml-auto">
+        <button type="button" class="btn-pill-secondary btn-pill-sm" @click="editing = true; $nextTick(() => $refs.editTitle.focus())">Editar</button>
+
+        <button type="button" class="btn-icon-round" @click="openMenu($event)" aria-haspopup="menu" :aria-expanded="menuOpen ? 'true' : 'false'" aria-label="Mais ações para /{{ qr.shortcut }}">
+          <svg width="17" height="17" fill="currentColor" stroke="none" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+        </button>
+      </div>
+
+      <div x-show="menuOpen" x-cloak @click.away="menuOpen = false" :style="`top:${menuTop}px; left:${menuLeft}px;`" class="row-menu-panel fixed z-50 w-[200px]" role="menu">
+        <button type="button" class="row-menu-item row-menu-item-danger" role="menuitem"
+                hx-post="{% url 'inbox:quick_reply_delete' workspace_id=request.workspace.id reply_id=qr.id %}"
+                hx-confirm="Excluir a resposta rápida “/{{ qr.shortcut }}”? Os atendentes não poderão mais utilizá-la pelo atalho."
+                @click="menuOpen = false">Excluir</button>
+      </div>
+
+      <form x-show="editing" x-cloak class="w-full order-last flex flex-col gap-3 pt-3 mt-2 border-t border-border bg-surface-raised/40 dark:bg-zinc-800/40 p-4 rounded-lg"
+            hx-post="{% url 'inbox:quick_reply_save' workspace_id=request.workspace.id %}"
+            @htmx:after-request="if (bbChanged($event, 'quickRepliesChanged')) editing = false">
+        {% csrf_token %}
+        <input type="hidden" name="id" value="{{ qr.id }}">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-muted mb-1">Atalho (/)</label>
+            <div class="flex items-center">
+              <span class="inline-flex items-center px-2 py-1 text-xs bg-surface-raised dark:bg-zinc-800 text-muted border border-r-0 border-border rounded-l-md font-mono">/</span>
+              <input class="form-input-styled rounded-l-none font-mono text-xs" type="text" name="shortcut" value="{{ qr.shortcut }}" required maxlength="64">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-muted mb-1">Título</label>
+            <input class="form-input-styled text-xs" x-ref="editTitle" type="text" name="title" value="{{ qr.title }}" required maxlength="128">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-muted mb-1">Mensagem</label>
+          <textarea class="form-input-styled text-xs" name="body" rows="3">{{ qr.body }}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+          <div>
+            <label class="block text-xs font-medium text-muted mb-1">URL de Mídia (opcional)</label>
+            <input class="form-input-styled font-mono text-xs" type="url" name="media_url" value="{{ qr.media_url }}">
+          </div>
+          <div class="flex items-center gap-2 pt-4">
+            <input type="checkbox" id="edit-ptt-{{ qr.id }}" name="is_ptt" value="true" {% if qr.is_ptt %}checked{% endif %} class="rounded border-border text-emerald-600 focus:ring-emerald-500">
+            <label for="edit-ptt-{{ qr.id }}" class="text-xs font-medium cursor-pointer text-ink">
+              🎙️ Enviar como PTT Voice Note
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" class="btn-pill-secondary btn-pill-sm" @click="editing = false">Cancelar</button>
+          <button type="submit" class="btn-pill-primary btn-pill-sm">Salvar alterações</button>
+        </div>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-state-title">Nenhuma resposta rápida cadastrada</p>
+    <p class="empty-state-body">
+      Cadastre atalhos com barra (ex: /pix, /ola) para agilizar as respostas do seu time no inbox e enviar mensagens de áudio gravadas na hora.
+    </p>
+    <button type="button" class="btn-pill-secondary mt-4" @click="$modal('new-quick-reply')">Cadastrar primeira resposta</button>
+  </div>
+  {% endif %}
+</div>

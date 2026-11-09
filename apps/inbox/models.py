@@ -29,6 +29,7 @@ a form field naming another tenant's label is an IDOR no URL fuzzer reaches.
 and a ``Max`` cannot see a row that is gone.
 """
 
+import uuid
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.conf import settings
@@ -51,6 +52,7 @@ __all__ = [
     "InboxRuleApplication",
     "InboxReminder",
     "ScheduledReply",
+    "QuickReply",
     "WorkspaceMismatchError",
 ]
 
@@ -536,3 +538,28 @@ class ScheduledReply(DeferredWorkModel):
 
     def __str__(self) -> str:
         return f"scheduled reply at {self.send_at:%Y-%m-%d %H:%M}"
+
+
+class QuickReply(WorkspaceScopedModel):
+    """A canned quick reply template triggered by a slash command (e.g. /pix, /ola) in the inbox."""
+
+    shortcut = models.CharField(
+        max_length=64,
+        db_index=True,
+        help_text="Slash command shortcut, e.g. 'pix', 'ola', 'catalogo' (typed as /pix).",
+    )
+    title = models.CharField(max_length=128, help_text="Human-readable title for the quick reply.")
+    body = models.TextField(help_text="Message content to insert into the composer.")
+    media_url = models.URLField(max_length=2000, blank=True, default="", help_text="Optional attached media URL.")
+    media_type = models.CharField(max_length=32, blank=True, default="", help_text="image, document, audio, ptt, video")
+    is_ptt = models.BooleanField(default=False, help_text="If True and media is audio, sends as a WhatsApp Voice Note (gravado na hora).")
+
+    class Meta:
+        db_table = "inbox_quick_reply"
+        verbose_name = "Resposta Rápida"
+        verbose_name_plural = "Respostas Rápidas"
+        unique_together = ("workspace", "shortcut")
+        ordering = ["shortcut"]
+
+    def __str__(self) -> str:
+        return f"/{self.shortcut} - {self.title}"

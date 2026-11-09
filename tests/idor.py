@@ -106,6 +106,7 @@ TENANT_KWARG_RESOLVERS: dict[str, Callable[[Tenancy], Any]] = {
     "rule_id": lambda t: _victim_inbox_rule(t).pk,
     "reminder_id": lambda t: _victim_reminder(t).pk,
     "scheduled_reply_id": lambda t: _victim_scheduled_reply(t).pk,
+    "reply_id": lambda t: _victim_quick_reply(t).pk,
 }
 
 #: Kwargs that need *a* value but do not identify a tenant. A route made only of
@@ -410,6 +411,21 @@ def _victim_scheduled_reply(tenancy: Tenancy) -> Any:
         )
         reply.save()
     return reply
+
+
+def _victim_quick_reply(tenancy: Tenancy) -> Any:
+    """A quick reply owned by the victim."""
+    from apps.inbox.models import QuickReply
+
+    qr = QuickReply.objects.for_workspace(tenancy.workspace).first()
+    if qr is None:
+        qr = QuickReply.objects.create(
+            workspace=tenancy.workspace,
+            shortcut="ola",
+            title="Olá",
+            body="Olá! Como podemos ajudar?",
+        )
+    return qr
 
 
 def _victim_message(tenancy: Tenancy) -> Any:

@@ -78,4 +78,11 @@ urlpatterns = [
     path("settings/rules/test/", views.rule_test, name="rule_test"),
     path("settings/rules/<uuid:rule_id>/toggle/", views.rule_toggle, name="rule_toggle"),
     path("settings/rules/<uuid:rule_id>/delete/", views.rule_delete, name="rule_delete"),
+    # Quick replies & voice notes
+    path("quick-replies/json/", views.quick_replies_json, name="quick_replies_json"),
+    path("<uuid:conversation_id>/send-voice/", views.send_voice_note, name="send_voice_note"),
+    path("settings/quick-replies/", views.quick_reply_settings, name="quick_reply_settings"),
+    path("settings/quick-replies/rows/", views.quick_reply_rows, name="quick_reply_rows"),
+    path("settings/quick-replies/save/", views.quick_reply_save, name="quick_reply_save"),
+    path("settings/quick-replies/<uuid:reply_id>/delete/", views.quick_reply_delete, name="quick_reply_delete"),
 ]

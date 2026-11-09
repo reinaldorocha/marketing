@@ -317,6 +317,14 @@ SETTINGS_NAV: list[NavGroup] = [
                 url_name="inbox:rule_settings",
                 workspace_scoped=True,
             ),
+            NavItem(
+                key="ws_quick_replies",
+                permission="reply_in_inbox",
+                label="Respostas Rápidas",
+                icon="inbox",
+                url_name="inbox:quick_reply_settings",
+                workspace_scoped=True,
+            ),
             # The redesign names four Workspace rows; the product has nine
             # settings pages and these four have no other entry point anywhere
             # in the app. Extra rows in a named group is a far smaller

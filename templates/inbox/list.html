@@ -355,10 +355,267 @@ inert.
   function inboxComposer(config) {
     return {
       conversationId: config.conversationId,
-      // Reply or Internal note — which tab the compose box is on.
       mode: 'reply',
       items: [],
       picker: { open: false, loading: false, error: '', term: '', results: [] },
+
+      // Quick replies state
+      quickReplies: [],
+      slashOpen: false,
+      slashQuery: '',
+      slashIndex: 0,
+      slashMatchStart: -1,
+
+      // Voice recording (PTT) state
+      isRecording: false,
+      recordingSeconds: 0,
+      mediaRecorder: null,
+      audioChunks: [],
+      recordingTimer: null,
+      isUploadingVoice: false,
+      stream: null,
+
+      init() {
+        this.loadQuickReplies();
+      },
+
+      loadQuickReplies() {
+        if (!config.quickRepliesUrl) return;
+        fetch(config.quickRepliesUrl, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            this.quickReplies = data.replies || [];
+          })
+          .catch(() => {});
+      },
+
+      get filteredQuickReplies() {
+        if (!this.slashQuery) return this.quickReplies;
+        const q = this.slashQuery.toLowerCase().trim();
+        return this.quickReplies.filter((r) =>
+          r.shortcut.toLowerCase().includes(q) || r.title.toLowerCase().includes(q)
+        );
+      },
+
+      onComposerInput(e) {
+        if (this.mode !== 'reply') {
+          this.slashOpen = false;
+          return;
+        }
+        const val = e.target.value;
+        const pos = e.target.selectionStart;
+        const textBefore = val.slice(0, pos);
+        
+        const match = textBefore.match(/(?:^|\s)\/([a-zA-Z0-9_-]*)$/);
+        if (match) {
+          this.slashOpen = true;
+          this.slashQuery = match[1] || '';
+          const slashPos = textBefore.lastIndexOf('/');
+          this.slashMatchStart = slashPos >= 0 ? slashPos : 0;
+          this.slashIndex = 0;
+        } else {
+          this.slashOpen = false;
+        }
+      },
+
+      onComposerClick(e) {
+        this.onComposerInput(e);
+      },
+
+      onComposerKeydown(e) {
+        if (!this.slashOpen) return;
+        const list = this.filteredQuickReplies;
+        if (!list.length) {
+          if (e.key === 'Escape') {
+            this.slashOpen = false;
+          }
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this.slashIndex = (this.slashIndex + 1) % list.length;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.slashIndex = (this.slashIndex - 1 + list.length) % list.length;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          const selected = list[this.slashIndex];
+          if (selected) {
+            this.applyQuickReply(selected);
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          this.slashOpen = false;
+        }
+      },
+
+      applyQuickReply(reply) {
+        const textarea = this.$refs.textarea;
+        if (!textarea) return;
+        const val = textarea.value;
+        const pos = textarea.selectionStart;
+        
+        let start = this.slashMatchStart;
+        if (start < 0) {
+          start = val.lastIndexOf('/', pos - 1);
+        }
+        if (start < 0) start = 0;
+
+        const before = val.slice(0, start);
+        const after = val.slice(pos);
+        const insertion = reply.body || '';
+
+        textarea.value = before + insertion + after;
+        const newCursorPos = before.length + insertion.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+
+        this.slashOpen = false;
+        this.slashQuery = '';
+        this.slashMatchStart = -1;
+
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      },
+
+      formatTime(seconds) {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+      },
+
+      async startVoiceRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert('Seu navegador não suporta gravação de áudio pelo microfone.');
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this.stream = stream;
+          this.audioChunks = [];
+          this.recordingSeconds = 0;
+
+          const mimeTypes = [
+            'audio/ogg;codecs=opus',
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+          ];
+          const supportedMime = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+
+          const options = supportedMime ? { mimeType: supportedMime } : {};
+          const recorder = new MediaRecorder(stream, options);
+
+          recorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+              this.audioChunks.push(event.data);
+            }
+          };
+
+          this.mediaRecorder = recorder;
+          recorder.start(250);
+          this.isRecording = true;
+
+          this.recordingTimer = setInterval(() => {
+            this.recordingSeconds++;
+          }, 1000);
+        } catch (err) {
+          alert('Não foi possível acessar o microfone: ' + (err.message || 'Permissão negada.'));
+          this.isRecording = false;
+        }
+      },
+
+      cancelVoiceRecording() {
+        if (this.recordingTimer) {
+          clearInterval(this.recordingTimer);
+          this.recordingTimer = null;
+        }
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+          this.mediaRecorder.stop();
+        }
+        if (this.stream) {
+          this.stream.getTracks().forEach((track) => track.stop());
+          this.stream = null;
+        }
+        this.audioChunks = [];
+        this.recordingSeconds = 0;
+        this.isRecording = false;
+      },
+
+      sendVoiceRecording() {
+        if (!this.mediaRecorder || (this.audioChunks.length === 0 && this.recordingSeconds === 0)) {
+          this.cancelVoiceRecording();
+          return;
+        }
+        if (this.recordingTimer) {
+          clearInterval(this.recordingTimer);
+          this.recordingTimer = null;
+        }
+
+        const recorder = this.mediaRecorder;
+        recorder.onstop = () => {
+          if (this.stream) {
+            this.stream.getTracks().forEach((track) => track.stop());
+            this.stream = null;
+          }
+          const mime = recorder.mimeType || 'audio/webm';
+          const blob = new Blob(this.audioChunks, { type: mime });
+          
+          let ext = 'webm';
+          if (mime.includes('ogg')) ext = 'ogg';
+          else if (mime.includes('mp4')) ext = 'm4a';
+          else if (mime.includes('wav')) ext = 'wav';
+
+          const formData = new FormData();
+          formData.append('audio', blob, `voice_ptt.${ext}`);
+
+          const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+          formData.append('csrfmiddlewaretoken', csrf);
+
+          this.isUploadingVoice = true;
+
+          fetch(config.voiceUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+          })
+            .then(async (response) => {
+              const hxTrigger = response.headers.get('HX-Trigger');
+              if (hxTrigger) {
+                try {
+                  const evts = JSON.parse(hxTrigger);
+                  Object.keys(evts).forEach((evtName) => {
+                    if (window.htmx) {
+                      window.htmx.trigger(document.body, evtName, evts[evtName]);
+                    }
+                  });
+                } catch (e) {}
+              }
+              if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || 'Erro no envio do áudio.');
+              }
+              this.audioChunks = [];
+              this.recordingSeconds = 0;
+              this.isRecording = false;
+              this.isUploadingVoice = false;
+            })
+            .catch((err) => {
+              alert('Erro ao enviar mensagem de voz: ' + (err.message || 'Falha na conexão.'));
+              this.isUploadingVoice = false;
+            });
+        };
+
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+      },
 
       drop(id) {
         this.items = this.items.filter((item) => item.id !== id);
@@ -373,10 +630,6 @@ inert.
         this.picker.open = false;
       },
 
-      // One page from apps/media_library/picker.py. `platform` populates
-      // platform_warnings and never filters, so the kind filter is ours: the
-      // list only offers what this channel can actually carry, which is the
-      // same table apps/inbox/views.py reads server-side.
       loadPicker() {
         const url = new URL(config.pickerUrl, window.location.origin);
         url.searchParams.set('platform', config.platform);
@@ -402,9 +655,6 @@ inert.
           });
       },
 
-      // Store the id, never the url — the picker's contract is explicit that the
-      // url is minted per request, and the view resolves the id to a fresh
-      // signed one at send time.
       attach(asset) {
         if (this.items.length >= config.max) {
           this.picker.error = 'That is as many attachments as one message can carry.';

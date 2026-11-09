@@ -197,11 +197,15 @@ class EvolutionClient:
         filename: str = "",
         delay: int | None = None,
         mentions: list[str] | None = None,
+        ptt: bool = False,
     ) -> dict[str, Any]:
-        """Call POST /send/media."""
+        """Call POST /send/media with native PTT (Push-To-Talk voice note) support."""
         clean_type = media_type.lower()
         if clean_type == "file":
             clean_type = "document"
+        elif clean_type == "ptt":
+            clean_type = "audio"
+            ptt = True
         payload: dict[str, Any] = {
             "number": _clean_recipient(number),
             "type": clean_type,
@@ -209,6 +213,8 @@ class EvolutionClient:
             "caption": caption,
             "filename": filename or "",
         }
+        if ptt:
+            payload["ptt"] = True
         if delay is not None:
             payload["delay"] = delay
         if mentions:
@@ -219,6 +225,23 @@ class EvolutionClient:
             headers=self._headers(),
             json=payload,
             timeout=25.0,
+        )
+
+    def send_voice_note(
+        self,
+        number: str,
+        url: str,
+        delay: int | None = None,
+        mentions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Send a WhatsApp Push-To-Talk (PTT) voice note (gravado na hora)."""
+        return self.send_media(
+            number=number,
+            media_type="audio",
+            url=url,
+            delay=delay,
+            mentions=mentions,
+            ptt=True,
         )
 
     # -----------------------------------------------------------------------
@@ -798,7 +821,7 @@ class WhatsAppEvolutionAdapter(Adapter):
             blocks = body.get("blocks", [])
 
             # Handle media blocks
-            media_blocks = [b for b in blocks if b.get("type") in ("image", "video", "audio", "file")]
+            media_blocks = [b for b in blocks if b.get("type") in ("image", "video", "audio", "file", "ptt")]
             if media_blocks:
                 for block in media_blocks:
                     media_url = block.get("url", "")
@@ -807,6 +830,13 @@ class WhatsAppEvolutionAdapter(Adapter):
                     m_kind = block.get("type", "image")
                     caption = block.get("caption") or block.get("text") or ""
                     filename = block.get("filename") or ""
+                    is_ptt = bool(
+                        block.get("is_ptt")
+                        or m_kind == "ptt"
+                        or "ptt" in filename.lower()
+                        or "ptt" in media_url.lower()
+                        or block.get("extra", {}).get("ptt")
+                    )
                     try:
                         res = client.send_media(
                             number=number,
@@ -814,6 +844,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                             url=media_url,
                             caption=caption,
                             filename=filename,
+                            ptt=is_ptt,
                         )
                         last_provider_id = res.get("key", {}).get("id") or res.get("id") or last_provider_id
                     except APIError as exc:
