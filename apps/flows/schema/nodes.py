@@ -101,10 +101,10 @@ class NodeSpec:
 #: the order and the labels are exported, so the frontend reads one file rather
 #: than one file plus a hard-coded table.
 GROUPS: tuple[tuple[str, str], ...] = (
-    ("content", "Content"),
-    ("logic", "Logic"),
-    ("actions", "Actions"),
-    ("other", "Other"),
+    ("content", "Conteúdo"),
+    ("logic", "Lógica"),
+    ("actions", "Ações"),
+    ("other", "Outros"),
 )
 
 NODE_TYPES: dict[str, NodeSpec] = {}
@@ -454,7 +454,7 @@ for _verb_name, _verb_schema in (
 register_node_type(
     NodeSpec(
         type="send_message",
-        label="Send a message",
+        label="Enviar Mensagem",
         description="Sends a message. If it offers buttons or quick replies, the flow waits for an answer.",
         group="content",
         config=f.obj(
@@ -481,7 +481,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="action",
-        label="Tag, save or assign",
+        label="Etiquetar, Salvar ou Atribuir",
         description="Tags a contact, saves a detail, assigns the conversation. Several at once, in order.",
         group="actions",
         # The verb union is built at export time from ACTION_VERBS, so a verb a
@@ -494,7 +494,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="start_flow",
-        label="Hand over to another flow",
+        label="Iniciar Outro Fluxo",
         description="Hands over to another flow. This one stops here.",
         group="logic",
         config=f.obj({"flow_id": f.string(min_length=1, max_length=64)}, required=["flow_id"]),
@@ -506,7 +506,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="condition",
-        label="Branch on a condition",
+        label="Condição (Se / Senão)",
         description="Splits the flow in two, on what you know about the contact.",
         group="logic",
         config=f.ref("condition_filter"),
@@ -517,8 +517,8 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="smart_delay",
-        label="Wait",
-        description="Waits, then carries on. Picks up at the next hour you allow sending.",
+        label="Aguardar (Delay)",
+        description="Aguarda um intervalo de tempo configurado antes de prosseguir.",
         group="logic",
         # Discriminated on `mode` rather than a flat object with everything
         # optional. With only `mode` required, {"mode": "duration"} published
@@ -534,7 +534,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="randomizer",
-        label="Split the traffic",
+        label="Divisão de Tráfego (Teste A/B)",
         description="Splits people down different paths, to compare two versions. Each person keeps the path they got.",
         group="logic",
         config=f.obj(
@@ -554,7 +554,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="external_request",
-        label="Call another system",
+        label="Chamar API Externa (Webhook)",
         description="Calls another system and can save what it sends back.",
         group="actions",
         config=f.obj(
@@ -577,7 +577,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="data_collection",
-        label="Ask a question",
+        label="Fazer uma Pergunta (Coletar Dados)",
         description="Asks a question and saves the answer on the contact. Checks emails and phone numbers look real.",
         group="content",
         config=f.obj(
@@ -613,7 +613,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="send_sms",
-        label="Send a text",
+        label="Enviar SMS",
         description="Sends a text message. Needs an SMS account connected and a phone number for the contact.",
         group="actions",
         config=f.obj(
@@ -630,7 +630,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="send_email",
-        label="Send an email",
+        label="Enviar E-mail",
         description="Sends an email. Needs an email account connected and an address for the contact.",
         group="actions",
         config=f.obj(

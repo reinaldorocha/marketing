@@ -44,12 +44,12 @@ thread above keeps its height.
     <div class="ib-compose-head">
       <div class="ib-seg" role="tablist" aria-label="Message type">
         <button type="button" role="tab" class="ib-seg-btn" :aria-selected="mode === 'reply' ? 'true' : 'false'"
-                aria-controls="reply-{{ conversation.id }}" @click="mode = 'reply'">Reply</button>
+                aria-controls="reply-{{ conversation.id }}" @click="mode = 'reply'">Responder</button>
         <button type="button" role="tab" class="ib-seg-btn" :aria-selected="mode === 'note' ? 'true' : 'false'"
-                aria-controls="reply-{{ conversation.id }}" @click="mode = 'note'; sheet = ''">Internal note</button>
+                aria-controls="reply-{{ conversation.id }}" @click="mode = 'note'; sheet = ''">Nota interna</button>
       </div>
-      <span class="ib-compose-hint" x-show="mode === 'reply'">Sending pauses automation for {{ pause_minutes }} minutes.</span>
-      <span class="ib-compose-hint" x-show="mode === 'note'" x-cloak>Only your team sees notes.</span>
+      <span class="ib-compose-hint" x-show="mode === 'reply'">O envio pausa a automação por {{ pause_minutes }} minutos.</span>
+      <span class="ib-compose-hint" x-show="mode === 'note'" x-cloak>Apenas sua equipe vê notas internas.</span>
     </div>
 
     <div class="ib-compose-box" :class="mode === 'note' && 'is-note'">
@@ -64,8 +64,8 @@ thread above keeps its height.
                 maxlength="{{ max_chars }}"
                 data-shortcut="reply"
                 class="ib-compose-input"
-                :placeholder="mode === 'note' ? 'Write a note for your team…' : 'Write a reply… press r to focus'"
-                placeholder="Write a reply…"></textarea>
+                :placeholder="mode === 'note' ? 'Escreva uma nota para sua equipe…' : 'Escreva uma resposta… (tecla r para focar)'"
+                placeholder="Escreva uma resposta…"></textarea>
       {% comment %}
         Attachments picked from the library (#16). Ids only — the picker's
         contract says "Store `id`. Never store `url` — it is minted per request" —
@@ -91,27 +91,27 @@ thread above keeps its height.
         {% if media_kinds %}
           <button type="button" class="ib-tool" x-show="mode === 'reply'"
                   @click="sheet = ''; togglePicker()"
-                  :aria-expanded="picker.open ? 'true' : 'false'">Attach</button>
+                  :aria-expanded="picker.open ? 'true' : 'false'">Anexar</button>
         {% endif %}
         <button type="button" class="ib-tool" x-show="mode === 'reply'"
                 @click="closePicker(); sheet = sheet === 'later' ? '' : 'later'"
                 aria-haspopup="dialog" :aria-expanded="sheet === 'later' ? 'true' : 'false'"
-                aria-controls="inbox-schedule-{{ conversation.id }}">Send later</button>
+                aria-controls="inbox-schedule-{{ conversation.id }}">Agendar envio</button>
         <button type="button" class="ib-tool"
                 @click="closePicker(); sheet = sheet === 'remind' ? '' : 'remind'"
                 aria-haspopup="dialog" :aria-expanded="sheet === 'remind' ? 'true' : 'false'"
-                aria-controls="inbox-reminder-{{ conversation.id }}">Reminder</button>
+                aria-controls="inbox-reminder-{{ conversation.id }}">Lembrete</button>
         {% comment %}
           Send is the one orange control in the inbox (HANDOFF §3). In the note
           tab it gives way to "Add note", which posts the same fields to the
           note endpoint — hx-post on the button overrides the form's. Same
           token: whichever is pressed, pressing it twice is still one message.
         {% endcomment %}
-        <button type="submit" class="btn-pill-primary ib-send-btn ml-auto" x-show="mode === 'reply'">Send</button>
+        <button type="submit" class="btn-pill-primary ib-send-btn ml-auto" x-show="mode === 'reply'">Enviar</button>
         <button type="submit" class="btn-pill-secondary ib-send-btn ml-auto" x-show="mode === 'note'" x-cloak
                 hx-post="{% url 'inbox:note' workspace_id=request.workspace.id conversation_id=conversation.id %}"
                 hx-include="closest form"
-                hx-swap="none">Add note</button>
+                hx-swap="none">Adicionar nota</button>
       </div>
     </div>
 
@@ -126,7 +126,7 @@ thread above keeps its height.
       <div class="ib-picker-head">
         <label class="sr-only" :for="'media-search-' + conversationId">Search the library</label>
         <input type="search" :id="'media-search-' + conversationId" class="form-input-styled"
-               placeholder="Search the media library…"
+               placeholder="Buscar na biblioteca de mídia…"
                x-model="picker.term" @input.debounce.300ms="loadPicker()">
         <button type="button" class="btn-icon-hover" @click="closePicker()" aria-label="Close the picker">×</button>
       </div>

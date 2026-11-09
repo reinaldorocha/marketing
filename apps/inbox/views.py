@@ -582,10 +582,10 @@ def _sidebar_context(request: WorkspaceRequest, conversation: Conversation) -> d
 #: Channel and label stay as selects beside them, because those genuinely are
 #: long lists.
 INBOX_VIEWS: tuple[tuple[str, str, str, str], ...] = (
-    ("all", "All", "", ""),
-    ("unassigned", "Unassigned", "", selectors.ASSIGNEE_UNASSIGNED),
-    ("mine", "Mine", "", selectors.ASSIGNEE_ME),
-    ("done", "Done", ConversationState.DONE, ""),
+    ("all", "Todos", "", ""),
+    ("unassigned", "Não atribuídos", "", selectors.ASSIGNEE_UNASSIGNED),
+    ("mine", "Meus", "", selectors.ASSIGNEE_ME),
+    ("done", "Concluídos", ConversationState.DONE, ""),
 )
 
 

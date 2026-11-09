@@ -33,6 +33,8 @@
    Like the glob above, the frontend stage of the Dockerfile has to copy it. */
 @source "../../../flows/frontend/src/**/*.{ts,tsx}";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ═══════════════════════════════════════════════════════════════
    WHITE-LABEL TOKEN ARCHITECTURE
    Layer 1 → Brand Tokens   (swap these to white-label)
@@ -298,10 +300,70 @@
   --font-mono:    var(--brand-font-mono);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   DARK THEME TOKENS
+   ═══════════════════════════════════════════════════════════════ */
+
+html.dark {
+  /* Surfaces */
+  --surface-0: #1C1917;
+  --surface-page: #0C0A09;
+  --surface-1: #171412;
+  --surface-2: #24201D;
+  --surface-3: #342E2A;
+  --surface-sunken: #12100E;
+
+  /* Borders & Dividers */
+  --border: #292524;
+  --border-hover: #44403C;
+  --border-strong: #3E3835;
+  --divider: #24201D;
+
+  /* Neutrals */
+  --neutral-950: #FAFAF9;
+  --neutral-900: #F5F5F4;
+  --neutral-800: #E7E5E4;
+  --neutral-700: #D6D3D1;
+  --neutral-600: #A8A29E;
+  --neutral-500: #78716C;
+  --neutral-400: #57534E;
+  --neutral-300: #44403C;
+  --neutral-200: #292524;
+  --neutral-150: #24201D;
+  --neutral-125: #1C1917;
+  --neutral-100: #171412;
+  --neutral-75:  #141210;
+  --neutral-50:  #0C0A09;
+
+  /* Text */
+  --text-primary:   #F5F5F4;
+  --text-secondary: #D6D3D1;
+  --text-tertiary:  #A8A29E;
+  --text-ghost:     #78716C;
+  --text-inverse:   #1C1917;
+  --ink:            #F5F5F4;
+  --selected-fill:  #292524;
+
+  /* Primary tints in dark mode */
+  --primary-soft:   rgba(var(--brand-500-rgb), 0.15);
+  --primary-muted:  rgba(var(--brand-500-rgb), 0.25);
+  --primary-tint:   #2A1D15;
+  --primary-tint-border: #4D2D1B;
+
+  /* Shadows in dark mode */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:  0 4px 6px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg:  0 10px 15px rgba(0, 0, 0, 0.6), 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-xl:  0 20px 25px rgba(0, 0, 0, 0.6), 0 8px 10px rgba(0, 0, 0, 0.4);
+}
+
 /* Base */
 body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  background-color: var(--surface-page);
+  color: var(--text-primary);
 }
 
 /* Auth page background pattern */

@@ -21,21 +21,21 @@ every row made the page look like a configuration dump. They live on the
 connection's own page now, which is where somebody pasting one into a console
 is already standing. (The redesign's fifth principle: no ids in the UI.)
 {% endcomment %}
-{% block title %}Channels · BrightBean Chat{% endblock %}
+{% block title %}Canais · BrightBean Chat{% endblock %}
 {% block content_wrap %}{% endblock %}
 
 {% block content %}
 <div class="max-w-[1060px] w-full">
     <div class="page-header">
         <div class="page-header-text">
-            <h1 class="page-title">Channels</h1>
+            <h1 class="page-title">Canais de Comunicação</h1>
             <p class="page-lede">
-                Each channel is one bot, page, number or sending address. Messages arrive and go out through it.
+                Cada canal representa um bot, página, número de WhatsApp ou endereço de envio por onde as mensagens trafegam.
             </p>
         </div>
         <div class="page-header-actions">
             <a class="btn-pill-primary" href="{% url 'channels:create' workspace_id=request.workspace.id %}">
-                {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} Connect a channel
+                {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} Conectar um canal
             </a>
         </div>
     </div>
@@ -48,15 +48,15 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
         </span>
         <div class="flex-1 min-w-0">
             <div class="text-sm font-semibold" style="color: var(--error-700);">
-                {{ row.connection.display_name }} stopped receiving messages
+                {{ row.connection.display_name }} parou de receber mensagens
             </div>
             <div class="text-[13px]" style="color: var(--error-700);">
-                {{ row.label }} revoked the connection. Reconnect to start receiving again.
+                {{ row.label }} revogou a conexão. Reconecte para voltar a receber.
             </div>
         </div>
         <a class="btn-pill-sm flex-shrink-0 inline-flex items-center rounded-full font-semibold"
            style="background: var(--error-700); color: var(--text-inverse); padding: 0 18px; height: 36px;"
-           href="{% url 'channels:detail' workspace_id=request.workspace.id connection_id=row.connection.id %}">Reconnect</a>
+           href="{% url 'channels:detail' workspace_id=request.workspace.id connection_id=row.connection.id %}">Reconectar</a>
     </div>
     {% endfor %}
 
@@ -96,10 +96,10 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
                     {% csrf_token %}
                     {% if row.connection.status == "disabled" %}
                     <input type="hidden" name="status" value="active">
-                    <button type="submit" class="btn-pill-secondary btn-pill-sm">Turn on</button>
+                    <button type="submit" class="btn-pill-secondary btn-pill-sm">Ativar</button>
                     {% else %}
                     <input type="hidden" name="status" value="disabled">
-                    <button type="submit" class="btn-pill-secondary btn-pill-sm">Turn off</button>
+                    <button type="submit" class="btn-pill-secondary btn-pill-sm">Desativar</button>
                     {% endif %}
                 </form>
                 {% comment %}
@@ -110,10 +110,10 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
                   onsubmit attribute: the CSP blocks inline handlers.
                 {% endcomment %}
                 <form method="post" class="ml-auto" x-data
-                      @submit="if (!window.confirm('Disconnect {{ row.connection.display_name|escapejs }}? This cannot be undone. Turning it off keeps everything instead.')) $event.preventDefault()"
+                      @submit="if (!window.confirm('Desconectar {{ row.connection.display_name|escapejs }}? Esta ação não pode ser desfeita. Desativar mantém todo o histórico.')) $event.preventDefault()"
                       action="{% url 'channels:delete' workspace_id=request.workspace.id connection_id=row.connection.id %}">
                     {% csrf_token %}
-                    <button type="submit" class="btn-danger-link">Disconnect</button>
+                    <button type="submit" class="btn-danger-link">Desconectar</button>
                 </form>
             </div>
         </div>

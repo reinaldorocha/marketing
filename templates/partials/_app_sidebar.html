@@ -310,22 +310,37 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
                 {% if members_url %}
                 <a href="{{ members_url }}" class="sidebar-menu-cta">
                     {% include "partials/_nav_icon.html" with name="users" icon_size=16 only %}
-                    Manage team
+                    Gerenciar Equipe
                 </a>
                 {% endif %}
                 <div class="sidebar-menu-section">
-                    {% comment %}
-                      Named for where it lands, not for what it is: this row
-                      opens the settings shell on your profile, and the shell's
-                      Organisation group is the rest of what is behind it. It
-                      read "Settings" while there was a second one beside it in
-                      the switcher; "Organization Settings" is what tells the
-                      two apart from the account menu.
-                    {% endcomment %}
                     <a href="{{ settings_home_url|default:'#' }}" class="sidebar-menu-row">
                         {% include "partials/_nav_icon.html" with name="settings" icon_size=16 only %}
-                        <span>Organization Settings</span>
+                        <span>Configurações da Organização</span>
                     </a>
+                </div>
+                <div class="sidebar-menu-section" x-data="{ currentTheme: (window.__bbGetTheme ? window.__bbGetTheme() : 'system') }">
+                    <div class="px-3 pt-2 pb-1 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Aparência</div>
+                    <div class="grid grid-cols-3 gap-1 px-2 pb-2">
+                        <button type="button" @click="currentTheme = 'light'; window.__bbSetTheme('light')"
+                                :class="currentTheme === 'light' ? 'bg-amber-100 text-amber-900 font-semibold dark:bg-amber-950/80 dark:text-amber-200 shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'"
+                                class="flex items-center justify-center gap-1 py-1 px-1.5 rounded text-xs transition-colors" title="Tema Claro">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41m14.14-14.14l-1.41 1.41"/></svg>
+                            <span>Claro</span>
+                        </button>
+                        <button type="button" @click="currentTheme = 'dark'; window.__bbSetTheme('dark')"
+                                :class="currentTheme === 'dark' ? 'bg-emerald-100 text-emerald-900 font-semibold dark:bg-emerald-950/80 dark:text-emerald-200 shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'"
+                                class="flex items-center justify-center gap-1 py-1 px-1.5 rounded text-xs transition-colors" title="Tema Escuro">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            <span>Escuro</span>
+                        </button>
+                        <button type="button" @click="currentTheme = 'system'; window.__bbSetTheme('system')"
+                                :class="currentTheme === 'system' ? 'bg-blue-100 text-blue-900 font-semibold dark:bg-blue-950/80 dark:text-blue-200 shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'"
+                                class="flex items-center justify-center gap-1 py-1 px-1.5 rounded text-xs transition-colors" title="Automático">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                            <span>Auto</span>
+                        </button>
+                    </div>
                 </div>
                 {% if logout_url %}
                 <div class="sidebar-menu-section">
@@ -333,7 +348,7 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
                         {% csrf_token %}
                         <button type="submit" class="sidebar-menu-row">
                             {% include "partials/_nav_icon.html" with name="logout" icon_size=16 only %}
-                            <span>Sign out</span>
+                            <span>Sair da Conta</span>
                         </button>
                     </form>
                 </div>

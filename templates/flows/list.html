@@ -24,7 +24,7 @@ tokens rather than from utility palettes, which is what keeps the white-label
 swap in styles.css meaningful.
 {% endcomment %}
 
-{% block title %}Flows · BrightBean Chat{% endblock %}
+{% block title %}Fluxos de Automação · BrightBean Chat{% endblock %}
 
 {% block sub_nav %}{% include "partials/_sub_nav.html" with groups=flow_tab_groups %}{% endblock %}
 {% block alpine_components %}{{ block.super }}{% include "partials/_list_behaviours.html" %}{% endblock %}
@@ -47,15 +47,15 @@ swap in styles.css meaningful.
 
     <div class="page-header">
         <div class="page-header-text">
-            <h1 class="page-title">Flows</h1>
+            <h1 class="page-title">Fluxos de Automação</h1>
             <p class="page-lede">
-                A flow replies for you when something happens: a comment, a keyword, a reply to your story.
+                Um fluxo responde automaticamente por você quando algo acontece: uma nova mensagem, palavra-chave, comentário ou webhook.
             </p>
         </div>
         {% if can_edit %}
         <div class="page-header-actions">
             <button type="button" class="btn-pill-primary" @click="$modal('new-flow')">
-                {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} New flow
+                {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} Novo fluxo
             </button>
         </div>
         {% endif %}
@@ -67,7 +67,7 @@ swap in styles.css meaningful.
       name — a template and a file each bring their own — so the field and the
       button follow the choice, and the button says what it is about to do.
     {% endcomment %}
-    {% modal "new-flow" title="New flow" close_on="flowsChanged" %}
+    {% modal "new-flow" title="Novo fluxo" close_on="flowsChanged" %}
     {% comment %}
       The modal resets its forms as it opens (partials/_modal_behaviours.html),
       which puts the radios back to their `checked` default but not the Alpine
@@ -77,14 +77,14 @@ swap in styles.css meaningful.
           x-data="{ start: 'blank' }" @reset="start = 'blank'">
         <div class="bb-modal-body">
             <fieldset class="field">
-                <legend class="field-label">Start from</legend>
+                <legend class="field-label">Começar a partir de</legend>
                 <div class="option-cards">
                     <label class="option-card">
                         <input type="radio" name="start" value="blank" x-model="start" checked>
                         <span class="option-card-icon">{% include "partials/_nav_icon.html" with name="plus" icon_size=18 %}</span>
                         <span class="option-card-body">
-                            <span class="option-card-title">Blank</span>
-                            <span class="option-card-text">A first message to build on</span>
+                            <span class="option-card-title">Em branco</span>
+                            <span class="option-card-text">Começar do zero com uma mensagem inicial</span>
                         </span>
                         <span class="option-card-radio" aria-hidden="true"></span>
                     </label>
@@ -92,8 +92,8 @@ swap in styles.css meaningful.
                         <input type="radio" name="start" value="template" x-model="start">
                         <span class="option-card-icon">{% include "partials/_nav_icon.html" with name="grid" icon_size=18 %}</span>
                         <span class="option-card-body">
-                            <span class="option-card-title">A template</span>
-                            <span class="option-card-text">Ready-made, with the words to change</span>
+                            <span class="option-card-title">Um modelo pronto</span>
+                            <span class="option-card-text">Estrutura pré-pronta para personalizar</span>
                         </span>
                         <span class="option-card-radio" aria-hidden="true"></span>
                     </label>
@@ -101,26 +101,26 @@ swap in styles.css meaningful.
                         <input type="radio" name="start" value="import" x-model="start">
                         <span class="option-card-icon">{% include "partials/_nav_icon.html" with name="upload" icon_size=18 %}</span>
                         <span class="option-card-body">
-                            <span class="option-card-title">A file</span>
-                            <span class="option-card-text">A flow downloaded from BrightBean</span>
+                            <span class="option-card-title">Arquivo JSON</span>
+                            <span class="option-card-text">Fluxo exportado do BrightBean</span>
                         </span>
                         <span class="option-card-radio" aria-hidden="true"></span>
                     </label>
                 </div>
             </fieldset>
             <div class="field" x-show="start === 'blank'">
-                <label class="field-label" for="new-flow-name">What is this flow called?</label>
+                <label class="field-label" for="new-flow-name">Qual é o nome deste fluxo?</label>
                 <input class="form-input-styled" id="new-flow-name" type="text" name="name" maxlength="200"
                        :required="start === 'blank'" autofocus placeholder="Comment to DM">
             </div>
         </div>
         <div class="bb-modal-actions">
-            <button type="button" class="btn-pill-secondary" @click="close()">Cancel</button>
-            <button type="submit" class="btn-pill-primary" x-show="start === 'blank'">Create flow</button>
+            <button type="button" class="btn-pill-secondary" @click="close()">Cancelar</button>
+            <button type="submit" class="btn-pill-primary" x-show="start === 'blank'">Criar fluxo</button>
             <a class="btn-pill-primary" x-show="start === 'template'" x-cloak
-               href="{% url 'flows:template_gallery' workspace_id=request.workspace.id %}">Choose a template</a>
+               href="{% url 'flows:template_gallery' workspace_id=request.workspace.id %}">Escolher um modelo</a>
             <a class="btn-pill-primary" x-show="start === 'import'" x-cloak
-               href="{% url 'flows:import_start' workspace_id=request.workspace.id %}">Upload a file</a>
+               href="{% url 'flows:import_start' workspace_id=request.workspace.id %}">Carregar arquivo</a>
         </div>
     </form>
     {% endmodal %}

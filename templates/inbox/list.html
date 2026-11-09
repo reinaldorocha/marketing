@@ -23,13 +23,13 @@ inert.
 {% endcomment %}
 {% load common_extras %}
 
-{% block title %}Inbox · BrightBean Chat{% endblock %}
+{% block title %}Caixa de Entrada · BrightBean Chat{% endblock %}
 
 {% block page_header %}
   <div class="page-header mb-4">
     <div class="page-header-text">
-      <h1 class="page-title">Inbox</h1>
-      <p class="page-lede">Every conversation across your connected channels.</p>
+      <h1 class="page-title">Caixa de Entrada</h1>
+      <p class="page-lede">Todas as conversas em seus canais conectados.</p>
     </div>
     {% comment %}
       The keyboard shortcuts, said out loud (HANDOFF §2.4). They have worked
@@ -37,9 +37,9 @@ inert.
       Hidden on a phone, where there is no keyboard to press them on.
     {% endcomment %}
     <p class="ib-shortcuts hidden md:flex" aria-label="Keyboard shortcuts">
-      <span><kbd>j</kbd> <kbd>k</kbd> navigate</span>
-      <span><kbd>e</kbd> done</span>
-      <span><kbd>r</kbd> reply</span>
+      <span><kbd>j</kbd> <kbd>k</kbd> navegar</span>
+      <span><kbd>e</kbd> concluir</span>
+      <span><kbd>r</kbd> responder</span>
     </p>
   </div>
 {% endblock %}
@@ -150,7 +150,7 @@ inert.
           <label class="search-field flex-1 min-w-0">
             {% include "partials/_nav_icon.html" with name="search" icon_size=16 %}
             <input type="search" id="inbox-search" name="q" x-model="q" class="search-input"
-                   placeholder="Search conversations" aria-label="Search conversations" maxlength="100">
+                   placeholder="Buscar conversas..." aria-label="Buscar conversas" maxlength="100">
           </label>
           {% filter_popover groups=filter_groups onchange="reload()" noun="conversation" icon_only=True %}
         </div>
@@ -172,12 +172,12 @@ inert.
           <span class="text-xs" x-text="count + (count === 1 ? ' selected' : ' selected')"></span>
           <label class="sr-only" for="bulk-label">Label</label>
           <select id="bulk-label" class="bb-select" name="label" required>
-            <option value="">Choose a label…</option>
+            <option value="">Escolha um marcador…</option>
             {% for option in label_options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}
           </select>
-          <button type="submit" class="btn-outline btn-inline" name="action" value="add">Add</button>
-          <button type="submit" class="btn-outline btn-inline" name="action" value="remove">Remove</button>
-          <button type="button" class="btn-link btn-inline" @click="clear()">Clear</button>
+          <button type="submit" class="btn-outline btn-inline" name="action" value="add">Adicionar</button>
+          <button type="submit" class="btn-outline btn-inline" name="action" value="remove">Remover</button>
+          <button type="button" class="btn-link btn-inline" @click="clear()">Limpar</button>
         </form>
       {% endif %}
       <div id="inbox-list" class="ib-rail-scroll"

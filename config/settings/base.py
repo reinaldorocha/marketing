@@ -551,10 +551,15 @@ def _platform_credentials_from_env() -> dict[str, dict[str, str]]:
 PLATFORM_CREDENTIALS_FROM_ENV = _platform_credentials_from_env()
 
 # Internationalization
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+LANGUAGE_CODE = "pt-br"
+TIME_ZONE = "America/Sao_Paulo"
 USE_I18N = True
 USE_TZ = True
+LANGUAGES = [
+    ("pt-br", "Português (Brasil)"),
+    ("en-us", "Inglês"),
+]
+LOCALE_PATHS = [BASE_DIR / "locale"]
 
 # Static files
 STATIC_URL = "/static/"

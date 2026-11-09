@@ -28,7 +28,7 @@ x-* expressions but NOT 'unsafe-inline', so an `onclick=` attribute is silently
 inert — a button that looks fine and does nothing.
 {% endcomment %}
 
-{% block title %}Contacts · BrightBean Chat{% endblock %}
+{% block title %}Contatos · BrightBean Chat{% endblock %}
 
 {% block extra_head %}
   {% comment %}
@@ -42,10 +42,10 @@ inert — a button that looks fine and does nothing.
 {% block page_header %}
   <div class="page-header">
     <div class="page-header-text">
-      <h1 class="page-title">Contacts</h1>
+      <h1 class="page-title">Contatos</h1>
       <p class="page-lede">
         {% if total_contacts %}{{ total_contacts }} {{ total_contacts|pluralize:"person has,people have" }}{% else %}Everyone who has{% endif %}
-        messaged you or been imported.
+        enviaram mensagens para você ou foram importadas.
       </p>
     </div>
     {% if can_manage_crm %}
@@ -57,8 +57,8 @@ inert — a button that looks fine and does nothing.
         {% endcomment %}
         <a class="bb-split-main" href="{% url 'contacts:import_list' workspace_id=request.workspace.id %}"
            :href="choice === 'export' ? '{% url 'contacts:export' workspace_id=request.workspace.id %}' + window.location.search : '{% url 'contacts:import_list' workspace_id=request.workspace.id %}'"
-           :aria-label="choice === 'export' ? 'Export contacts' : 'Import contacts'"
-           :title="choice === 'export' ? 'Export contacts' : 'Import contacts'">
+           :aria-label="choice === 'export' ? 'Exportar contatos' : 'Importar contatos'"
+           :title="choice === 'export' ? 'Exportar contatos' : 'Importar contatos'">
           <svg x-show="choice === 'import'" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V8m0 0 4 4m-4-4-4 4M4 4v3h16V4"/></svg>
           <svg x-show="choice === 'export'" x-cloak viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg>
         </a>
@@ -69,9 +69,9 @@ inert — a button that looks fine and does nothing.
         </button>
         <div x-show="menuOpen" x-cloak class="bb-split-menu">
           <button type="button" @click="choice = 'import'; menuOpen = false"
-                  :aria-current="choice === 'import' ? 'true' : null">Import contacts</button>
+                  :aria-current="choice === 'import' ? 'true' : null">Importar contatos</button>
           <button type="button" @click="choice = 'export'; menuOpen = false"
-                  :aria-current="choice === 'export' ? 'true' : null">Export contacts</button>
+                  :aria-current="choice === 'export' ? 'true' : null">Exportar contatos</button>
         </div>
       </div>
     {% endif %}
@@ -190,19 +190,19 @@ inert — a button that looks fine and does nothing.
     what the panel shows, or one that is gone.
   {% endcomment %}
   {% if can_manage_crm %}
-    {% modal "save-segment" title="Save as a segment" close_on="segmentsChanged" %}
+    {% modal "save-segment" title="Salvar como segmento" close_on="segmentsChanged" %}
     <form hx-post="{% url 'contacts:segment_create' workspace_id=request.workspace.id %}" hx-swap="none">
       <div class="bb-modal-body">
         <div class="field">
-          <label class="field-label" for="segment-name">What is the segment called?</label>
+          <label class="field-label" for="segment-name">Qual é o nome do segmento?</label>
           <input class="form-input-styled" type="text" id="segment-name" name="name" maxlength="100" required autofocus placeholder="Repeat customers">
-          <span class="field-hint">It keeps the filter rules you have set right now.</span>
+          <span class="field-hint">Salva as regras de filtro definidas atualmente.</span>
         </div>
         <input type="hidden" name="filter" :value="serialised">
       </div>
       <div class="bb-modal-actions">
-        <button type="button" class="btn-pill-secondary" @click="close()">Cancel</button>
-        <button type="submit" class="btn-pill-primary">Save segment</button>
+        <button type="button" class="btn-pill-secondary" @click="close()">Cancelar</button>
+        <button type="submit" class="btn-pill-primary">Salvar segmento</button>
       </div>
     </form>
     {% endmodal %}
@@ -236,7 +236,7 @@ inert — a button that looks fine and does nothing.
         <template x-for="id in ids" :key="id"><input type="hidden" name="ids" :value="id"></template>
         <label for="bulk-tag" class="sr-only">Tag</label>
         <select id="bulk-tag" name="tag_id" class="w-44" required>
-          <option value="">Choose a tag…</option>
+          <option value="">Escolha uma etiqueta…</option>
           {% for tag in filter_config.tags %}<option value="{{ tag.value }}">{{ tag.label }}</option>{% endfor %}
         </select>
         <button type="submit" name="mode" value="add">Add tag</button>
