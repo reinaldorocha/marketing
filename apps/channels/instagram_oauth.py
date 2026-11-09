@@ -106,6 +106,7 @@ SCOPES: tuple[str, ...] = (
     "instagram_business_basic",
     "instagram_business_manage_messages",
     "instagram_business_manage_comments",
+    "instagram_business_content_publish",
 )
 
 #: The signer salt for the ``state`` parameter. See the module docstring.

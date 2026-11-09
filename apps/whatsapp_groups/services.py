@@ -61,6 +61,7 @@ def sync_groups_from_evolution(connection: ChannelConnection) -> int:
                     break
 
         group_obj, created = WhatsAppGroup.objects.for_workspace(connection.workspace).update_or_create(
+            workspace=connection.workspace,
             connection=connection,
             jid=jid,
             defaults={
@@ -96,6 +97,7 @@ def create_group_on_evolution(
         jid = f"{int(time.time())}@g.us"
 
     group = WhatsAppGroup.objects.for_workspace(connection.workspace).create(
+        workspace=connection.workspace,
         connection=connection,
         jid=jid,
         name=name,
@@ -305,7 +307,7 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
 
 def process_scheduled_broadcasts() -> int:
     """Check for scheduled group broadcasts whose execution time has arrived."""
-    pending = GroupBroadcast.objects.filter(
+    pending = GroupBroadcast.objects.unscoped().filter(
         status=BroadcastStatus.SCHEDULED,
         scheduled_at__lte=timezone.now(),
     )

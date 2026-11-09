@@ -273,6 +273,9 @@ def handle_broadcast_send(payload: dict[str, Any], action: ScheduledAction) -> N
         # reach it. A claimed action has to refuse itself.
         settle_recipient(recipient, RecipientStatus.CANCELLED, "")
         return
+    if broadcast.status == BroadcastStatus.PAUSED:
+        logger.info("Broadcast %s is paused; send skipped for recipient %s.", broadcast.pk, recipient.pk)
+        return
 
     contact = _scoped(Contact, action.workspace_id, payload.get("contact_id"))
     if contact is None:

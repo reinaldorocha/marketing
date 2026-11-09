@@ -478,6 +478,26 @@ inert.
         this.slashQuery = '';
         this.slashMatchStart = -1;
 
+        if (reply.media_url) {
+          let mediaUrl = reply.media_url;
+          if (reply.is_ptt && !mediaUrl.includes('ptt=')) {
+            mediaUrl += (mediaUrl.includes('?') ? '&' : '?') + 'ptt=1';
+          }
+          const mediaName = reply.is_ptt
+            ? '🎙️ Áudio PTT (' + (reply.title || reply.shortcut) + ')'
+            : '📎 ' + (reply.title || reply.shortcut || 'Mídia');
+
+          if (!this.items.some((it) => it.id === mediaUrl || it.url === mediaUrl)) {
+            this.items.push({
+              id: mediaUrl,
+              name: mediaName,
+              url: mediaUrl,
+              is_ptt: !!reply.is_ptt,
+              media_type: reply.media_type || (reply.is_ptt ? 'audio' : 'image'),
+            });
+          }
+        }
+
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
       },
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -638,24 +639,33 @@ class WhatsAppEvolutionAdapter(Adapter):
         return None
 
     def verify_webhook(self, request: Any, connection: ChannelConnection) -> bool:
-        """Validate that the webhook callback is authentic."""
+        """Validate that the webhook callback is authentic.
+
+        Fails closed: fails if the connection is disabled, or if neither the configured
+        webhook secret nor the instance API key match using constant-time comparison.
+        """
         if not connection or connection.platform != self.platform:
             return False
 
-        # If webhook_secret is set on the connection, verify it if presented
+        if connection.status == ConnectionStatus.DISABLED:
+            return False
+
+        # 1. If webhook_secret is set on the connection, verify it
         secret = request.headers.get("X-Webhook-Secret") or request.GET.get("secret")
-        if secret and connection.webhook_secret_digest:
-            return connection.verify_webhook_secret(secret)
+        if connection.webhook_secret_digest:
+            return bool(secret and connection.verify_webhook_secret(secret))
 
-        # Also accept matching apikey header
+        # 2. Accept matching apikey / x-api-key header using constant-time compare
         req_key = request.headers.get("apikey") or request.headers.get("x-api-key")
-        if req_key:
-            expected = connection.credentials.get("instance_token") or connection.credentials.get("api_key")
-            if expected and expected == req_key:
-                return True
+        expected_key = (
+            connection.credentials.get("instance_token")
+            or connection.credentials.get("api_key")
+            or ""
+        )
+        if req_key and expected_key:
+            return secrets.compare_digest(str(req_key), str(expected_key))
 
-        # If connection is active and resolved properly, allow ingestion
-        return connection.status != ConnectionStatus.DISABLED
+        return False
 
     def parse_events(self, request: Any, connection: ChannelConnection) -> list[NormalizedEvent]:
         """Convert Evolution GO webhook events into NormalizedEvent objects."""
@@ -835,6 +845,8 @@ class WhatsAppEvolutionAdapter(Adapter):
                         or m_kind == "ptt"
                         or "ptt" in filename.lower()
                         or "ptt" in media_url.lower()
+                        or "ptt" in caption.lower()
+                        or "voice" in caption.lower()
                         or block.get("extra", {}).get("ptt")
                     )
                     try:

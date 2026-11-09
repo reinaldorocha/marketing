@@ -1056,6 +1056,25 @@ def _message_events(
     if kinds:
         extra["attachment_types"] = list(kinds)
 
+    # Check Follower Gate on incoming direct messages (Phase 2)
+    settings = getattr(connection, "instagram_settings", None)
+    if settings is None:
+        try:
+            from apps.channels.models import InstagramProfileSettings
+            settings = InstagramProfileSettings.objects.filter(connection=connection).first()
+        except Exception:
+            settings = None
+
+    if settings and settings.require_follower:
+        token = access_token(connection)
+        if not check_is_follower(sender_id, token):
+            logger.info("Instagram DM: sender %s is not following, sending follower gate prompt.", sender_id)
+            try:
+                send_follower_gate_message(connection, {"id": sender_id}, f"dm:{sender_id}", settings, comment_text=text)
+            except Exception as exc:
+                logger.warning("Instagram: failed to send follower gate message for DM: %s", exc)
+            return []
+
     if "story_mention" in kinds:
         # SPEC §10's story-mention trigger. Delivered as a DM with a
         # ``story_mention`` attachment rather than as its own webhook field.
@@ -1112,9 +1131,10 @@ def _message_events(
 
 
 def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payload_str: str) -> None:
-    """Handle postback ig_follow_check:<row_pk> to re-verify follow status and resume flow."""
-    parts = payload_str.split(":", 1)
+    """Handle postback ig_follow_check:<row_pk>:<comment_text> to re-verify follow status and resume flow."""
+    parts = payload_str.split(":", 2)
     row_pk = parts[1] if len(parts) > 1 else ""
+    comment_text = parts[2] if len(parts) > 2 else ""
     token = access_token(connection)
     is_now_follower = check_is_follower(sender_id, token)
 
@@ -1129,10 +1149,10 @@ def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payloa
     if is_now_follower:
         logger.info("Instagram: user %s confirmed follower status, unblocking flow.", sender_id)
         from apps.flows.models import HandledComment
-        row = HandledComment.objects.unscoped().filter(pk=row_pk).first() if row_pk else None
+        row = HandledComment.objects.unscoped().filter(pk=row_pk).first() if (row_pk and not row_pk.startswith("dm:")) else None
         if row:
-            # Deliver flow by dispatching _open_thread
-            _open_thread(connection, row, {"comment_text": ""})
+            # Deliver flow by dispatching _open_thread preserving comment keyword
+            _open_thread(connection, row, {"comment_text": comment_text})
         else:
             # Send direct message confirmation
             call(token, "me/messages", payload={
@@ -1142,7 +1162,7 @@ def _handle_follow_recheck(connection: ChannelConnection, sender_id: str, payloa
     else:
         # Prompt again with follower gate buttons
         recipient = {"id": sender_id}
-        send_follower_gate_message(connection, recipient, row_pk, settings)
+        send_follower_gate_message(connection, recipient, row_pk, settings, comment_text=comment_text)
 
 
 def _postback_events(
@@ -1622,8 +1642,9 @@ def _answer_comment(payload: dict[str, Any], action: Any) -> None:
         if not check_is_follower(row.commenter_ref, token):
             logger.info("Instagram: commenter %s is not following, sending follower gate prompt.", row.commenter_ref)
             recipient = {"comment_id": row.comment_id}
+            cmt_text = _text(payload.get("comment_text"), MAX_INBOUND_TEXT_CHARS)
             try:
-                send_follower_gate_message(connection, recipient, str(row.pk), settings)
+                send_follower_gate_message(connection, recipient, str(row.pk), settings, comment_text=cmt_text)
             except Exception as exc:
                 logger.warning("Instagram: failed to send follower gate message: %s", exc)
             return
@@ -2008,6 +2029,7 @@ def send_follower_gate_message(
     recipient: dict[str, str],
     row_pk: str,
     settings: Any,
+    comment_text: str = "",
 ) -> None:
     """Send follower gate prompt with 'Seguir' link button and 'Já segui' postback button."""
     token = access_token(connection)
@@ -2019,6 +2041,8 @@ def send_follower_gate_message(
     )
     follow_label = (settings.follow_button_label if settings else "") or "Seguir no Instagram"
     confirm_label = (settings.confirm_button_label if settings else "") or "Já estou seguindo ✅"
+
+    btn_payload = f"ig_follow_check:{row_pk}:{comment_text}"[:1000] if comment_text else f"ig_follow_check:{row_pk}"[:1000]
 
     body = {
         "recipient": recipient,
@@ -2037,7 +2061,7 @@ def send_follower_gate_message(
                         {
                             "type": "postback",
                             "title": confirm_label[:20],
-                            "payload": f"ig_follow_check:{row_pk}"[:1000],
+                            "payload": btn_payload,
                         },
                     ],
                 },

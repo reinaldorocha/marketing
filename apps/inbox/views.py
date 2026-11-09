@@ -1507,13 +1507,36 @@ def _attachments(request: WorkspaceRequest, conversation: Conversation, dropped:
     referring in the text to a document that was never sent.
     """
     ids = [value for value in request.POST.getlist("media")[:MAX_ATTACHMENTS] if value]
-    if not ids:
+    urls = [value for value in request.POST.getlist("media_url")[:MAX_ATTACHMENTS] if value]
+    raw_items = ids + [u for u in urls if u not in ids]
+    if not raw_items:
         return []
     capabilities = _capabilities_for(conversation)
     blocks: list[Any] = []
-    for media_id in ids:
+    for item in raw_items[:MAX_ATTACHMENTS]:
+        item_str = str(item).strip()
+        if not item_str:
+            continue
+        if item_str.startswith("http://") or item_str.startswith("https://") or item_str.startswith("/"):
+            lower = item_str.lower()
+            if "ptt=1" in lower or "voice" in lower or lower.endswith((".ogg", ".opus", ".mp3", ".wav", ".m4a", ".aac")):
+                kind = "audio"
+            elif lower.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
+                kind = "image"
+            elif lower.endswith((".mp4", ".mov", ".avi", ".webm", ".mkv")):
+                kind = "video"
+            else:
+                kind = "file"
+
+            if capabilities is not None and not capabilities.supports_block(kind):
+                dropped.add(kind)
+                continue
+            caption = "Mensagem de Voz (PTT)" if ("ptt=1" in lower or "voice" in lower) else ""
+            blocks.append(MediaBlock(kind=kind, url=item_str, caption=caption))
+            continue
+
         try:
-            asset = resolve(media_id, workspace=request.workspace)
+            asset = resolve(item_str, workspace=request.workspace)
         except MediaNotFoundError:
             raise _ComposeError("One of those attachments is no longer in the library.") from None
         kind = str(asset["kind"])
@@ -2059,11 +2082,12 @@ def send_voice_note(request: WorkspaceRequest, workspace_id: str, conversation_i
         uploaded_by=request.user,
     )
     url = delivery_url(asset)
+    ptt_url = f"{url}?ptt=1" if "?" not in url else f"{url}&ptt=1"
 
     blocks = [
         MediaBlock(
             kind="audio",
-            url=url,
+            url=ptt_url,
             caption="Mensagem de Voz (PTT)",
         )
     ]

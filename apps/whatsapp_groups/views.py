@@ -304,6 +304,7 @@ def broadcast_compose(request: WorkspaceRequest, workspace_id: str) -> HttpRespo
 
         # Build broadcast instance
         broadcast = GroupBroadcast.objects.for_workspace(workspace).create(
+            workspace=workspace,
             connection=connection,
             title=title,
             target_mode=target_mode,
@@ -344,6 +345,15 @@ def broadcast_compose(request: WorkspaceRequest, workspace_id: str) -> HttpRespo
                 broadcast.scheduled_at = scheduled_dt
                 broadcast.status = BroadcastStatus.SCHEDULED
                 broadcast.save(update_fields=["scheduled_at", "status"])
+                from apps.queueing.registry import schedule
+
+                schedule(
+                    "group_broadcast_send",
+                    run_at=scheduled_dt,
+                    payload={"broadcast_id": str(broadcast.id)},
+                    workspace=broadcast.workspace,
+                    idempotency_key=f"group_broadcast:{broadcast.id}:{scheduled_dt.isoformat()}",
+                )
                 messages.success(request, f"Disparo agendado com sucesso para {scheduled_dt.strftime('%d/%m/%Y às %H:%M')}!")
                 return redirect("whatsapp_groups:broadcast_detail", workspace_id=workspace_id, broadcast_id=broadcast.id)
 
@@ -427,6 +437,7 @@ def tags_manage(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
             color = request.POST.get("color", "#25D366").strip()
             if name:
                 WhatsAppGroupTag.objects.for_workspace(workspace).get_or_create(
+                    workspace=workspace,
                     name=name,
                     defaults={"color": color},
                 )

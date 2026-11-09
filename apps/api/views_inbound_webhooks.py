@@ -12,7 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -108,7 +108,7 @@ def lead_webhook_create(request: WorkspaceRequest, workspace_id: str) -> HttpRes
     webhook.save()
 
     messages.success(request, f"Webhook de leads '{name}' criado com sucesso! Guarde o token de autenticação.")
-    return redirect("api:lead_webhook_detail", workspace_id=workspace_id, webhook_id=webhook.pk)
+    return redirect("lead_webhooks:detail", workspace_id=workspace_id, webhook_id=webhook.pk)
 
 
 @login_required
@@ -119,9 +119,11 @@ def lead_webhook_detail(request: WorkspaceRequest, workspace_id: str, webhook_id
     webhook = get_scoped_object_or_404(InboundLeadWebhook, request.workspace, pk=webhook_id)
     logs = webhook.logs.select_related("contact", "execution").order_by("-received_at")[:50]
 
-    endpoint_url = request.build_absolute_uri(
-        reverse("api:inbound_lead_receiver", kwargs={"webhook_id": webhook.pk})
-    )
+    try:
+        receiver_path = reverse("api:inbound_lead_receiver", kwargs={"webhook_id": webhook.pk})
+    except NoReverseMatch:
+        receiver_path = reverse("inbound_lead_receiver", kwargs={"webhook_id": webhook.pk})
+    endpoint_url = request.build_absolute_uri(receiver_path)
 
     return render(
         request,
@@ -143,7 +145,7 @@ def lead_webhook_rotate_secret(request: WorkspaceRequest, workspace_id: str, web
     new_secret = webhook.rotate_secret()
     webhook.save(update_fields=["secret_token", "secret_token_digest", "updated_at"])
     messages.success(request, "Novo segredo gerado com sucesso!")
-    return redirect("api:lead_webhook_detail", workspace_id=workspace_id, webhook_id=webhook.pk)
+    return redirect("lead_webhooks:detail", workspace_id=workspace_id, webhook_id=webhook.pk)
 
 
 @login_required
@@ -154,7 +156,7 @@ def lead_webhook_delete(request: WorkspaceRequest, workspace_id: str, webhook_id
     webhook = get_scoped_object_or_404(InboundLeadWebhook, request.workspace, pk=webhook_id)
     webhook.delete()
     messages.success(request, "Webhook de leads removido.")
-    return redirect("api:lead_webhook_list", workspace_id=workspace_id)
+    return redirect("lead_webhooks:list", workspace_id=workspace_id)
 
 
 @csrf_exempt
@@ -305,7 +307,8 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
 
             for tag_name in all_tags:
                 if tag_name:
-                    contact_services.add_tag(contact, tag_name)
+                    tag_obj, _ = contact_services.get_or_create_tag(webhook.workspace, tag_name)
+                    contact_services.add_tag(contact, tag_obj)
 
             # 6. Bind channel identity (WhatsApp)
             identity = None
@@ -313,12 +316,16 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                 conn = webhook.channel_connection
                 # User ID on WhatsApp is typically the phone number digits or JID
                 user_id = norm_phone.lstrip("+")
-                identity = ContactChannelIdentity.objects.filter(
-                    contact=contact,
-                    channel_connection=conn,
-                ).first()
+                identity = (
+                    ContactChannelIdentity.objects.for_workspace(webhook.workspace)
+                    .filter(
+                        contact=contact,
+                        channel_connection=conn,
+                    )
+                    .first()
+                )
                 if identity is None:
-                    identity = ContactChannelIdentity.objects.create(
+                    identity = ContactChannelIdentity.objects.for_workspace(webhook.workspace).create(
                         contact=contact,
                         channel_connection=conn,
                         platform=conn.platform,
@@ -329,7 +336,7 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
             # "Não marque o contato como autorizado automaticamente apenas porque recebeu um telefone.
             # Permita registrar o consentimento quando ele vier comprovado da origem."
             if identity and raw_opt_in in (True, "true", "True", "yes", "1", 1):
-                apply_opt_in(identity, OptInSource.WEBHOOK)
+                apply_opt_in(identity, source=OptInSource.API.value)
 
             # 8. Start the configured flow
             execution = start_flow(

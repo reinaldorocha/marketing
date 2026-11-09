@@ -614,6 +614,8 @@ def pause_broadcast(broadcast: Broadcast) -> Broadcast:
             raise BroadcastError("Only scheduled or sending broadcasts can be paused.")
         locked.status = BroadcastStatus.PAUSED
         locked.save(update_fields=["status", "updated_at"])
+        _cancel_deferred_sends(locked)
+        release_stats(locked)
     broadcast.refresh_from_db()
     return broadcast
 
@@ -626,12 +628,35 @@ def resume_broadcast(broadcast: Broadcast) -> Broadcast:
             raise BroadcastError("Only paused broadcasts can be resumed.")
         locked.status = BroadcastStatus.SENDING
         locked.save(update_fields=["status", "updated_at"])
+
+        now = timezone.now()
+        rate = buckets.rate_for(locked.platform)
+        pending_recipients = list(
+            BroadcastRecipient.objects.for_workspace(locked.workspace_id).filter(
+                broadcast=locked,
+                status=RecipientStatus.PENDING,
+            )
+        )
+        for index, recipient in enumerate(pending_recipients):
+            schedule(
+                ActionType.BROADCAST_SEND,
+                now + timedelta(seconds=index / rate),
+                {
+                    "broadcast_id": str(locked.pk),
+                    "recipient_id": str(recipient.pk),
+                    "contact_id": str(recipient.contact_id),
+                },
+                workspace=locked.workspace,
+                contact=recipient.contact_id,
+                idempotency_key=f"broadcast:{locked.pk}:contact:{recipient.contact_id}:resume:{int(now.timestamp())}",
+            )
+
         schedule(
             ActionType.BROADCAST_FANOUT,
             timezone.now(),
             {"broadcast_id": str(locked.pk)},
             workspace=locked.workspace,
-            idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(timezone.now().timestamp())}",
+            idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(now.timestamp())}",
         )
     broadcast.refresh_from_db()
     return broadcast
