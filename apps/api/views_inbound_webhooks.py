@@ -259,7 +259,7 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
         first_name = parts[0][:150]
         last_name = parts[1][:150] if len(parts) > 1 else ""
 
-    # 5. Find or create Contact in workspace (reconciling with existing channel identity)
+    # 5. Find or create Contact in workspace (preserving identity-determined contact)
     conn = webhook.channel_connection
     channel_user_id = (norm_phone if norm_phone.startswith("+") else f"+{norm_phone}") if (conn and norm_phone) else ""
     existing_identity = None
@@ -279,21 +279,21 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
             .first()
         )
     if not contact and norm_email:
-        contact = (
+        contact_by_email = (
             Contact.objects.for_workspace(webhook.workspace)
             .filter(email=norm_email)
             .first()
         )
-
-    # Check if a different contact matches email when identity contact was chosen
-    email_contact = None
-    if contact and norm_email and existing_identity:
-        email_contact = (
-            Contact.objects.for_workspace(webhook.workspace)
-            .filter(email=norm_email)
-            .exclude(pk=contact.pk)
-            .first()
-        )
+        if contact_by_email:
+            if not norm_phone or not contact_by_email.phone or contact_by_email.phone == norm_phone:
+                contact = contact_by_email
+            else:
+                logger.info(
+                    "Lead webhook: contact with email %s has a different phone (%s vs %s); creating separate contact",
+                    norm_email,
+                    contact_by_email.phone,
+                    norm_phone,
+                )
 
     try:
         with transaction.atomic():
@@ -306,23 +306,53 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                     email=norm_email,
                 )
             else:
-                # Merge duplicate contact if email matched another existing contact
-                if email_contact:
-                    try:
-                        contact = contact_services.merge_contacts(primary=contact, duplicate=email_contact)
-                    except Exception as exc:
-                        logger.warning("Could not merge contacts during lead webhook: %s", exc)
-
-                # Update contact with any newly provided fields
+                # Update existing contact if data is missing, treating conflicting email as divergence without merge
                 update_kwargs: dict[str, Any] = {}
                 if not contact.first_name and first_name:
                     update_kwargs["first_name"] = first_name
                 if not contact.last_name and last_name:
                     update_kwargs["last_name"] = last_name
                 if not contact.phone and norm_phone:
-                    update_kwargs["phone"] = norm_phone
-                if not contact.email and norm_email:
-                    update_kwargs["email"] = norm_email
+                    phone_conflict = (
+                        Contact.objects.for_workspace(webhook.workspace)
+                        .filter(phone=norm_phone)
+                        .exclude(pk=contact.pk)
+                        .exists()
+                    )
+                    if not phone_conflict:
+                        update_kwargs["phone"] = norm_phone
+                    else:
+                        logger.warning(
+                            "Lead webhook: phone conflict for contact %s: payload phone %s already belongs to another contact",
+                            contact.pk,
+                            norm_phone,
+                        )
+
+                if norm_email:
+                    if contact.email and contact.email.lower() != norm_email.lower():
+                        logger.warning(
+                            "Lead webhook: email divergence for contact %s: payload email '%s' differs from registered email '%s'",
+                            contact.pk,
+                            norm_email,
+                            contact.email,
+                        )
+                    elif not contact.email:
+                        email_conflict = (
+                            Contact.objects.for_workspace(webhook.workspace)
+                            .filter(email=norm_email)
+                            .exclude(pk=contact.pk)
+                            .exists()
+                        )
+                        if email_conflict:
+                            logger.warning(
+                                "Lead webhook: email conflict for contact %s: payload email '%s' already belongs to another contact in workspace %s",
+                                contact.pk,
+                                norm_email,
+                                webhook.workspace_id,
+                            )
+                        else:
+                            update_kwargs["email"] = norm_email
+
                 if update_kwargs:
                     contact_services.update_contact(contact, **update_kwargs)
 
