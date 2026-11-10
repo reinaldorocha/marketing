@@ -177,11 +177,11 @@ def npm_client(env, backup):
             (backup / "npm-api-error.json").write_bytes(exc.read())
             raise RuntimeError(f"NPM API failed ({exc.code}); see {backup}/npm-api-error.json") from None
 
-    return api, admin[1]
+    return api
 
 
 def configure_proxy(env, backup):
-    api, contact = npm_client(env, backup)
+    api = npm_client(env, backup)
     domain = env["APP_DOMAIN"]
     hosts = api("/nginx/proxy-hosts")
     matches = [h for h in hosts if domain in h["domain_names"]]
@@ -196,8 +196,9 @@ def configure_proxy(env, backup):
         print("Requesting HTTPS certificate from Let's Encrypt", flush=True)
         cert = api("/nginx/certificates", {
             "provider": "letsencrypt", "domain_names": [domain],
-            "meta": {"letsencrypt_email": env.get("ACME_EMAIL") or contact,
-                     "letsencrypt_agree": True, "dns_challenge": False},
+            # NPM takes the ACME contact from its authenticated administrator.
+            # Its public API intentionally rejects arbitrary contact fields here.
+            "meta": {"dns_challenge": False},
         })
     payload = {
         "domain_names": [domain], "forward_scheme": "http", "forward_host": "marketing-web",
