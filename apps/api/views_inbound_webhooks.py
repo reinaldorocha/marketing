@@ -57,7 +57,7 @@ def lead_webhook_list(request: WorkspaceRequest, workspace_id: str) -> HttpRespo
         .select_related("target_flow", "channel_connection")
         .order_by("-created_at")
     )
-    flows = Flow.objects.for_workspace(request.workspace).filter(status=FlowStatus.PUBLISHED)
+    flows = Flow.objects.for_workspace(request.workspace).filter(status=FlowStatus.ACTIVE)
     connections = ChannelConnection.objects.for_workspace(request.workspace).filter(status=ConnectionStatus.ACTIVE)
 
     return render(

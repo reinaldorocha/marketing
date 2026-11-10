@@ -22,6 +22,14 @@ Atualizado em 10 de novembro de 2026. Este arquivo registra achados, correções
 
 **Correção:** foi criada a migração `whatsapp_groups.0003`, que inclui a coluna sem descartar dados existentes. A mesma migração fixa o estado dos gerenciadores de modelos no histórico.
 
+### Tela de webhooks de leads indisponível
+
+**Sintoma:** `GET /w/<workspace>/settings/lead-webhooks/` retornava erro 500.
+
+**Causa:** a listagem tentava filtrar por `FlowStatus.PUBLISHED`, um membro que não existe no enum de fluxos. O estado que representa um fluxo publicado e disponível para automações é `FlowStatus.ACTIVE`.
+
+**Correção:** a consulta passou a usar o estado válido e recebeu teste de regressão para garantir que a página abra e ofereça somente fluxos ativos.
+
 ### Histórico de migrações incompleto
 
 O comando `makemigrations --check` encontrou alterações pendentes em `api`, `broadcasts`, `inbox`, `publishing` e `whatsapp_groups`. As migrações correspondentes foram adicionadas para que uma instalação nova e a VPS cheguem ao mesmo esquema.
