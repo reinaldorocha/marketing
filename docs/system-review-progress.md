@@ -7,7 +7,7 @@ Atualizado em 10 de novembro de 2026. Este arquivo registra achados, correções
 | Área | Situação | Resultado |
 | --- | --- | --- |
 | Migrações e banco de dados | Em validação | Seis diferenças entre modelos e histórico de migrações foram identificadas. A mais urgente impedia a listagem de grupos porque a coluna `updated_at` de `WhatsAppGroupTag` não existia no PostgreSQL. |
-| Interface em português | Em andamento | Iniciada a tradução dos estados de campanhas. A revisão cobre textos de telas, mensagens, formulários, rótulos de modelos e acessibilidade. |
+| Interface em português | Em andamento | Traduzidos login, cadastro, perfil, painel inicial, configurações de espaço, menu principal e telas centrais de disparos. A revisão continua nos canais, fluxos, caixa de entrada, contatos, API e mensagens de servidor. |
 | Fluxos, filas e integrações | Pendente | Será verificada a consistência de agendamento, idempotência, escopo por workspace e falhas de provedores. |
 | Rotas, permissões e isolamento | Pendente | Será verificado o acesso por workspace e as rotas administrativas e públicas. |
 | Produção | Pendente | Após cada lote, a implantação executará migrações, verificações do Django e testes de disponibilidade. |
@@ -25,6 +25,10 @@ Atualizado em 10 de novembro de 2026. Este arquivo registra achados, correções
 ### Histórico de migrações incompleto
 
 O comando `makemigrations --check` encontrou alterações pendentes em `api`, `broadcasts`, `inbox`, `publishing` e `whatsapp_groups`. As migrações correspondentes foram adicionadas para que uma instalação nova e a VPS cheguem ao mesmo esquema.
+
+### Idioma da interface
+
+O documento HTML agora declara `pt-BR`. Foram removidos textos em inglês das telas de acesso, conta, espaço de trabalho, painel inicial, menu lateral e das etapas principais de criação e acompanhamento de disparos. A auditoria restante está registrada na tabela de progresso para evitar que telas secundárias fiquem de fora.
 
 ## Critério de encerramento
 

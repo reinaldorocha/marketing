@@ -12,16 +12,16 @@ step, rather than sent.
       hx-target="#broadcast-wizard"
       hx-swap="innerHTML">
     {% csrf_token %}
-    <h2 class="wizard-title">Review and {% if broadcast.scheduled_at %}schedule{% else %}send{% endif %}</h2>
+    <h2 class="wizard-title">Revise e {% if broadcast.scheduled_at %}agende{% else %}envie{% endif %}</h2>
     <p class="wizard-lede">
         {% if summary_preview %}
-        <strong style="color: var(--text-primary);">{{ broadcast.name }}</strong> goes to
+        <strong style="color: var(--text-primary);">{{ broadcast.name }}</strong> será enviado para
         <strong style="color: var(--text-primary);">{{ summary_preview.eligible }} {{ summary_preview.eligible|pluralize:"person,people" }}</strong>
-        on {{ broadcast.channel_connection.display_name }}
-        {% if broadcast.scheduled_at %}on {{ broadcast.scheduled_at|timezone:request.workspace.effective_timezone|date:"l j F \a\t H:i" }}{% else %}as soon as you send it{% endif %}.
-        {% if summary_preview.skipped_total %}{{ summary_preview.skipped_total }} more match the audience but will be left out.{% endif %}
+        pelo canal {{ broadcast.channel_connection.display_name }}
+        {% if broadcast.scheduled_at %}em {{ broadcast.scheduled_at|timezone:request.workspace.effective_timezone|date:"l j F \a\s H:i" }}{% else %}assim que você enviar{% endif %}.
+        {% if summary_preview.skipped_total %}Mais {{ summary_preview.skipped_total }} correspondem ao público, mas ficarão de fora.{% endif %}
         {% else %}
-        Choose who it goes to before sending.
+        Escolha os destinatários antes do envio.
         {% endif %}
     </p>
 
@@ -40,21 +40,21 @@ step, rather than sent.
     {% endcomment %}
     {% if summary_preview %}
     <div class="summary-cards mb-5">
-        <div class="summary-card"><span class="dot dot-success" aria-hidden="true"></span><span class="summary-card-value">{{ summary_preview.eligible }}</span><span class="summary-card-label">will receive it</span></div>
-        <div class="summary-card"><span class="dot dot-neutral" aria-hidden="true"></span><span class="summary-card-value">{{ summary_preview.skipped_total }}</span><span class="summary-card-label">left out</span></div>
+        <div class="summary-card"><span class="dot dot-success" aria-hidden="true"></span><span class="summary-card-value">{{ summary_preview.eligible }}</span><span class="summary-card-label">receberão</span></div>
+        <div class="summary-card"><span class="dot dot-neutral" aria-hidden="true"></span><span class="summary-card-value">{{ summary_preview.skipped_total }}</span><span class="summary-card-label">ficarão de fora</span></div>
     </div>
     {% endif %}
 
     <p class="wizard-hint">
-        {% if broadcast.scheduled_at %}It can be cancelled up to the moment it starts, and while it is sending.{% else %}It starts going out straight away. You can cancel it while it is sending.{% endif %}
+        {% if broadcast.scheduled_at %}Você pode cancelar até o início e também durante o envio.{% else %}O envio começa imediatamente. Você pode cancelar enquanto estiver em andamento.{% endif %}
     </p>
 
     {% if not ready %}
-    <div class="alert-warning mt-4" role="status">Finish the steps marked in the summary before sending.</div>
+    <div class="alert-warning mt-4" role="status">Conclua as etapas indicadas no resumo antes de enviar.</div>
     {% endif %}
 
     <div class="wizard-actions">
         {% include "broadcasts/_step_back.html" %}
-        <button type="submit" class="btn-pill-primary" {% if not ready %}disabled{% endif %}>{% if broadcast.scheduled_at %}Schedule broadcast{% else %}Send broadcast{% endif %}</button>
+        <button type="submit" class="btn-pill-primary" {% if not ready %}disabled{% endif %}>{% if broadcast.scheduled_at %}Agendar disparo{% else %}Enviar disparo{% endif %}</button>
     </div>
 </form>

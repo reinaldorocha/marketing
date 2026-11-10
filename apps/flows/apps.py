@@ -4,7 +4,7 @@ from django.apps import AppConfig
 class FlowsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.flows"
-    verbose_name = "Flows"
+    verbose_name = "Fluxos"
 
     def ready(self) -> None:
         """Wire the engine up by importing the modules that register things.

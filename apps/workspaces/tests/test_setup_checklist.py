@@ -116,9 +116,9 @@ class TestTheCallsToAction:
         steps = _steps(response)
 
         assert [key for key, step in steps.items() if step["current"]] == ["channel"]
-        assert "Connect a channel" in body
-        assert "Pick a template" not in body
-        assert "Invite people" not in body
+        assert "Conecte um canal" in body
+        assert "Escolher modelo" not in body
+        assert "Convidar pessoas" not in body
 
     def test_the_current_step_is_a_tile_with_the_selected_modifier(self, tenancy, client_for):
         """`.tile-selected` only recolours; the radius is on `.tile`. The
@@ -138,7 +138,7 @@ class TestTheCallsToAction:
         response = _home(tenancy, client_for, user=tenancy.user_for(role))
 
         assert _steps(response)["channel"]["actionable"] is False
-        assert "Connect a channel" in response.content.decode()  # the title
+        assert "Conecte um canal" in response.content.decode()  # the title
         assert f'href="{reverse("channels:list", kwargs={"workspace_id": tenancy.workspace.pk})}"' not in (
             response.content.decode()
         )

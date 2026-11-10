@@ -11,7 +11,7 @@ rule an unchanged poll would swap an empty body over the counters and blank
 them.
 {% endcomment %}
 
-{% block title %}{{ broadcast.name }} · Broadcasts · BrightBean Chat{% endblock %}
+{% block title %}{{ broadcast.name }} · Disparos · BrightBean Chat{% endblock %}
 
 {% block page_header %}
 <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
@@ -29,10 +29,10 @@ them.
         </p>
     </div>
     <div class="flex items-center gap-2">
-        <a class="btn-outline btn-inline" href="{% url 'broadcasts:list' workspace_id=request.workspace.id %}">All broadcasts</a>
+        <a class="btn-outline btn-inline" href="{% url 'broadcasts:list' workspace_id=request.workspace.id %}">Todos os disparos</a>
         <form hx-post="{% url 'broadcasts:duplicate' workspace_id=request.workspace.id broadcast_id=broadcast.id %}" hx-swap="none">
             {% csrf_token %}
-            <button type="submit" class="btn-outline btn-inline">Duplicate</button>
+            <button type="submit" class="btn-outline btn-inline">Duplicar</button>
         </form>
     </div>
 </div>
@@ -50,8 +50,8 @@ them.
 
 <div class="bc-panel mt-4">
     <div class="bc-panel-head">
-        <span class="bc-panel-title">Recipients</span>
-        <span class="bc-hint">Who was skipped, and why.</span>
+        <span class="bc-panel-title">Destinatários</span>
+        <span class="bc-hint">Quem foi ignorado e por quê.</span>
     </div>
     <div id="broadcast-recipients"
          hx-get="{% url 'broadcasts:recipients' workspace_id=request.workspace.id broadcast_id=broadcast.id %}"
@@ -80,13 +80,13 @@ flow builder's overlay shows.
 {% endcomment %}
 <div class="bc-panel">
     <div class="bc-panel-head">
-        <span class="bc-panel-title">Clicks</span>
-        <span class="bc-hint">Links pressed in this message. Refresh to update.</span>
+        <span class="bc-panel-title">Cliques</span>
+        <span class="bc-hint">Links acessados nesta mensagem. Atualize para ver novos dados.</span>
     </div>
     <div class="bc-tiles">
         <div class="bc-tile">
             <div class="bc-tile-figure">{{ clicked }}</div>
-            <div class="bc-tile-label">Clicked</div>
+            <div class="bc-tile-label">Clicaram</div>
         </div>
     </div>
 </div>
@@ -94,26 +94,26 @@ flow builder's overlay shows.
 {% if deliverability %}
 <div class="bc-panel">
     <div class="bc-panel-head">
-        <span class="bc-panel-title">{{ deliverability.connection.display_name }} deliverability</span>
-        <span class="bc-hint">Last 30 days, every message on this channel.</span>
+        <span class="bc-panel-title">Entregabilidade de {{ deliverability.connection.display_name }}</span>
+        <span class="bc-hint">Últimos 30 dias, considerando todas as mensagens deste canal.</span>
     </div>
     <div class="bc-tiles">
         <div class="bc-tile">
             <div class="bc-tile-figure">{{ deliverability.total }}</div>
-            <div class="bc-tile-label">Messages</div>
+            <div class="bc-tile-label">Mensagens</div>
         </div>
         <div class="bc-tile">
             <div class="bc-tile-figure">{{ deliverability.sent }}</div>
-            <div class="bc-tile-label">Reached provider</div>
+            <div class="bc-tile-label">Chegaram ao provedor</div>
         </div>
         <div class="bc-tile">
             <div class="bc-tile-figure">{{ deliverability.failed }}</div>
-            <div class="bc-tile-label">Failed</div>
+            <div class="bc-tile-label">Falharam</div>
         </div>
         <div class="bc-tile">
             {# Blank rather than 0%: a rate with no denominator is not a rate. #}
             <div class="bc-tile-figure">{% if deliverability.delivery_rate is not None %}{{ deliverability.delivery_rate }}%{% else %}N/A{% endif %}</div>
-            <div class="bc-tile-label">Delivered</div>
+            <div class="bc-tile-label">Entregues</div>
         </div>
     </div>
 </div>

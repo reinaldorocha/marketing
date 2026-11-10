@@ -104,12 +104,12 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
           the page it is on.
         {% endcomment %}
         <a href="{{ app_home_url|default:'/' }}" class="sidebar-ws-btn sidebar-back"
-           title="Back to {{ current_workspace.name|default:'app' }}">
+           title="Voltar para {{ current_workspace.name|default:'aplicação' }}">
             <span class="sidebar-back-mark" aria-hidden="true">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             </span>
-            <span class="sidebar-ws-name">Back to {{ current_workspace.name|default:"app" }}</span>
+            <span class="sidebar-ws-name">Voltar para {{ current_workspace.name|default:"aplicação" }}</span>
         </a>
     </div>
     {% else %}
@@ -118,7 +118,7 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
         {% if sidebar_workspaces %}
         <button type="button" class="sidebar-ws-btn"
                 @click="wsOpen = !wsOpen"
-                title="Switch workspace (currently {{ current_workspace.name|default:'BrightBean Chat' }})"
+                title="Trocar espaço de trabalho (atual: {{ current_workspace.name|default:'BrightBean Chat' }})"
                 aria-haspopup="true" :aria-expanded="wsOpen ? 'true' : 'false'">
             {% include "partials/_logo.html" with workspace=current_workspace only %}
             <span class="sidebar-ws-name">{{ current_workspace.name|default:"BrightBean Chat" }}</span>
@@ -154,7 +154,7 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                     </span>
-                    <span class="sidebar-menu-name">New workspace</span>
+                    <span class="sidebar-menu-name">Novo espaço de trabalho</span>
                 </a>
             </div>
             {% endif %}
@@ -174,7 +174,7 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
                     <span class="sidebar-menu-mark" aria-hidden="true">
                         {% include "partials/_nav_icon.html" with name="settings" icon_size=16 only %}
                     </span>
-                    <span class="sidebar-menu-name">Workspace settings</span>
+                    <span class="sidebar-menu-name">Configurações do espaço</span>
                 </a>
             </div>
             {% endif %}
@@ -204,7 +204,7 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
       product's nav not on the page, calling this one "Main" would announce a
       list that is not there.
     {% endcomment %}
-    <nav class="sidebar-nav" aria-label="{% if settings_groups %}Settings{% else %}Main{% endif %}">
+    <nav class="sidebar-nav" aria-label="{% if settings_groups %}Configurações{% else %}Principal{% endif %}">
         {% if settings_groups %}
         {% include "partials/_sidebar_items.html" with groups=settings_groups %}
         {% comment %}
@@ -269,14 +269,14 @@ the header gone there is one trigger, inside the panel's own wrapper, so the
                     </span>
                 </button>
                 <button type="button" class="sidebar-toggle" @click="sidebarCollapsed = true"
-                        title="Collapse sidebar" aria-label="Collapse sidebar">
+                        title="Recolher barra lateral" aria-label="Recolher barra lateral">
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                          stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v18M16 15l-3-3 3-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
                 </button>
             </div>
             <div class="sidebar-footer-collapsed">
                 <button type="button" class="sidebar-toggle" @click="sidebarCollapsed = false"
-                        title="Expand sidebar" aria-label="Expand sidebar">
+                        title="Expandir barra lateral" aria-label="Expandir barra lateral">
                     <svg class="scale-x-[-1]" width="16" height="16" fill="none" stroke="currentColor"
                          viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
                          aria-hidden="true"><path d="M9 3v18M16 15l-3-3 3-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>

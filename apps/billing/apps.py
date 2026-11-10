@@ -26,7 +26,7 @@ class BillingConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.billing"
     label = "billing"
-    verbose_name = "Billing"
+    verbose_name = "Faturamento"
 
     def ready(self) -> None:
         """Import the modules whose registration is a side effect of import.

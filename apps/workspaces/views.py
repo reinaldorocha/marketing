@@ -178,31 +178,31 @@ def _setup_steps(request: WorkspaceRequest) -> list[dict[str, Any]]:
         {
             "key": "channel",
             "permission": "manage_channels",
-            "title": "Connect a channel",
-            "body": "Wherever people already message you: Telegram, Instagram, WhatsApp or email.",
-            "cta": "Connect a channel",
+            "title": "Conecte um canal",
+            "body": "Onde as pessoas já falam com você: Telegram, Instagram, WhatsApp ou e-mail.",
+            "cta": "Conectar canal",
             "url": reverse("channels:list", kwargs={"workspace_id": workspace.id}),
             "done": has_channel,
-            "done_body": "Messages arrive here now.",
+            "done_body": "As mensagens já chegam por aqui.",
         },
         {
             "key": "flow",
             "permission": "edit_flows",
-            "title": "Build your first flow",
-            "body": "A template comes with its trigger and its replies already written.",
-            "cta": "Pick a template",
+            "title": "Crie seu primeiro fluxo",
+            "body": "Um modelo já inclui o gatilho e as respostas prontas para você adaptar.",
+            "cta": "Escolher modelo",
             "url": reverse("flows:list", kwargs={"workspace_id": workspace.id}),
             "done": live_flows > 0,
-            "done_body": "A flow is answering for you.",
+            "done_body": "Um fluxo já responde por você.",
         },
         {
             "key": "team",
-            "title": "Invite your team",
-            "body": "Share the inbox so every reply does not land on you.",
-            "cta": "Invite people",
+            "title": "Convide sua equipe",
+            "body": "Compartilhe a caixa de entrada para que todas as respostas não dependam de você.",
+            "cta": "Convidar pessoas",
             "url": reverse("members:list"),
             "done": teammates > 1,
-            "done_body": "Other people can answer too.",
+            "done_body": "Outras pessoas também podem responder.",
             # members:list is gated on an organisation role rather than a
             # workspace permission, and every member holds "member".
             "permission": "",
@@ -247,8 +247,8 @@ def _needs_you(request: WorkspaceRequest) -> list[dict[str, Any]]:
             items.append(
                 {
                     "tone": "bad",
-                    "title": f"{connection.display_name} needs reconnecting",
-                    "body": "It stopped receiving messages. Reconnect to start again.",
+                    "title": f"{connection.display_name} precisa ser reconectado",
+                    "body": "Ele parou de receber mensagens. Reconecte para continuar.",
                     "url": reverse(
                         "channels:detail",
                         kwargs={"workspace_id": workspace.id, "connection_id": connection.id},
@@ -266,8 +266,8 @@ def _needs_you(request: WorkspaceRequest) -> list[dict[str, Any]]:
             items.append(
                 {
                     "tone": "warn",
-                    "title": f"{unassigned} conversation{'' if unassigned == 1 else 's'} unassigned",
-                    "body": "Nobody has picked these up yet.",
+                    "title": f"{unassigned} conversa{'s' if unassigned != 1 else ''} sem responsável",
+                    "body": "Ninguém assumiu essas conversas ainda.",
                     "url": reverse("inbox:list", kwargs={"workspace_id": workspace.id}),
                 }
             )
@@ -339,14 +339,14 @@ def update_settings(request: WorkspaceRequest, workspace_id: str) -> HttpRespons
     # string, so "   " would survive it and be stored as a nameless workspace.
     name = (request.POST.get("name") or "").strip()[:100]
     if not name:
-        messages.error(request, "A workspace needs a name.")
+        messages.error(request, "O espaço de trabalho precisa de um nome.")
         return redirect(reverse("workspaces:settings", kwargs={"workspace_id": workspace_id}))
     # (organization, name) is unique, so without this an ordinary rename onto a
     # sibling's name reaches the constraint and 500s. The create flow already
     # checks; this one has to as well.
     clash = Workspace.objects.for_org(workspace.organization_id).filter(name=name).exclude(pk=workspace.pk)
     if clash.exists():
-        messages.error(request, "Another workspace in this organization already has that name.")
+        messages.error(request, "Já existe outro espaço de trabalho com esse nome nesta organização.")
         return redirect(reverse("workspaces:settings", kwargs={"workspace_id": workspace_id}))
     workspace.name = name
     workspace.icon = (request.POST.get("icon") or "").strip()[:8]
@@ -361,19 +361,19 @@ def update_settings(request: WorkspaceRequest, workspace_id: str) -> HttpRespons
     # this page — the picker's list is narrower than the column's rule.
     submitted_timezone = (request.POST.get("timezone") or "").strip()[:63]
     if submitted_timezone and not is_valid_timezone(submitted_timezone):
-        messages.error(request, "That is not a timezone we recognise.")
+        messages.error(request, "Esse fuso horário não é reconhecido.")
         return redirect(reverse("workspaces:settings", kwargs={"workspace_id": workspace_id}))
     workspace.timezone = submitted_timezone
 
     for field in ("primary_color", "secondary_color"):
         value = (request.POST.get(field) or "").strip()
         if not is_valid_hex_color(value):
-            messages.error(request, "Colours must be a 6-digit hex value like #3B82F6.")
+            messages.error(request, "As cores devem usar seis dígitos hexadecimais, como #3B82F6.")
             return redirect(reverse("workspaces:settings", kwargs={"workspace_id": workspace_id}))
         setattr(workspace, field, value)
 
     workspace.save(
         update_fields=["name", "icon", "description", "timezone", "primary_color", "secondary_color", "updated_at"]
     )
-    messages.success(request, "Workspace settings saved.")
+    messages.success(request, "Configurações do espaço de trabalho salvas.")
     return redirect(reverse("workspaces:settings", kwargs={"workspace_id": workspace_id}))

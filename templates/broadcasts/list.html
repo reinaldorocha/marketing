@@ -12,20 +12,20 @@ messaging window, not the selector (SPEC §13.2). There is no platform name in
 this file.
 {% endcomment %}
 
-{% block title %}Broadcasts · BrightBean Chat{% endblock %}
+{% block title %}Disparos · BrightBean Chat{% endblock %}
 
 {% block page_header %}
 <div class="page-header max-w-[1060px]">
     <div class="page-header-text">
-        <h1 class="page-title">Broadcasts</h1>
+        <h1 class="page-title">Disparos</h1>
         <p class="page-lede">
-            One message to many contacts, filtered for compliance before it goes out.
+            Uma mensagem para muitos contatos, validada antes do envio.
         </p>
     </div>
     {% if connections %}
     <div class="page-header-actions">
         <button type="button" class="btn-pill-primary" @click="$modal('new-broadcast')">
-            {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} New broadcast
+            {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} Novo disparo
         </button>
     </div>
     {% endif %}
@@ -37,15 +37,15 @@ this file.
   stays open with what was typed.
 {% endcomment %}
 {% if connections %}
-{% modal "new-broadcast" title="New broadcast" %}
+{% modal "new-broadcast" title="Novo disparo" %}
 <form hx-post="{% url 'broadcasts:create' workspace_id=request.workspace.id %}" hx-swap="none">
     <div class="bb-modal-body">
         <div class="field">
-            <label class="field-label" for="new-broadcast-name">What is this broadcast called?</label>
-            <input class="form-input-styled" id="new-broadcast-name" type="text" name="name" maxlength="200" required autofocus placeholder="Spring sale announcement">
+            <label class="field-label" for="new-broadcast-name">Qual é o nome deste disparo?</label>
+            <input class="form-input-styled" id="new-broadcast-name" type="text" name="name" maxlength="200" required autofocus placeholder="Comunicado de promoção">
         </div>
         <div class="field">
-            <label class="field-label" for="new-broadcast-connection">Channel</label>
+            <label class="field-label" for="new-broadcast-connection">Canal</label>
             <select class="form-input-styled bb-select" id="new-broadcast-connection" name="connection_id" required>
                 {% for connection in connections %}
                 <option value="{{ connection.id }}">{{ connection.display_name }}</option>
@@ -54,8 +54,8 @@ this file.
         </div>
     </div>
     <div class="bb-modal-actions">
-        <button type="button" class="btn-pill-secondary" @click="close()">Cancel</button>
-        <button type="submit" class="btn-pill-primary">Create broadcast</button>
+        <button type="button" class="btn-pill-secondary" @click="close()">Cancelar</button>
+        <button type="submit" class="btn-pill-primary">Criar disparo</button>
     </div>
 </form>
 {% endmodal %}
@@ -65,8 +65,8 @@ this file.
 {% block content %}
 {% if not connections %}
 <div class="alert-info mb-4">
-    No channel in this workspace accepts broadcasts yet. Connect one in
-    <a href="{% url 'channels:list' workspace_id=request.workspace.id %}">channel settings</a> first.
+    Nenhum canal deste espaço aceita disparos ainda. Conecte um em
+    <a href="{% url 'channels:list' workspace_id=request.workspace.id %}">configurações de canais</a> primeiro.
 </div>
 {% endif %}
 
@@ -87,10 +87,10 @@ this file.
           @submit.prevent>
         <label class="search-field w-full sm:w-64">
             {% include "partials/_nav_icon.html" with name="search" icon_size=16 %}
-            <input id="broadcast-q" type="search" name="q" x-model="q" placeholder="Search broadcasts"
-                   class="search-input" aria-label="Search broadcasts">
+            <input id="broadcast-q" type="search" name="q" x-model="q" placeholder="Buscar disparos"
+                   class="search-input" aria-label="Buscar disparos">
         </label>
-        {% filter_popover groups=filter_groups onchange="reload()" target="#broadcast-rows" count=broadcasts|length noun="broadcast" %}
+        {% filter_popover groups=filter_groups onchange="reload()" target="#broadcast-rows" count=broadcasts|length noun="disparo" %}
     </form>
     {% filter_chips groups=filter_groups onchange="reload()" %}
     </div>
