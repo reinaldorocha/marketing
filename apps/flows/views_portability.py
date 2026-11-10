@@ -356,11 +356,11 @@ def _apply_and_redirect(request: WorkspaceRequest, workspace_id: str, record: Fl
         return _redirect_to_review(workspace_id, record)
     except (portability.ImportRefusedError, ContactsError, CampaignsError) as exc:
         logger.info("Workspace %s could not apply import %s: %s", request.workspace.pk, record.pk, exc)
-        messages.error(request, f"Nothing was imported. {exc}")
+        messages.error(request, f"Nenhum fluxo foi importado. {exc}")
         return _redirect_to_review(workspace_id, record)
 
     if flows is None:
-        messages.info(request, "This file has already been imported.")
+        messages.info(request, "Este arquivo já foi importado.")
         return redirect("flows:list", workspace_id=workspace_id)
 
     record.refresh_from_db()

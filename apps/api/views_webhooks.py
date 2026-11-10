@@ -162,7 +162,7 @@ def webhook_update(request: WorkspaceRequest, workspace_id: str, webhook_id: str
     except ApiKeysError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Endpoint updated.")
+        messages.success(request, "Endpoint atualizado.")
     return redirect(_detail_url(workspace_id, webhook.pk))
 
 
@@ -185,7 +185,7 @@ def webhook_rotate_secret(request: WorkspaceRequest, workspace_id: str, webhook_
             "webhook": webhook,
             "plaintext": plaintext,
             "back_url": _detail_url(workspace_id, webhook.pk),
-            "heading": "New signing secret",
+            "heading": "Novo segredo de assinatura",
         },
     )
 
@@ -202,9 +202,9 @@ def webhook_test(request: WorkspaceRequest, workspace_id: str, webhook_id: str) 
     webhook = _webhook_or_404(request, webhook_id)
     delivery = send_test_event(webhook)
     if delivery.succeeded:
-        messages.success(request, f"Test delivered. The endpoint answered {delivery.response_code}.")
+        messages.success(request, f"Teste entregue. O endpoint respondeu {delivery.response_code}.")
     else:
-        messages.error(request, f"Test failed: {delivery.error or delivery.status}.")
+        messages.error(request, f"O teste falhou: {delivery.error or delivery.status}.")
     return redirect(_detail_url(workspace_id, webhook.pk))
 
 
@@ -216,5 +216,5 @@ def webhook_delete(request: WorkspaceRequest, workspace_id: str, webhook_id: str
     webhook = _webhook_or_404(request, webhook_id)
     url = webhook.url
     webhook.delete()
-    messages.success(request, f"Deleted {url}.")
+    messages.success(request, f"{url} foi excluído.")
     return redirect(_list_url(workspace_id))
