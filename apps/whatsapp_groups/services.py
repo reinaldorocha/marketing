@@ -2,13 +2,16 @@ import logging
 import threading
 import time
 import uuid
+from datetime import timedelta
 from typing import Any
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.channels.models import ChannelConnection, ConnectionStatus
 from apps.channels.providers.whatsapp_evolution import EvolutionClient, WhatsAppEvolutionAdapter
 from apps.common.platforms import Platform
+from apps.queueing.registry import schedule
 from apps.whatsapp_groups.models import (
     BroadcastMessageType,
     BroadcastStatus,
@@ -273,74 +276,105 @@ def send_message_to_group(
         )
 
 
+def _run_in_independent_thread(func: Any) -> Any:
+    """Execute func in an independent thread with its own database connection.
+
+    Ensures that:
+    1. The operation commits immediately in its own transaction, avoiding long-lived row locks.
+    2. Any exception raised inside func (such as OperationalError, DatabaseError, etc.)
+       is captured and re-raised in the caller's thread upon t.join(), so queue workers
+       can properly catch and retry the action.
+    """
+    result: list[Any] = []
+    error: list[BaseException] = []
+
+    def _worker() -> None:
+        from django.db import connection as db_connection
+        try:
+            res = func()
+            result.append(res)
+        except BaseException as exc:
+            error.append(exc)
+        finally:
+            db_connection.close()
+
+    t = threading.Thread(target=_worker)
+    t.start()
+    t.join()
+
+    if error:
+        raise error[0]
+    return result[0] if result else None
+
+
 def mark_broadcast_failed_committed(broadcast_id: Any) -> None:
     """Mark a broadcast as FAILED in an independent committed transaction.
 
     Used when fanout or execution fails terminally, ensuring that the terminal
     FAILED status is committed independently and survives worker rollback.
     """
-    def _run() -> None:
-        from django.db import connection as db_connection
-        try:
-            (
-                GroupBroadcast.objects.unscoped()
-                .filter(pk=broadcast_id)
-                .update(
-                    status=BroadcastStatus.FAILED,
-                    updated_at=timezone.now(),
-                )
+    def _fail() -> None:
+        (
+            GroupBroadcast.objects.unscoped()
+            .filter(pk=broadcast_id)
+            .update(
+                status=BroadcastStatus.FAILED,
+                updated_at=timezone.now(),
             )
-        finally:
-            db_connection.close()
+        )
 
-    t = threading.Thread(target=_run)
-    t.start()
-    t.join()
+    _run_in_independent_thread(_fail)
 
 
 def set_broadcast_total_groups_committed(broadcast_id: Any, total_groups: int) -> None:
     """Update total_groups_count in an independent committed transaction."""
-    def _run() -> None:
-        from django.db import connection as db_connection
-        try:
-            (
-                GroupBroadcast.objects.unscoped()
-                .filter(pk=broadcast_id)
-                .update(
-                    total_groups_count=total_groups,
-                    updated_at=timezone.now(),
-                )
+    def _update() -> None:
+        (
+            GroupBroadcast.objects.unscoped()
+            .filter(pk=broadcast_id)
+            .update(
+                total_groups_count=total_groups,
+                updated_at=timezone.now(),
             )
-        finally:
-            db_connection.close()
+        )
 
-    t = threading.Thread(target=_run)
-    t.start()
-    t.join()
+    _run_in_independent_thread(_update)
 
 
-def set_broadcast_completed_committed(broadcast_id: Any) -> None:
-    """Set broadcast status to COMPLETED with 0 groups in an independent committed transaction."""
-    def _run() -> None:
-        from django.db import connection as db_connection
-        try:
-            now = timezone.now()
-            (
-                GroupBroadcast.objects.unscoped()
-                .filter(pk=broadcast_id)
-                .update(
-                    status=BroadcastStatus.COMPLETED,
-                    total_groups_count=0,
-                    sent_at=now,
-                    updated_at=now,
-                )
-            )
-        finally:
-            db_connection.close()
+def set_broadcast_completed_committed(broadcast_id: Any, total_groups: int | None = None) -> None:
+    """Set broadcast status to COMPLETED in an independent committed transaction."""
+    def _complete() -> None:
+        now = timezone.now()
+        update_fields: dict[str, Any] = {
+            "status": BroadcastStatus.COMPLETED,
+            "sent_at": now,
+            "updated_at": now,
+        }
+        if total_groups is not None:
+            update_fields["total_groups_count"] = total_groups
+        (
+            GroupBroadcast.objects.unscoped()
+            .filter(pk=broadcast_id)
+            .update(**update_fields)
+        )
 
-    t = threading.Thread(target=_run)
-    t.start()
-    t.join()
+    _run_in_independent_thread(_complete)
+
+
+def _release_claim_on_failure(broadcast_id: Any) -> None:
+    """Reset claim_token and revert status to SCHEDULED if no groups were sent yet."""
+    def _release() -> None:
+        b = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
+        if b and b.status == BroadcastStatus.SENDING:
+            update_kwargs: dict[str, Any] = {"claim_token": "", "updated_at": timezone.now()}
+            if not b.delivery_logs:
+                update_kwargs["status"] = BroadcastStatus.SCHEDULED
+            GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).update(**update_kwargs)
+
+    try:
+        _run_in_independent_thread(_release)
+    except Exception as exc:
+        logger.warning("Failed to release claim for broadcast %s: %s", broadcast_id, exc)
 
 
 def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
@@ -495,77 +529,112 @@ def claim_group_broadcast_for_sending(
     Crucially, committing the claim in an independent transaction releases the row
     lock immediately, so the caller's transaction never maintains an exclusive lock
     that could cause circular wait with other operations.
+    Propagates database exceptions (e.g. OperationalError) to trigger queue retries.
     """
-    result: list[GroupBroadcast | None] = [None]
+    def _claim() -> GroupBroadcast | None:
+        with transaction.atomic():
+            broadcast = (
+                GroupBroadcast.objects.unscoped()
+                .select_for_update()
+                .filter(pk=broadcast_id)
+                .first()
+            )
+            if not broadcast:
+                return None
 
-    def _run() -> None:
-        from django.db import connection as db_connection
-        try:
-            with transaction.atomic():
-                broadcast = (
-                    GroupBroadcast.objects.unscoped()
-                    .select_for_update()
-                    .filter(pk=broadcast_id)
-                    .first()
-                )
-                if not broadcast:
-                    return
+            now = timezone.now()
+            is_stale = (
+                broadcast.status == BroadcastStatus.SENDING
+                and broadcast.updated_at
+                and (now - broadcast.updated_at).total_seconds() > 300
+            )
 
-                now = timezone.now()
-                is_stale = (
-                    broadcast.status == BroadcastStatus.SENDING
-                    and broadcast.updated_at
-                    and (now - broadcast.updated_at).total_seconds() > 300
-                )
-
-                can_claim = False
-                if broadcast.status == BroadcastStatus.SCHEDULED:
+            can_claim = False
+            if broadcast.status == BroadcastStatus.SCHEDULED:
+                can_claim = True
+            elif is_stale:
+                can_claim = True
+            elif allow_resume and broadcast.status == BroadcastStatus.SENDING:
+                if claim_owner and broadcast.claim_token == claim_owner:
                     can_claim = True
-                elif is_stale:
+                elif not broadcast.claim_token and claim_owner:
                     can_claim = True
-                elif allow_resume and broadcast.status == BroadcastStatus.SENDING:
-                    if claim_owner and broadcast.claim_token == claim_owner:
-                        can_claim = True
-                    elif not broadcast.claim_token and claim_owner:
-                        can_claim = True
 
-                if not can_claim:
-                    return
+            if not can_claim:
+                return None
 
-                broadcast.status = BroadcastStatus.SENDING
-                if claim_owner:
-                    broadcast.claim_token = claim_owner
-                broadcast.updated_at = now
-                broadcast.save(update_fields=["status", "claim_token", "updated_at"])
-                result[0] = broadcast
-        finally:
-            db_connection.close()
+            broadcast.status = BroadcastStatus.SENDING
+            if claim_owner:
+                broadcast.claim_token = claim_owner
+            broadcast.updated_at = now
+            broadcast.save(update_fields=["status", "claim_token", "updated_at"])
+            return broadcast
 
-    t = threading.Thread(target=_run)
-    t.start()
-    t.join()
-    return result[0]
+    return _run_in_independent_thread(_claim)
 
 
 def process_scheduled_broadcasts() -> int:
-    """Check for scheduled group broadcasts whose execution time has arrived."""
+    """Check for scheduled and abandoned group broadcasts whose execution time has arrived.
+
+    Sweeps for:
+    1. SCHEDULED broadcasts due for sending (scheduled_at <= now)
+    2. Stale / abandoned SENDING broadcasts (> 5 minutes without update)
+
+    For each candidate, reclaims the broadcast, ensures total_groups_count is set,
+    and forwards remaining unsent groups to per-group queue tasks.
+    """
+    now = timezone.now()
+    stale_cutoff = now - timedelta(seconds=300)
+
     pending_ids = list(
         GroupBroadcast.objects.unscoped()
         .filter(
-            status=BroadcastStatus.SCHEDULED,
-            scheduled_at__lte=timezone.now(),
+            Q(status=BroadcastStatus.SCHEDULED, scheduled_at__lte=now)
+            | Q(status=BroadcastStatus.SENDING, updated_at__lte=stale_cutoff)
         )
         .values_list("pk", flat=True)
     )
     processed = 0
     for broadcast_id in pending_ids:
         claim_owner = f"housekeeping:{uuid.uuid4().hex[:12]}"
-        broadcast = claim_group_broadcast_for_sending(broadcast_id, claim_owner=claim_owner)
-        if not broadcast:
-            continue
         try:
-            dispatch_group_broadcast(broadcast)
+            broadcast = claim_group_broadcast_for_sending(
+                broadcast_id, claim_owner=claim_owner, allow_resume=True
+            )
+            if not broadcast:
+                continue
+
+            target_groups = resolve_target_groups(broadcast)
+            total_groups = len(target_groups)
+            logs = list(broadcast.delivery_logs or [])
+            already_sent_jids = {
+                entry.get("group_jid") for entry in logs if entry.get("status") == "ok"
+            }
+            remaining_groups = [g for g in target_groups if g.jid not in already_sent_jids]
+
+            if total_groups == 0:
+                set_broadcast_completed_committed(broadcast.id, total_groups=0)
+                processed += 1
+                continue
+
+            if len(remaining_groups) == 0:
+                set_broadcast_completed_committed(broadcast.id, total_groups=total_groups)
+                processed += 1
+                continue
+
+            set_broadcast_total_groups_committed(broadcast.id, total_groups)
+
+            delay = min(max(broadcast.delay_seconds, 0), 15)
+            for idx, group in enumerate(remaining_groups):
+                schedule(
+                    "group_broadcast_send",
+                    run_at=now + timedelta(seconds=idx * delay),
+                    payload={"broadcast_id": str(broadcast.id), "group_jid": group.jid},
+                    workspace=broadcast.workspace,
+                    idempotency_key=f"group_broadcast:{broadcast.id}:{group.jid}:hb:{now.strftime('%Y%m%d%H%M')}",
+                )
             processed += 1
         except Exception as exc:
             logger.error("Error processing scheduled broadcast %s: %s", broadcast_id, exc)
+            _release_claim_on_failure(broadcast_id)
     return processed

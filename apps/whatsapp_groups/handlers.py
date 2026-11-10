@@ -59,7 +59,7 @@ def handle_group_broadcast_send(payload: dict, action: Any) -> None:
         broadcast.total_groups_count = total_groups
 
         if total_groups == 0:
-            set_broadcast_completed_committed(broadcast.id)
+            set_broadcast_completed_committed(broadcast.id, total_groups=0)
             return
 
         set_broadcast_total_groups_committed(broadcast.id, total_groups)
