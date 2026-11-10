@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from apps.channels.models import ChannelConnection, ConnectionStatus
 from apps.channels.providers.whatsapp_evolution import EvolutionClient, WhatsAppEvolutionAdapter
+from apps.channels.registry import adapter_for
 from apps.common.platforms import Platform
 from apps.queueing.models import ActionStatus, ScheduledAction
 from apps.queueing.registry import schedule
@@ -212,13 +213,28 @@ def resolve_target_groups(broadcast: GroupBroadcast) -> list[WhatsAppGroup]:
     return list(target_groups_qs)
 
 
+def _call_client_send(send_func: Any, *args: Any, **kwargs: Any) -> Any:
+    """Invoke client send method, passing idempotency_key only if accepted by the callable."""
+    try:
+        import inspect
+        sig = inspect.signature(send_func)
+        has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        if has_var_kw:
+            return send_func(*args, **kwargs)
+        filtered = {k: v for k, v in kwargs.items() if k in sig.parameters}
+        return send_func(*args, **filtered)
+    except (TypeError, ValueError):
+        return send_func(*args, **kwargs)
+
+
 def send_message_to_group(
     broadcast: GroupBroadcast,
     group: WhatsAppGroup | None,
     group_jid: str,
     client: EvolutionClient | None = None,
-) -> None:
-    """Send configured broadcast message payload to a specific group."""
+    idempotency_key: str = "",
+) -> Any:
+    """Send configured broadcast message payload to a specific group with idempotency."""
     if client is None:
         client = get_evolution_client(broadcast.connection)
 
@@ -233,47 +249,63 @@ def send_message_to_group(
             if p_jid:
                 mentions.append(p_jid)
 
+    extra_kwargs: dict[str, Any] = {}
+    if idempotency_key:
+        extra_kwargs["idempotency_key"] = idempotency_key
+
     mtype = broadcast.message_type
     if mtype == BroadcastMessageType.TEXT:
-        client.send_text(
+        return _call_client_send(
+            client.send_text,
             number=group_jid,
             text=broadcast.text,
             mentions=mentions if broadcast.mention_all else None,
+            **extra_kwargs,
         )
     elif mtype == BroadcastMessageType.MEDIA:
-        client.send_media(
+        return _call_client_send(
+            client.send_media,
             number=group_jid,
             media_type=broadcast.media_type or "image",
             url=broadcast.media_url,
             caption=broadcast.media_caption,
             mentions=mentions if broadcast.mention_all else None,
+            **extra_kwargs,
         )
     elif mtype == BroadcastMessageType.POLL:
-        client.send_poll(
+        return _call_client_send(
+            client.send_poll,
             number=group_jid,
             question=broadcast.poll_question,
             options=broadcast.poll_options or ["Sim", "Não"],
             max_answers=broadcast.poll_max_answers or 1,
+            **extra_kwargs,
         )
     elif mtype == BroadcastMessageType.STICKER:
-        client.send_sticker(
+        return _call_client_send(
+            client.send_sticker,
             number=group_jid,
             url=broadcast.sticker_url,
+            **extra_kwargs,
         )
     elif mtype == BroadcastMessageType.LOCATION:
-        client.send_location(
+        return _call_client_send(
+            client.send_location,
             number=group_jid,
             latitude=broadcast.location_latitude or 0.0,
             longitude=broadcast.location_longitude or 0.0,
             name=broadcast.location_name,
             address=broadcast.location_address,
+            **extra_kwargs,
         )
     elif mtype == BroadcastMessageType.CONTACT:
-        client.send_contact(
+        return _call_client_send(
+            client.send_contact,
             number=group_jid,
             full_name=broadcast.contact_name,
             phone=broadcast.contact_phone,
             organization=broadcast.contact_organization,
+            **extra_kwargs,
         )
 
 
@@ -476,7 +508,8 @@ def reserve_group_delivery(
 ) -> tuple[bool, str]:
     """Atomically reserve a specific WhatsApp group for delivery in an independent transaction.
 
-    Returns (True, "reserved") if the reservation was granted.
+    Returns (True, "reserved") if fresh reservation was granted.
+    Returns (True, "uncertain_retry") if this same action previously had an in-flight attempt whose outcome is uncertain.
     Returns (False, "already_sent") if the group was already successfully sent.
     Returns (False, "in_flight") if another worker is actively sending to this group.
     Returns (False, "not_found") if the broadcast does not exist or is cancelled.
@@ -499,12 +532,12 @@ def reserve_group_delivery(
             now = timezone.now()
             # Check for active in_flight reservation (< 300 seconds)
             active_in_flight = False
+            is_same_action_retry = False
             for e in logs:
                 if e.get("group_jid") == group_jid and e.get("status") == "in_flight":
                     reserved_by = e.get("action_id", "")
-                    # If this reservation belongs to the same action that is retrying, allow reclaiming!
                     if action_id and reserved_by and action_id == reserved_by:
-                        active_in_flight = False
+                        is_same_action_retry = True
                         break
 
                     sent_at_str = e.get("sent_at")
@@ -522,6 +555,11 @@ def reserve_group_delivery(
 
             if active_in_flight:
                 return False, "in_flight"
+
+            if is_same_action_retry:
+                # Same action retrying an uncertain attempt: signal caller to perform reconciliation
+                # before re-dispatching to provider!
+                return True, "uncertain_retry"
 
             # Filter out any old in_flight entry for this group and reserve anew
             new_logs = [
@@ -542,6 +580,40 @@ def reserve_group_delivery(
     return _run_in_independent_thread(_reserve)
 
 
+def check_provider_sent_message(
+    connection: ChannelConnection,
+    group_jid: str,
+    idempotency_key: str,
+    client: EvolutionClient | None = None,
+) -> str | None:
+    """Query whether the provider or adapter already accepted/sent the message for this idempotency key."""
+    if client is not None:
+        if hasattr(client, "find_sent_message"):
+            try:
+                res = client.find_sent_message(idempotency_key)
+                if res:
+                    return str(res)
+            except Exception:
+                pass
+        if hasattr(client, "is_message_sent"):
+            try:
+                if client.is_message_sent(group_jid, idempotency_key):
+                    return "reconciled"
+            except Exception:
+                pass
+
+    try:
+        adapter = adapter_for(connection.platform)
+        if hasattr(adapter, "find_sent_message"):
+            res = adapter.find_sent_message(connection, idempotency_key)
+            if res:
+                return str(res)
+    except Exception:
+        pass
+
+    return None
+
+
 def finalize_group_delivery(
     broadcast_id: Any,
     group_jid: str,
@@ -549,6 +621,7 @@ def finalize_group_delivery(
     success: bool,
     error_msg: str,
     will_retry: bool,
+    cancelled: bool = False,
 ) -> None:
     """Commit the delivery result for a specific WhatsApp group in an independent transaction."""
     def _finalize() -> None:
@@ -563,13 +636,20 @@ def finalize_group_delivery(
                 return
 
             logs = list(broadcast.delivery_logs or [])
-            # Remove in_flight reservation
+            # Always remove in_flight reservation
             logs = [
                 e for e in logs
                 if not (e.get("group_jid") == group_jid and e.get("status") == "in_flight")
             ]
 
             now = timezone.now()
+            # If broadcast was cancelled, preserve CANCELLED status, do not record error, and save
+            if cancelled or broadcast.status == BroadcastStatus.CANCELLED:
+                broadcast.delivery_logs = logs
+                broadcast.updated_at = now
+                broadcast.save(update_fields=["delivery_logs", "updated_at"])
+                return
+
             if success:
                 # Add terminal success log if not already present
                 if not any(e.get("group_jid") == group_jid and e.get("status") == "ok" for e in logs):
@@ -633,50 +713,83 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
             )
         return
 
+    idempotency_key = f"group_broadcast:{broadcast_id}:{group_jid}"
+    cancelled = False
     group_name = group_jid
     success = False
     error_msg = ""
     try:
         broadcast = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
         if not broadcast or broadcast.status == BroadcastStatus.CANCELLED:
-            # Broadcast was cancelled while reserving: clean up in_flight reservation
-            finalize_group_delivery(
-                broadcast_id=broadcast_id,
-                group_jid=group_jid,
-                group_name=group_name,
-                success=False,
-                error_msg="Cancelled",
-                will_retry=False,
-            )
+            cancelled = True
             return
+
+        client = get_evolution_client(broadcast.connection)
+
+        # Reconciliation: if this is an uncertain retry (previous attempt crashed after reserving),
+        # verify with the provider before sending to prevent duplicate messages!
+        if reason == "uncertain_retry":
+            sent_provider_id = check_provider_sent_message(
+                connection=broadcast.connection,
+                group_jid=group_jid,
+                idempotency_key=idempotency_key,
+                client=client,
+            )
+            if sent_provider_id:
+                logger.info(
+                    "Reconciled group %s for broadcast %s: provider already accepted message (%s)",
+                    group_jid,
+                    broadcast_id,
+                    sent_provider_id,
+                )
+                success = True
+                return
 
         group = WhatsAppGroup.objects.unscoped().filter(connection=broadcast.connection, jid=group_jid).first()
         if group and group.name:
             group_name = group.name
 
-        send_message_to_group(broadcast, group, group_jid)
+        send_message_to_group(
+            broadcast,
+            group,
+            group_jid,
+            client=client,
+            idempotency_key=idempotency_key,
+        )
         success = True
     except Exception as exc:
         error_msg = str(exc)
         logger.error("Failed broadcast %s to group %s: %s", broadcast_id, group_jid, exc)
     finally:
-        will_retry = (
-            not success
-            and hasattr(action, "attempts")
-            and hasattr(action, "max_attempts")
-            and action.attempts < action.max_attempts
-        )
+        if cancelled:
+            finalize_group_delivery(
+                broadcast_id=broadcast_id,
+                group_jid=group_jid,
+                group_name=group_name,
+                success=False,
+                error_msg="",
+                will_retry=False,
+                cancelled=True,
+            )
+        else:
+            will_retry = (
+                not success
+                and hasattr(action, "attempts")
+                and hasattr(action, "max_attempts")
+                and action.attempts < action.max_attempts
+            )
 
-        finalize_group_delivery(
-            broadcast_id=broadcast_id,
-            group_jid=group_jid,
-            group_name=group_name,
-            success=success,
-            error_msg=error_msg,
-            will_retry=will_retry,
-        )
+            finalize_group_delivery(
+                broadcast_id=broadcast_id,
+                group_jid=group_jid,
+                group_name=group_name,
+                success=success,
+                error_msg=error_msg,
+                will_retry=will_retry,
+                cancelled=False,
+            )
 
-    if not success:
+    if not cancelled and not success:
         raise RuntimeError(f"Delivery to group {group_jid} failed: {error_msg}")
 
 

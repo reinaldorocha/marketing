@@ -135,13 +135,15 @@ class EvolutionClient:
         self.instance_id = instance_id
         self.client = client
 
-    def _headers(self) -> dict[str, str]:
+    def _headers(self, idempotency_key: str = "") -> dict[str, str]:
         headers = {
             "apikey": self.api_key,
             "Content-Type": "application/json",
         }
         if self.instance_id:
             headers["instanceId"] = self.instance_id
+        if idempotency_key:
+            headers["X-Idempotency-Key"] = idempotency_key
         return headers
 
     def _request(
@@ -246,6 +248,10 @@ class EvolutionClient:
             timeout=10.0,
         )
 
+    def find_sent_message(self, idempotency_key: str) -> str | None:
+        """Lookup hook for checking if a message was already sent with this idempotency key."""
+        return None
+
     def send_text(
         self,
         number: str,
@@ -253,6 +259,8 @@ class EvolutionClient:
         quoted: dict[str, Any] | None = None,
         delay: int | None = None,
         mentions: list[str] | None = None,
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Call POST /send/text."""
         payload: dict[str, Any] = {
@@ -265,10 +273,13 @@ class EvolutionClient:
             payload["delay"] = delay
         if mentions:
             payload["mentions"] = [_clean_recipient(m) for m in mentions if m]
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/text",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=15.0,
         )
@@ -283,6 +294,8 @@ class EvolutionClient:
         delay: int | None = None,
         mentions: list[str] | None = None,
         ptt: bool = False,
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Call POST /send/media with native PTT (Push-To-Talk voice note) support."""
         clean_type = media_type.lower()
@@ -304,10 +317,13 @@ class EvolutionClient:
             payload["delay"] = delay
         if mentions:
             payload["mentions"] = [_clean_recipient(m) for m in mentions if m]
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/media",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=25.0,
         )
@@ -1271,6 +1287,16 @@ class WhatsAppEvolutionAdapter(Adapter):
             return SendResult(SendStatus.FAILED, error="no_content_sent")
 
         return SendResult(SendStatus.SENT, provider_message_id=last_provider_id[:200])
+
+    def find_sent_message(self, connection: ChannelConnection, idempotency_key: str) -> str | None:
+        """Query if a message with this idempotency key was already accepted/sent."""
+        client = self.get_client(connection)
+        if hasattr(client, "find_sent_message"):
+            try:
+                return client.find_sent_message(idempotency_key)
+            except Exception:
+                pass
+        return None
 
     def on_disconnect(self, connection: ChannelConnection) -> None:
         """Called when connection is disconnected or disabled."""
