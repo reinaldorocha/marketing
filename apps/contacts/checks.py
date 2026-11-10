@@ -29,7 +29,33 @@ def check_condition_allowlists(app_configs: Any = None, **kwargs: Any) -> list[C
         for field in Contact._meta.get_fields()
         if getattr(field, "concrete", False) and not field.is_relation
     }
+    # Instagram enrichment is intentionally stored on the matching channel
+    # identity, not copied into Contact. `_system_field_q` handles this small,
+    # fixed JSON allowlist through a workspace-scoped correlated subquery. It is
+    # safe for it to be an exception to the direct-column rule, but accepting a
+    # general `__` path here would undo the guard this check provides.
+    identity_extra_fields = {
+        "is_user_follow_business",
+        "is_business_follow_user",
+        "follower_count",
+        "username",
+    }
     for key, spec in SYSTEM_FIELDS.items():
+        if spec.column.startswith("channel_identities__extra__"):
+            extra_key = spec.column.removeprefix("channel_identities__extra__")
+            if extra_key in identity_extra_fields and spec.nullable:
+                continue
+            errors.append(
+                Error(
+                    f"system_field {key!r} maps to unsupported identity extra {spec.column!r}.",
+                    hint=(
+                        "Only the fixed Instagram identity-extra allowlist may traverse a relation, "
+                        "and JSON values must be declared nullable."
+                    ),
+                    id="contacts.E001",
+                )
+            )
+            continue
         if spec.column not in concrete:
             errors.append(
                 Error(
