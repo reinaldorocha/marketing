@@ -128,14 +128,46 @@
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                                 Enviando...
                             </span>
+                            {% elif item.status == "uncertain" %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300" title="Resultado incerto: requer reconciliação manual">
+                                Incerteza (Requer Reconciliação)
+                            </span>
                             {% else %}
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
                                 Falha
                             </span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-3 text-xs text-gray-500 max-w-xs truncate">
-                            {{ item.error|default:"Envio confirmado pela API" }}
+                        <td class="px-6 py-3 text-xs text-gray-500 max-w-xs">
+                            <div>{{ item.error|default:"Envio confirmado pela API" }}</div>
+                            {% if item.status == "uncertain" %}
+                            <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                                <form method="post" action="{% url 'whatsapp_groups:broadcast_reconcile_group' workspace_id=request.workspace.id broadcast_id=broadcast.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="group_jid" value="{{ item.group_jid }}">
+                                    <input type="hidden" name="resolution" value="confirm_sent">
+                                    <button type="submit" class="px-2 py-0.5 text-[11px] font-medium rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                        Confirmar Envio
+                                    </button>
+                                </form>
+                                <form method="post" action="{% url 'whatsapp_groups:broadcast_reconcile_group' workspace_id=request.workspace.id broadcast_id=broadcast.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="group_jid" value="{{ item.group_jid }}">
+                                    <input type="hidden" name="resolution" value="confirm_failed">
+                                    <button type="submit" class="px-2 py-0.5 text-[11px] font-medium rounded bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                        Confirmar Falha
+                                    </button>
+                                </form>
+                                <form method="post" action="{% url 'whatsapp_groups:broadcast_reconcile_group' workspace_id=request.workspace.id broadcast_id=broadcast.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="group_jid" value="{{ item.group_jid }}">
+                                    <input type="hidden" name="resolution" value="retry">
+                                    <button type="submit" class="px-2 py-0.5 text-[11px] font-medium rounded bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                        Reenviar
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
                         </td>
                         <td class="px-6 py-3 text-xs text-gray-400">
                             {{ item.sent_at|slice:":19" }}

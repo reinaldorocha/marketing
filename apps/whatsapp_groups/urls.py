@@ -18,6 +18,7 @@ urlpatterns = [
     path("broadcasts/compose/", views.broadcast_compose, name="broadcast_compose"),
     path("broadcasts/<uuid:broadcast_id>/", views.broadcast_detail, name="broadcast_detail"),
     path("broadcasts/<uuid:broadcast_id>/cancel/", views.broadcast_cancel, name="broadcast_cancel"),
+    path("broadcasts/<uuid:broadcast_id>/reconcile-group/", views.broadcast_reconcile_group, name="broadcast_reconcile_group"),
 
     # Tags
     path("tags/", views.tags_manage, name="tags_manage"),

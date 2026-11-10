@@ -25,6 +25,7 @@ from apps.whatsapp_groups.services import (
     create_group_on_evolution,
     dispatch_group_broadcast,
     leave_group_on_evolution,
+    reconcile_group_delivery_manual,
     refresh_group_invite_link,
     sync_groups_from_evolution,
     update_group_on_evolution,
@@ -418,6 +419,34 @@ def broadcast_cancel(request: WorkspaceRequest, workspace_id: str, broadcast_id:
         messages.success(request, "Disparo agendado cancelado com sucesso.")
     else:
         messages.warning(request, "Apenas disparos agendados podem ser cancelados.")
+
+    return redirect("whatsapp_groups:broadcast_detail", workspace_id=workspace_id, broadcast_id=broadcast.id)
+
+
+@login_required
+@require_permission("send_broadcasts")
+@require_POST
+def broadcast_reconcile_group(request: WorkspaceRequest, workspace_id: str, broadcast_id: str) -> HttpResponse:
+    """Manually reconcile a group broadcast delivery with uncertain status."""
+    workspace = request.workspace
+    broadcast = get_scoped_object_or_404(GroupBroadcast, workspace, pk=broadcast_id)
+    group_jid = request.POST.get("group_jid", "").strip()
+    resolution = request.POST.get("resolution", "").strip()
+
+    if not group_jid or resolution not in ("confirm_sent", "confirm_failed", "retry"):
+        messages.error(request, "Ação de reconciliação inválida.")
+        return redirect("whatsapp_groups:broadcast_detail", workspace_id=workspace_id, broadcast_id=broadcast.id)
+
+    res = reconcile_group_delivery_manual(broadcast.id, group_jid, resolution=resolution)
+    if res.get("success"):
+        if resolution in ("confirm_sent", "ok"):
+            messages.success(request, f"Entrega para o grupo {group_jid} confirmada como enviada!")
+        elif resolution in ("confirm_failed", "error"):
+            messages.info(request, f"Entrega para o grupo {group_jid} confirmada como falha.")
+        elif resolution == "retry":
+            messages.success(request, f"Reenvio agendado para o grupo {group_jid}!")
+    else:
+        messages.error(request, f"Não foi possível reconciliar o grupo: {res.get('error', 'erro desconhecido')}")
 
     return redirect("whatsapp_groups:broadcast_detail", workspace_id=workspace_id, broadcast_id=broadcast.id)
 

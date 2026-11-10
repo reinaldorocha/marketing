@@ -250,59 +250,27 @@ class EvolutionClient:
         )
 
     def find_sent_message(self, idempotency_key: str, recipient: str = "") -> str | None:
-        """Query Evolution API to check if a message with this idempotency key was already sent."""
+        """Lookup hook for checking if a message was already sent with this idempotency key.
+
+        Note: Official Evolution GO routes (pkg/routes/routes.go) do not implement a message
+        lookup endpoint by client idempotency key. If a custom client transport or test
+        harness provides a find_sent_message hook, delegate to it; otherwise return None
+        without issuing non-existent HTTP requests (avoiding 404s).
+        """
         if not idempotency_key:
             return None
-        payload: dict[str, Any] = {
-            "where": {
-                "idempotencyKey": idempotency_key,
-            },
-            "idempotencyKey": idempotency_key,
-            "idempotency_key": idempotency_key,
-        }
-        if recipient:
-            clean_recip = _clean_recipient(recipient)
-            payload["where"]["key"] = {"remoteJid": clean_recip}
-            payload["where"]["remoteJid"] = clean_recip
-
-        endpoints = [f"{self.api_url}/chat/findMessages"]
-        if self.instance_id:
-            endpoints.append(f"{self.api_url}/chat/findMessages/{self.instance_id}")
-
-        for endpoint in endpoints:
+        if self.client is not None and hasattr(self.client, "find_sent_message"):
             try:
-                res = self._request(
-                    "POST",
-                    endpoint,
-                    headers=self._headers(idempotency_key=idempotency_key),
-                    json=payload,
-                    timeout=10.0,
-                )
-                if isinstance(res, dict):
-                    msg_id = res.get("id") or res.get("messageId") or res.get("key", {}).get("id")
-                    if msg_id:
-                        return str(msg_id)
-                    msgs = res.get("messages") or res.get("records") or res.get("data")
-                    if isinstance(msgs, list) and msgs:
-                        first = msgs[0]
-                        if isinstance(first, dict):
-                            return str(
-                                first.get("id")
-                                or first.get("messageId")
-                                or first.get("key", {}).get("id")
-                                or "found"
-                            )
-                elif isinstance(res, list) and res:
-                    first = res[0]
-                    if isinstance(first, dict):
-                        return str(
-                            first.get("id")
-                            or first.get("messageId")
-                            or first.get("key", {}).get("id")
-                            or "found"
-                        )
+                import inspect
+                sig = inspect.signature(self.client.find_sent_message)
+                if "recipient" in sig.parameters:
+                    res = self.client.find_sent_message(idempotency_key, recipient=recipient)
+                else:
+                    res = self.client.find_sent_message(idempotency_key)
+                if res:
+                    return str(res)
             except Exception:
-                continue
+                pass
         return None
 
     def send_text(
@@ -1253,6 +1221,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                                 description=text_val,
                                 footer="",
                                 buttons=norm_buttons,
+                                idempotency_key=idempotency_key,
                             )
                             last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                             buttons_sent = True
@@ -1261,7 +1230,11 @@ class WhatsAppEvolutionAdapter(Adapter):
                             return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
                     else:
                         try:
-                            res = client.send_text(number=number, text=text_val)
+                            res = client.send_text(
+                                number=number,
+                                text=text_val,
+                                idempotency_key=idempotency_key,
+                            )
                             last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                         except APIError as exc:
                             logger.error("Evolution GO send_text failed for connection %s: %s", connection.pk, exc)
@@ -1291,6 +1264,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                             caption=caption,
                             filename=filename,
                             ptt=is_ptt,
+                            idempotency_key=idempotency_key,
                         )
                         last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     except APIError as exc:
@@ -1305,6 +1279,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                             longitude=float(block.get("longitude", 0.0)),
                             name=str(block.get("name", "")),
                             address=str(block.get("address", "")),
+                            idempotency_key=idempotency_key,
                         )
                         last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     except APIError as exc:
@@ -1318,6 +1293,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                             full_name=str(block.get("full_name", "")),
                             phone=str(block.get("phone", "")),
                             organization=str(block.get("organization", "")),
+                            idempotency_key=idempotency_key,
                         )
                         last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     except APIError as exc:
@@ -1331,6 +1307,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                             question=str(block.get("question", "")),
                             options=list(block.get("options", [])),
                             max_answers=int(block.get("max_answers", 1)),
+                            idempotency_key=idempotency_key,
                         )
                         last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     except APIError as exc:
@@ -1347,6 +1324,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                             footer_text=str(block.get("footer_text", "")),
                             button_text=str(block.get("button_text", "Ver Opções")),
                             sections=sections,
+                            idempotency_key=idempotency_key,
                         )
                         last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     except APIError as exc:
@@ -1357,7 +1335,11 @@ class WhatsAppEvolutionAdapter(Adapter):
                     url = str(block.get("url", ""))
                     if url:
                         try:
-                            res = client.send_sticker(number=number, url=url)
+                            res = client.send_sticker(
+                                number=number,
+                                url=url,
+                                idempotency_key=idempotency_key,
+                            )
                             last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                         except APIError as exc:
                             logger.error("Evolution GO send_sticker failed: %s", exc)
@@ -1372,6 +1354,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                         description="Opções:",
                         footer="",
                         buttons=norm_buttons,
+                        idempotency_key=idempotency_key,
                     )
                     last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     buttons_sent = True

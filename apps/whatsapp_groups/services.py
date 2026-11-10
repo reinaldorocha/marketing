@@ -627,6 +627,7 @@ def finalize_group_delivery(
     error_msg: str,
     will_retry: bool,
     cancelled: bool = False,
+    uncertain: bool = False,
 ) -> None:
     """Commit the delivery result for a specific WhatsApp group in an independent transaction."""
     def _finalize() -> None:
@@ -655,7 +656,18 @@ def finalize_group_delivery(
                 broadcast.save(update_fields=["delivery_logs", "updated_at"])
                 return
 
-            if success:
+            if uncertain:
+                # Explicit uncertain outcome: remove in_flight, record explicit uncertain status
+                # awaiting manual reconciliation, without incrementing sent_count or error_count
+                if not any(e.get("group_jid") == group_jid and e.get("status") in ("ok", "uncertain") for e in logs):
+                    logs.append({
+                        "group_jid": group_jid,
+                        "group_name": group_name,
+                        "status": "uncertain",
+                        "error": error_msg or "Resultado incerto: envio pode ter ocorrido, mas o provedor não suporta confirmação. Reconciliação manual necessária.",
+                        "sent_at": now.isoformat(),
+                    })
+            elif success:
                 # Add terminal success log if not already present
                 if not any(e.get("group_jid") == group_jid and e.get("status") == "ok" for e in logs):
                     logs.append({
@@ -680,8 +692,9 @@ def finalize_group_delivery(
 
             broadcast.delivery_logs = logs
 
-            # If all target groups have reached a terminal result (ok or error), mark broadcast complete
-            terminal_count = sum(1 for e in logs if e.get("status") in ("ok", "error"))
+            # If all target groups have reached a terminal or explicit result (ok, error, or uncertain),
+            # settle the broadcast status
+            terminal_count = sum(1 for e in logs if e.get("status") in ("ok", "error", "uncertain"))
             total = broadcast.total_groups_count
             if total > 0 and terminal_count >= total:
                 if broadcast.sent_count > 0:
@@ -753,7 +766,7 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
             else:
                 logger.warning(
                     "Uncertain delivery outcome for group %s in broadcast %s and provider cannot confirm; "
-                    "keeping pending without automatic re-send",
+                    "recording explicit uncertain state awaiting manual reconciliation without automatic re-send",
                     group_jid,
                     broadcast_id,
                 )
@@ -787,8 +800,18 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
                 cancelled=True,
             )
         elif uncertain_pending:
-            # Maintain the uncertain delivery pending without re-sending or concluding as terminal
-            pass
+            # Commit explicit "uncertain" state in delivery_logs, clearing in_flight
+            # and allowing the broadcast to settle without re-sending
+            finalize_group_delivery(
+                broadcast_id=broadcast_id,
+                group_jid=group_jid,
+                group_name=group_name,
+                success=False,
+                error_msg="Resultado incerto: envio pode ter ocorrido, mas o provedor não suporta confirmação. Reconciliação manual necessária.",
+                will_retry=False,
+                cancelled=False,
+                uncertain=True,
+            )
         else:
             will_retry = (
                 not success
@@ -913,7 +936,10 @@ def process_scheduled_broadcasts() -> int:
             terminal_error_jids = {
                 entry.get("group_jid") for entry in logs if entry.get("status") == "error"
             }
-            terminal_jids = already_sent_jids | terminal_error_jids
+            uncertain_jids = {
+                entry.get("group_jid") for entry in logs if entry.get("status") in ("uncertain", "requires_reconciliation")
+            }
+            terminal_jids = already_sent_jids | terminal_error_jids | uncertain_jids
 
             # Check for actively in-flight groups (< 5 min)
             active_in_flight_jids = set()
@@ -1004,3 +1030,89 @@ def process_scheduled_broadcasts() -> int:
             if broadcast is not None:
                 _release_claim_on_failure(broadcast_id, claim_owner=claim_owner)
     return processed
+
+
+def reconcile_group_delivery_manual(
+    broadcast_id: Any,
+    group_jid: str,
+    resolution: str,
+) -> dict[str, Any]:
+    """Manually reconcile an uncertain group delivery in an independent transaction.
+
+    resolution can be:
+    - 'confirm_sent': mark status as 'ok', increment sent_count
+    - 'confirm_failed': mark status as 'error', increment error_count
+    - 'retry': remove log entry, clear any active reservation, schedule fresh send action
+    """
+    def _reconcile() -> dict[str, Any]:
+        with transaction.atomic():
+            broadcast = (
+                GroupBroadcast.objects.unscoped()
+                .select_for_update()
+                .filter(pk=broadcast_id)
+                .first()
+            )
+            if not broadcast:
+                return {"success": False, "error": "broadcast_not_found"}
+
+            logs = list(broadcast.delivery_logs or [])
+            entry = next((e for e in logs if e.get("group_jid") == group_jid), None)
+            now = timezone.now()
+
+            if resolution in ("confirm_sent", "ok"):
+                new_logs = [e for e in logs if e.get("group_jid") != group_jid]
+                new_logs.append({
+                    "group_jid": group_jid,
+                    "group_name": entry.get("group_name", group_jid) if entry else group_jid,
+                    "status": "ok",
+                    "error": "Confirmado manualmente pelo operador",
+                    "sent_at": now.isoformat(),
+                })
+                broadcast.sent_count += 1
+                broadcast.delivery_logs = new_logs
+            elif resolution in ("confirm_failed", "error"):
+                new_logs = [e for e in logs if e.get("group_jid") != group_jid]
+                new_logs.append({
+                    "group_jid": group_jid,
+                    "group_name": entry.get("group_name", group_jid) if entry else group_jid,
+                    "status": "error",
+                    "error": "Falha confirmada manualmente pelo operador",
+                    "sent_at": now.isoformat(),
+                })
+                broadcast.error_count += 1
+                broadcast.delivery_logs = new_logs
+            elif resolution == "retry":
+                # Remove log entry so group can be dispatched anew
+                new_logs = [e for e in logs if e.get("group_jid") != group_jid]
+                broadcast.delivery_logs = new_logs
+                broadcast.status = BroadcastStatus.SENDING
+                broadcast.updated_at = now
+                broadcast.save()
+
+                action_key = f"group_broadcast:{broadcast.id}:{group_jid}"
+                schedule(
+                    "group_broadcast_send",
+                    run_at=now,
+                    payload={"broadcast_id": str(broadcast.id), "group_jid": group_jid},
+                    workspace=broadcast.workspace,
+                    idempotency_key=action_key,
+                )
+                return {"success": True, "status": "retrying"}
+            else:
+                return {"success": False, "error": "invalid_resolution"}
+
+            # Update terminal status
+            terminal_count = sum(1 for e in broadcast.delivery_logs if e.get("status") in ("ok", "error", "uncertain"))
+            total = broadcast.total_groups_count
+            if total > 0 and terminal_count >= total:
+                if broadcast.sent_count > 0:
+                    broadcast.status = BroadcastStatus.COMPLETED
+                else:
+                    broadcast.status = BroadcastStatus.FAILED
+                broadcast.sent_at = now
+
+            broadcast.updated_at = now
+            broadcast.save()
+            return {"success": True, "status": resolution}
+
+    return _run_in_independent_thread(_reconcile)
