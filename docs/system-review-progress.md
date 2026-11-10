@@ -7,7 +7,7 @@ Atualizado em 10 de novembro de 2026. Este arquivo registra achados, correções
 | Área | Situação | Resultado |
 | --- | --- | --- |
 | Migrações e banco de dados | Em validação | Seis diferenças entre modelos e histórico de migrações foram identificadas. A mais urgente impedia a listagem de grupos porque a coluna `updated_at` de `WhatsAppGroupTag` não existia no PostgreSQL. |
-| Interface em português | Em andamento | Traduzidos login, cadastro, perfil, painel inicial, configurações de espaço, menu principal, disparos, canais e retornos de membros, organização, API, faturamento, análises e importação de fluxos. A revisão continua em templates e mensagens da caixa de entrada, contatos e fluxos. |
+| Interface em português | Em andamento | Traduzidos login, cadastro, perfil, painel inicial, configurações de espaço, menu principal, disparos, canais, contatos, fluxos, sequências e retornos de membros, organização, API, faturamento, análises e importação. Componentes compartilhados de filtros e diálogos também foram traduzidos. A revisão continua nas telas detalhadas e e-mails transacionais. |
 | Fluxos, filas e integrações | Pendente | Será verificada a consistência de agendamento, idempotência, escopo por workspace e falhas de provedores. |
 | Rotas, permissões e isolamento | Pendente | Será verificado o acesso por workspace e as rotas administrativas e públicas. |
 | Produção | Pendente | Após cada lote, a implantação executará migrações, verificações do Django e testes de disponibilidade. |

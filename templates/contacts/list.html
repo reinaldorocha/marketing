@@ -64,7 +64,7 @@ inert — a button that looks fine and does nothing.
         </a>
         <button type="button" class="bb-split-toggle" @click="menuOpen = !menuOpen"
                 :aria-expanded="menuOpen ? 'true' : 'false'" aria-haspopup="true"
-                aria-label="Choose import or export" title="Choose import or export">
+                aria-label="Escolher importação ou exportação" title="Escolher importação ou exportação">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div x-show="menuOpen" x-cloak class="bb-split-menu">
@@ -104,9 +104,9 @@ inert — a button that looks fine and does nothing.
     workspace's whole filter library in every page load.
   {% endcomment %}
   {% if filter_config.segments %}
-  <nav class="tabs tabs-inline mb-4" aria-label="Saved filters">
+  <nav class="tabs tabs-inline mb-4" aria-label="Filtros salvos">
     <a class="tab" href="{% url 'contacts:list' workspace_id=request.workspace.id %}"
-       {% if not filter_config.segmentId %}aria-current="page"{% endif %}>Everyone</a>
+       {% if not filter_config.segmentId %}aria-current="page"{% endif %}>Todos</a>
     {% for segment in filter_config.segments %}
       <a class="tab" href="{% url 'contacts:list' workspace_id=request.workspace.id %}?segment={{ segment.value }}"
          {% if filter_config.segmentId == segment.value %}aria-current="page"{% endif %}>{{ segment.label }}</a>
@@ -135,7 +135,7 @@ inert — a button that looks fine and does nothing.
       <label class="search-field flex-1 min-w-48 sm:max-w-80">
         {% include "partials/_nav_icon.html" with name="search" icon_size=16 %}
         <input type="search" id="contact-search" name="q" value="{{ query.search_term }}" class="search-input"
-               placeholder="Search by name, email or phone" maxlength="200" aria-label="Search contacts">
+               placeholder="Buscar por nome, e-mail ou telefone" maxlength="200" aria-label="Buscar contatos">
       </label>
       {% comment %}
         The three questions people ask of a contact list most — which channel,
@@ -156,10 +156,10 @@ inert — a button that looks fine and does nothing.
               @click="showBuilder = !showBuilder"
               :aria-expanded="showBuilder ? 'true' : 'false'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h18"/><path d="M6 12h12"/><path d="M10 19h4"/></svg>
-        Advanced rules<span class="filter-trigger-count" x-show="rules.length" x-text="rules.length" x-cloak></span>
+        Regras avançadas<span class="filter-trigger-count" x-show="rules.length" x-text="rules.length" x-cloak></span>
       </button>
       <div class="flex-shrink-0 ml-auto">
-        <label for="contact-sort" class="sr-only">Sort</label>
+        <label for="contact-sort" class="sr-only">Ordenar</label>
         <select id="contact-sort" name="sort" class="w-48">
           {% for option in sorts %}
             <option value="{{ option.value }}" {% if option.value == query.sort %}selected{% endif %}>{{ option.label }}</option>
@@ -195,7 +195,7 @@ inert — a button that looks fine and does nothing.
       <div class="bb-modal-body">
         <div class="field">
           <label class="field-label" for="segment-name">Qual é o nome do segmento?</label>
-          <input class="form-input-styled" type="text" id="segment-name" name="name" maxlength="100" required autofocus placeholder="Repeat customers">
+          <input class="form-input-styled" type="text" id="segment-name" name="name" maxlength="100" required autofocus placeholder="Clientes recorrentes">
           <span class="field-hint">Salva as regras de filtro definidas atualmente.</span>
         </div>
         <input type="hidden" name="filter" :value="serialised">
@@ -219,7 +219,7 @@ inert — a button that looks fine and does nothing.
       <form x-ref="deleteSegment" class="hidden"
             hx-post="{% url 'contacts:segment_delete' workspace_id=request.workspace.id segment_id=filter_config.segmentId %}"
             hx-swap="none"
-            hx-confirm="Delete “{{ query.segment.name }}”? The contacts stay; any flow whose condition node references this segment stops validating."
+            hx-confirm="Excluir “{{ query.segment.name }}”? Os contatos permanecem; qualquer fluxo cuja condição use este segmento deixará de validar."
             hx-on::after-request="if (event.detail.successful) window.location = '{% url 'contacts:list' workspace_id=request.workspace.id %}'">
       </form>
     {% endif %}
@@ -227,7 +227,7 @@ inert — a button that looks fine and does nothing.
   </div>
 
   <div class="crm-bulkbar" x-show="count > 0" x-cloak>
-    <span class="text-sm font-semibold" x-text="`${count} selected`"></span>
+    <span class="text-sm font-semibold" x-text="`${count} selecionado(s)`"></span>
 
     {% if can_edit_contacts %}
       <form class="flex items-center gap-2 mb-0"
@@ -239,8 +239,8 @@ inert — a button that looks fine and does nothing.
           <option value="">Escolha uma etiqueta…</option>
           {% for tag in filter_config.tags %}<option value="{{ tag.value }}">{{ tag.label }}</option>{% endfor %}
         </select>
-        <button type="submit" name="mode" value="add">Add tag</button>
-        <button type="submit" name="mode" value="remove">Remove tag</button>
+        <button type="submit" name="mode" value="add">Adicionar etiqueta</button>
+        <button type="submit" name="mode" value="remove">Remover etiqueta</button>
       </form>
     {% endif %}
 
@@ -255,12 +255,12 @@ inert — a button that looks fine and does nothing.
             hx-post="{% url 'contacts:bulk_sequence' workspace_id=request.workspace.id %}"
             hx-swap="none">
         <template x-for="id in ids" :key="id"><input type="hidden" name="ids" :value="id"></template>
-        <label for="bulk-sequence" class="sr-only">Sequence</label>
+        <label for="bulk-sequence" class="sr-only">Sequência</label>
         <select id="bulk-sequence" name="sequence_id" required>
           {% for sequence in enrollable_sequences %}<option value="{{ sequence.value }}">{{ sequence.label }}</option>{% endfor %}
         </select>
-        <button type="submit" name="mode" value="subscribe">Subscribe</button>
-        <button type="submit" name="mode" value="unsubscribe">Unsubscribe</button>
+        <button type="submit" name="mode" value="subscribe">Inscrever</button>
+        <button type="submit" name="mode" value="unsubscribe">Cancelar inscrição</button>
       </form>
     {% endif %}
 
@@ -268,9 +268,9 @@ inert — a button that looks fine and does nothing.
       <form class="mb-0"
             hx-post="{% url 'contacts:bulk_delete' workspace_id=request.workspace.id %}"
             hx-swap="none"
-            hx-confirm="Delete the selected contacts? They are hidden everywhere and drop out of every segment.">
+            hx-confirm="Excluir os contatos selecionados? Eles serão ocultados em todo o sistema e sairão de todos os segmentos.">
         <template x-for="id in ids" :key="id"><input type="hidden" name="ids" :value="id"></template>
-        <button type="submit" class="btn-outline btn-inline btn-danger-soft">Delete</button>
+        <button type="submit" class="btn-outline btn-inline btn-danger-soft">Excluir</button>
       </form>
     {% endif %}
 
@@ -283,15 +283,15 @@ inert — a button that looks fine and does nothing.
       <form class="crm-danger-form mb-0"
             hx-post="{% url 'contacts:bulk_erase' workspace_id=request.workspace.id %}"
             hx-swap="none"
-            hx-confirm="Erase the selected contacts permanently? Their messages, identities and consent records are removed for good. This cannot be undone.">
+            hx-confirm="Apagar permanentemente os contatos selecionados? Mensagens, identidades e registros de consentimento serão removidos sem possibilidade de desfazer.">
         <template x-for="id in ids" :key="id"><input type="hidden" name="ids" :value="id"></template>
         <input type="text" name="confirm" autocomplete="off" spellcheck="false"
-               placeholder="{{ erase_confirmation }}" aria-label="Type {{ erase_confirmation }} to confirm" required>
-        <button type="submit" class="btn-outline btn-inline btn-danger-soft">Erase</button>
+               placeholder="{{ erase_confirmation }}" aria-label="Digite {{ erase_confirmation }} para confirmar" required>
+        <button type="submit" class="btn-outline btn-inline btn-danger-soft">Apagar definitivamente</button>
       </form>
     {% endif %}
 
-    <button type="button" @click="clear()">Clear selection</button>
+    <button type="button" @click="clear()">Limpar seleção</button>
   </div>
 
   {% include "contacts/_rows.html" %}

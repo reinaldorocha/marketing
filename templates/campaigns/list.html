@@ -10,7 +10,7 @@ utility here sets a property a design-system class already owns — ground rule 
 in docs/agent-prompts/layer-2.md.
 {% endcomment %}
 
-{% block title %}Sequences · BrightBean Chat{% endblock %}
+{% block title %}Sequências · BrightBean Chat{% endblock %}
 
 {% comment %}
 Sequences is the middle tab of the automations strip, so it carries the strip
@@ -31,32 +31,32 @@ of one section should not move the title about as you switch between them.
      }">
     <div class="page-header">
         <div class="page-header-text">
-            <h1 class="page-title">Sequences</h1>
+            <h1 class="page-title">Sequências</h1>
             <p class="page-lede">
-                A series of messages sent over days. Each step waits for the time you set, counting from the message before it, then runs a flow.
+                Uma série de mensagens enviada ao longo dos dias. Cada etapa espera o tempo definido e então executa um fluxo.
             </p>
         </div>
         {% if can_edit %}
         <div class="page-header-actions">
             <button type="button" class="btn-pill-primary" @click="$modal('new-sequence')">
-                {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} New sequence
+                {% include "partials/_nav_icon.html" with name="plus" icon_size=16 %} Nova sequência
             </button>
         </div>
         {% endif %}
     </div>
 
     {% if can_edit %}
-    {% modal "new-sequence" title="New sequence" close_on="sequencesChanged" %}
+    {% modal "new-sequence" title="Nova sequência" close_on="sequencesChanged" %}
     <form hx-post="{% url 'campaigns:create' workspace_id=request.workspace.id %}" hx-swap="none">
         <div class="bb-modal-body">
             <div class="field">
-                <label class="field-label" for="new-sequence-name">What is this sequence called?</label>
-                <input class="form-input-styled" id="new-sequence-name" type="text" name="name" maxlength="200" required autofocus placeholder="New subscriber welcome">
+                <label class="field-label" for="new-sequence-name">Qual é o nome desta sequência?</label>
+                <input class="form-input-styled" id="new-sequence-name" type="text" name="name" maxlength="200" required autofocus placeholder="Boas-vindas para novos inscritos">
             </div>
         </div>
         <div class="bb-modal-actions">
-            <button type="button" class="btn-pill-secondary" @click="close()">Cancel</button>
-            <button type="submit" class="btn-pill-primary">Create sequence</button>
+            <button type="button" class="btn-pill-secondary" @click="close()">Cancelar</button>
+            <button type="submit" class="btn-pill-primary">Criar sequência</button>
         </div>
     </form>
     {% endmodal %}
@@ -72,10 +72,10 @@ of one section should not move the title about as you switch between them.
           @submit.prevent>
         <label class="search-field w-full sm:w-64">
             {% include "partials/_nav_icon.html" with name="search" icon_size=16 %}
-            <input type="search" id="sequence-search" name="q" x-model="q" placeholder="Search sequences"
-                   class="search-input" aria-label="Search sequences">
+            <input type="search" id="sequence-search" name="q" x-model="q" placeholder="Buscar sequências"
+                   class="search-input" aria-label="Buscar sequências">
         </label>
-        {% filter_popover groups=filter_groups onchange="reload()" target="#sequence-rows" count=sequences|length noun="sequence" %}
+        {% filter_popover groups=filter_groups onchange="reload()" target="#sequence-rows" count=sequences|length noun="sequência" %}
     </form>
     {% filter_chips groups=filter_groups onchange="reload()" %}
     </div>

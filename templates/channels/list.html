@@ -73,7 +73,7 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
                     <div class="text-[13px]" style="color: var(--text-tertiary);">{{ row.label }}</div>
                 </div>
                 {% if row.settings_url %}
-                <a class="btn-icon-round flex-shrink-0" href="{{ row.settings_url }}" aria-label="Settings for {{ row.connection.display_name }}">
+                <a class="btn-icon-round flex-shrink-0" href="{{ row.settings_url }}" aria-label="Configurações de {{ row.connection.display_name }}">
                     {% include "partials/_nav_icon.html" with name="settings" icon_size=16 %}
                 </a>
                 {% endif %}
@@ -85,8 +85,8 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
 
             {% if not row.adapter_ready %}
             <p class="text-xs mt-2" style="color: var(--text-ghost);">
-                Guided setup for {{ row.label }} is still on the way. The connection holds its
-                webhook URL and secret, and starts working when the adapter ships.
+                A configuração guiada de {{ row.label }} ainda está em desenvolvimento. A conexão guarda a
+                URL e o segredo do webhook e funcionará quando o adaptador estiver disponível.
             </p>
             {% endif %}
 
@@ -119,11 +119,11 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
         </div>
         {% empty %}
         <div class="empty-state md:col-span-2">
-            <p class="empty-state-title">No channels connected yet</p>
+            <p class="empty-state-title">Nenhum canal conectado ainda</p>
             <p class="empty-state-body">
-                Connect the first one and messages start arriving in your inbox.
+                Conecte o primeiro canal para começar a receber mensagens na caixa de entrada.
             </p>
-            <a class="btn-pill-secondary btn-pill-sm mt-4" href="{% url 'channels:create' workspace_id=request.workspace.id %}">Connect a channel</a>
+            <a class="btn-pill-secondary btn-pill-sm mt-4" href="{% url 'channels:create' workspace_id=request.workspace.id %}">Conectar um canal</a>
         </div>
         {% endfor %}
 
@@ -135,16 +135,16 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
             </span>
             <span>
-                <span class="block text-[15px] font-bold" style="color: var(--text-primary);">Add another channel</span>
-                <span class="block text-[13px]" style="color: var(--text-tertiary);">WhatsApp, Messenger or email</span>
+                <span class="block text-[15px] font-bold" style="color: var(--text-primary);">Adicionar outro canal</span>
+                <span class="block text-[13px]" style="color: var(--text-tertiary);">WhatsApp, Messenger ou e-mail</span>
             </span>
         </a>
         {% endif %}
     </div>
 
-    <h2 class="section-title">Available to connect</h2>
+    <h2 class="section-title">Disponíveis para conectar</h2>
     <p class="text-sm mt-1 mb-4" style="color: var(--text-tertiary);">
-        Each one takes a few minutes and we walk you through it.
+        Cada conexão leva poucos minutos e nós guiamos você no processo.
     </p>
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {% for platform in platforms %}
@@ -159,9 +159,9 @@ is already standing. (The redesign's fifth principle: no ids in the UI.)
                 {% endif %}
             </span>
             {% if platform.connect_url %}
-            <a class="text-[13px] font-semibold flex-shrink-0 underline underline-offset-2" style="color: var(--text-primary);" href="{{ platform.connect_url }}">Set up</a>
+            <a class="text-[13px] font-semibold flex-shrink-0 underline underline-offset-2" style="color: var(--text-primary);" href="{{ platform.connect_url }}">Configurar</a>
             {% else %}
-            <span class="text-[13px] flex-shrink-0" style="color: var(--text-ghost);">Soon</span>
+            <span class="text-[13px] flex-shrink-0" style="color: var(--text-ghost);">Em breve</span>
             {% endif %}
         </div>
         {% endfor %}
