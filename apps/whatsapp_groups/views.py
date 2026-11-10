@@ -446,7 +446,15 @@ def broadcast_reconcile_group(request: WorkspaceRequest, workspace_id: str, broa
         elif resolution == "retry":
             messages.success(request, f"Reenvio agendado para o grupo {group_jid}!")
     else:
-        messages.error(request, f"Não foi possível reconciliar o grupo: {res.get('error', 'erro desconhecido')}")
+        err = res.get("error", "erro desconhecido")
+        if err == "action_running":
+            messages.warning(
+                request,
+                f"A tarefa de envio para o grupo {group_jid} ainda está em execução pelo worker. "
+                "Aguarde alguns instantes e tente novamente.",
+            )
+        else:
+            messages.error(request, f"Não foi possível reconciliar o grupo: {err}")
 
     return redirect("whatsapp_groups:broadcast_detail", workspace_id=workspace_id, broadcast_id=broadcast.id)
 

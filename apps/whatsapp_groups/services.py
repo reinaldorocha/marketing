@@ -1091,6 +1091,22 @@ def reconcile_group_delivery_manual(
                 broadcast.error_count += 1
                 broadcast.delivery_logs = new_logs
             elif resolution == "retry":
+                action_key = f"group_broadcast:{broadcast.id}:{group_jid}"
+                existing_action = (
+                    ScheduledAction.objects.unscoped()
+                    .select_for_update()
+                    .filter(type="group_broadcast_send", idempotency_key=action_key)
+                    .first()
+                )
+
+                if existing_action and existing_action.status == ActionStatus.RUNNING:
+                    return {
+                        "success": False,
+                        "error": "action_running",
+                        "message": "A tarefa anterior ainda está em execução pelo worker. Aguarde a finalização antes de reenviar.",
+                    }
+
+                # Safe to reactivate: worker is not running.
                 # Remove log entry so group can be dispatched anew
                 new_logs = [e for e in logs if e.get("group_jid") != group_jid]
                 broadcast.delivery_logs = new_logs
@@ -1098,17 +1114,12 @@ def reconcile_group_delivery_manual(
                 broadcast.updated_at = now
                 broadcast.save(update_fields=["delivery_logs", "status", "updated_at"])
 
-                action_key = f"group_broadcast:{broadcast.id}:{group_jid}"
-                existing_action = (
-                    ScheduledAction.objects.unscoped()
-                    .filter(type="group_broadcast_send", idempotency_key=action_key)
-                    .first()
-                )
                 if existing_action:
                     existing_action.status = ActionStatus.PENDING
                     existing_action.attempts = 0
                     existing_action.run_at = now
                     existing_action.last_error = ""
+                    existing_action.updated_at = now
                     existing_action.save(
                         update_fields=["status", "attempts", "run_at", "last_error", "updated_at"]
                     )
