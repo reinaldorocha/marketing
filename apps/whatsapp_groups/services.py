@@ -469,7 +469,11 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
     }
 
 
-def reserve_group_delivery(broadcast_id: Any, group_jid: str) -> tuple[bool, str]:
+def reserve_group_delivery(
+    broadcast_id: Any,
+    group_jid: str,
+    action_id: str = "",
+) -> tuple[bool, str]:
     """Atomically reserve a specific WhatsApp group for delivery in an independent transaction.
 
     Returns (True, "reserved") if the reservation was granted.
@@ -493,10 +497,16 @@ def reserve_group_delivery(broadcast_id: Any, group_jid: str) -> tuple[bool, str
                 return False, "already_sent"
 
             now = timezone.now()
-            # Check for non-stale in_flight reservation (< 300 seconds)
+            # Check for active in_flight reservation (< 300 seconds)
             active_in_flight = False
             for e in logs:
                 if e.get("group_jid") == group_jid and e.get("status") == "in_flight":
+                    reserved_by = e.get("action_id", "")
+                    # If this reservation belongs to the same action that is retrying, allow reclaiming!
+                    if action_id and reserved_by and action_id == reserved_by:
+                        active_in_flight = False
+                        break
+
                     sent_at_str = e.get("sent_at")
                     if sent_at_str:
                         try:
@@ -513,7 +523,7 @@ def reserve_group_delivery(broadcast_id: Any, group_jid: str) -> tuple[bool, str
             if active_in_flight:
                 return False, "in_flight"
 
-            # Filter out any stale in_flight entry for this group and reserve anew
+            # Filter out any old in_flight entry for this group and reserve anew
             new_logs = [
                 e for e in logs
                 if not (e.get("group_jid") == group_jid and e.get("status") == "in_flight")
@@ -521,6 +531,7 @@ def reserve_group_delivery(broadcast_id: Any, group_jid: str) -> tuple[bool, str
             new_logs.append({
                 "group_jid": group_jid,
                 "status": "in_flight",
+                "action_id": action_id,
                 "sent_at": now.isoformat(),
             })
             broadcast.delivery_logs = new_logs
@@ -602,48 +613,70 @@ def finalize_group_delivery(
 
 def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) -> None:
     """Deliver a group broadcast to one specific WhatsApp group with atomic reservation."""
-    reserved, reason = reserve_group_delivery(broadcast_id, group_jid)
+    action_id = str(action.pk) if hasattr(action, "pk") and action.pk else ""
+    reserved, reason = reserve_group_delivery(broadcast_id, group_jid, action_id=action_id)
     if not reserved:
-        logger.info(
-            "Group %s for broadcast %s cannot be reserved (reason: %s); skipping",
-            group_jid,
-            broadcast_id,
-            reason,
-        )
+        if reason in ("already_sent", "not_found"):
+            logger.info(
+                "Group %s for broadcast %s cannot be reserved (reason: %s); completing normally",
+                group_jid,
+                broadcast_id,
+                reason,
+            )
+            return
+
+        if reason == "in_flight":
+            # Another worker or attempt is actively delivering to this group right now.
+            # We must NOT conclude this task as DONE. Raise to trigger queue retry/backoff.
+            raise RuntimeError(
+                f"Group {group_jid} delivery for broadcast {broadcast_id} is currently in-flight; rescheduling"
+            )
         return
 
-    broadcast = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
-    if not broadcast or broadcast.status == BroadcastStatus.CANCELLED:
-        return
-
-    group = WhatsAppGroup.objects.unscoped().filter(connection=broadcast.connection, jid=group_jid).first()
-    group_name = group.name if group else group_jid
+    group_name = group_jid
     success = False
     error_msg = ""
     try:
+        broadcast = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
+        if not broadcast or broadcast.status == BroadcastStatus.CANCELLED:
+            # Broadcast was cancelled while reserving: clean up in_flight reservation
+            finalize_group_delivery(
+                broadcast_id=broadcast_id,
+                group_jid=group_jid,
+                group_name=group_name,
+                success=False,
+                error_msg="Cancelled",
+                will_retry=False,
+            )
+            return
+
+        group = WhatsAppGroup.objects.unscoped().filter(connection=broadcast.connection, jid=group_jid).first()
+        if group and group.name:
+            group_name = group.name
+
         send_message_to_group(broadcast, group, group_jid)
         success = True
     except Exception as exc:
         error_msg = str(exc)
-        logger.error("Failed broadcast %s to group %s: %s", broadcast.id, group_jid, exc)
+        logger.error("Failed broadcast %s to group %s: %s", broadcast_id, group_jid, exc)
+    finally:
+        will_retry = (
+            not success
+            and hasattr(action, "attempts")
+            and hasattr(action, "max_attempts")
+            and action.attempts < action.max_attempts
+        )
 
-    will_retry = (
-        not success
-        and hasattr(action, "attempts")
-        and hasattr(action, "max_attempts")
-        and action.attempts < action.max_attempts
-    )
+        finalize_group_delivery(
+            broadcast_id=broadcast_id,
+            group_jid=group_jid,
+            group_name=group_name,
+            success=success,
+            error_msg=error_msg,
+            will_retry=will_retry,
+        )
 
-    finalize_group_delivery(
-        broadcast_id=broadcast_id,
-        group_jid=group_jid,
-        group_name=group_name,
-        success=success,
-        error_msg=error_msg,
-        will_retry=will_retry,
-    )
-
-    if will_retry:
+    if not success:
         raise RuntimeError(f"Delivery to group {group_jid} failed: {error_msg}")
 
 
@@ -746,6 +779,10 @@ def process_scheduled_broadcasts() -> int:
             already_sent_jids = {
                 entry.get("group_jid") for entry in logs if entry.get("status") == "ok"
             }
+            terminal_error_jids = {
+                entry.get("group_jid") for entry in logs if entry.get("status") == "error"
+            }
+            terminal_jids = already_sent_jids | terminal_error_jids
 
             # Check for actively in-flight groups (< 5 min)
             active_in_flight_jids = set()
@@ -770,8 +807,11 @@ def process_scheduled_broadcasts() -> int:
                 processed += 1
                 continue
 
-            if len(already_sent_jids) >= total_groups:
-                set_broadcast_completed_committed(broadcast.id, total_groups=total_groups)
+            if len(terminal_jids) >= total_groups:
+                if len(already_sent_jids) > 0:
+                    set_broadcast_completed_committed(broadcast.id, total_groups=total_groups)
+                else:
+                    mark_broadcast_failed_committed(broadcast.id)
                 processed += 1
                 continue
 
@@ -791,10 +831,27 @@ def process_scheduled_broadcasts() -> int:
                         # Task is already pending or actively executing: do not duplicate
                         continue
                     elif existing_action.status == ActionStatus.DONE:
-                        # Task already marked done
-                        continue
+                        # Reconcile: If the task is marked DONE but the group has no terminal
+                        # delivery result in delivery_logs (neither 'ok' nor 'error'), it completed
+                        # prematurely or was dropped. Re-arm it to guarantee delivery!
+                        if group.jid in terminal_jids:
+                            continue
+                        logger.warning(
+                            "Reconciling group %s for broadcast %s: task is DONE without terminal delivery result",
+                            group.jid,
+                            broadcast.id,
+                        )
+                        existing_action.status = ActionStatus.PENDING
+                        existing_action.attempts = 0
+                        existing_action.run_at = now + timedelta(seconds=idx * delay)
+                        existing_action.last_error = ""
+                        existing_action.save(
+                            update_fields=["status", "attempts", "run_at", "last_error", "updated_at"]
+                        )
                     elif existing_action.status == ActionStatus.FAILED:
-                        # Task exhausted retries; re-arm it for recovery
+                        # Task exhausted retries and group has no terminal delivery: re-arm it for recovery
+                        if group.jid in terminal_jids:
+                            continue
                         existing_action.status = ActionStatus.PENDING
                         existing_action.attempts = 0
                         existing_action.run_at = now + timedelta(seconds=idx * delay)
