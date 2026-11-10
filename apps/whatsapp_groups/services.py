@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from django.db import transaction
 from django.db.models import Q
@@ -11,6 +11,7 @@ from django.utils import timezone
 from apps.channels.models import ChannelConnection, ConnectionStatus
 from apps.channels.providers.whatsapp_evolution import EvolutionClient, WhatsAppEvolutionAdapter
 from apps.common.platforms import Platform
+from apps.queueing.models import ActionStatus, ScheduledAction
 from apps.queueing.registry import schedule
 from apps.whatsapp_groups.models import (
     BroadcastMessageType,
@@ -361,20 +362,39 @@ def set_broadcast_completed_committed(broadcast_id: Any, total_groups: int | Non
     _run_in_independent_thread(_complete)
 
 
-def _release_claim_on_failure(broadcast_id: Any) -> None:
-    """Reset claim_token and revert status to SCHEDULED if no groups were sent yet."""
+def _release_claim_on_failure(broadcast_id: Any, claim_owner: str) -> None:
+    """Reset claim_token and revert status to SCHEDULED only if owned by claim_owner."""
+    if not claim_owner:
+        return
+
     def _release() -> None:
-        b = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
-        if b and b.status == BroadcastStatus.SENDING:
+        with transaction.atomic():
+            b = (
+                GroupBroadcast.objects.unscoped()
+                .select_for_update()
+                .filter(pk=broadcast_id, claim_token=claim_owner)
+                .first()
+            )
+            if not b:
+                return
+
             update_kwargs: dict[str, Any] = {"claim_token": "", "updated_at": timezone.now()}
-            if not b.delivery_logs:
+            has_successful_deliveries = any(
+                entry.get("status") == "ok" for entry in (b.delivery_logs or [])
+            )
+            if not has_successful_deliveries:
                 update_kwargs["status"] = BroadcastStatus.SCHEDULED
-            GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).update(**update_kwargs)
+
+            (
+                GroupBroadcast.objects.unscoped()
+                .filter(pk=broadcast_id, claim_token=claim_owner)
+                .update(**update_kwargs)
+            )
 
     try:
         _run_in_independent_thread(_release)
     except Exception as exc:
-        logger.warning("Failed to release claim for broadcast %s: %s", broadcast_id, exc)
+        logger.warning("Failed to release claim %s for broadcast %s: %s", claim_owner, broadcast_id, exc)
 
 
 def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
@@ -449,16 +469,151 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
     }
 
 
+def reserve_group_delivery(broadcast_id: Any, group_jid: str) -> tuple[bool, str]:
+    """Atomically reserve a specific WhatsApp group for delivery in an independent transaction.
+
+    Returns (True, "reserved") if the reservation was granted.
+    Returns (False, "already_sent") if the group was already successfully sent.
+    Returns (False, "in_flight") if another worker is actively sending to this group.
+    Returns (False, "not_found") if the broadcast does not exist or is cancelled.
+    """
+    def _reserve() -> tuple[bool, str]:
+        with transaction.atomic():
+            broadcast = (
+                GroupBroadcast.objects.unscoped()
+                .select_for_update()
+                .filter(pk=broadcast_id)
+                .first()
+            )
+            if not broadcast or broadcast.status == BroadcastStatus.CANCELLED:
+                return False, "not_found"
+
+            logs = list(broadcast.delivery_logs or [])
+            if any(e.get("group_jid") == group_jid and e.get("status") == "ok" for e in logs):
+                return False, "already_sent"
+
+            now = timezone.now()
+            # Check for non-stale in_flight reservation (< 300 seconds)
+            active_in_flight = False
+            for e in logs:
+                if e.get("group_jid") == group_jid and e.get("status") == "in_flight":
+                    sent_at_str = e.get("sent_at")
+                    if sent_at_str:
+                        try:
+                            sent_time = datetime.fromisoformat(sent_at_str)
+                            if (now - sent_time).total_seconds() < 300:
+                                active_in_flight = True
+                                break
+                        except Exception:
+                            pass
+                    else:
+                        active_in_flight = True
+                        break
+
+            if active_in_flight:
+                return False, "in_flight"
+
+            # Filter out any stale in_flight entry for this group and reserve anew
+            new_logs = [
+                e for e in logs
+                if not (e.get("group_jid") == group_jid and e.get("status") == "in_flight")
+            ]
+            new_logs.append({
+                "group_jid": group_jid,
+                "status": "in_flight",
+                "sent_at": now.isoformat(),
+            })
+            broadcast.delivery_logs = new_logs
+            broadcast.updated_at = now
+            broadcast.save(update_fields=["delivery_logs", "updated_at"])
+            return True, "reserved"
+
+    return _run_in_independent_thread(_reserve)
+
+
+def finalize_group_delivery(
+    broadcast_id: Any,
+    group_jid: str,
+    group_name: str,
+    success: bool,
+    error_msg: str,
+    will_retry: bool,
+) -> None:
+    """Commit the delivery result for a specific WhatsApp group in an independent transaction."""
+    def _finalize() -> None:
+        with transaction.atomic():
+            broadcast = (
+                GroupBroadcast.objects.unscoped()
+                .select_for_update()
+                .filter(pk=broadcast_id)
+                .first()
+            )
+            if not broadcast:
+                return
+
+            logs = list(broadcast.delivery_logs or [])
+            # Remove in_flight reservation
+            logs = [
+                e for e in logs
+                if not (e.get("group_jid") == group_jid and e.get("status") == "in_flight")
+            ]
+
+            now = timezone.now()
+            if success:
+                # Add terminal success log if not already present
+                if not any(e.get("group_jid") == group_jid and e.get("status") == "ok" for e in logs):
+                    logs.append({
+                        "group_jid": group_jid,
+                        "group_name": group_name,
+                        "status": "ok",
+                        "error": "",
+                        "sent_at": now.isoformat(),
+                    })
+                    broadcast.sent_count += 1
+            else:
+                if not will_retry:
+                    # Final attempt failed: record terminal error log
+                    logs.append({
+                        "group_jid": group_jid,
+                        "group_name": group_name,
+                        "status": "error",
+                        "error": error_msg,
+                        "sent_at": now.isoformat(),
+                    })
+                    broadcast.error_count += 1
+
+            broadcast.delivery_logs = logs
+
+            # If all target groups have reached a terminal result (ok or error), mark broadcast complete
+            terminal_count = sum(1 for e in logs if e.get("status") in ("ok", "error"))
+            total = broadcast.total_groups_count
+            if total > 0 and terminal_count >= total:
+                if broadcast.sent_count > 0:
+                    broadcast.status = BroadcastStatus.COMPLETED
+                else:
+                    broadcast.status = BroadcastStatus.FAILED
+                broadcast.sent_at = now
+
+            broadcast.updated_at = now
+            broadcast.save()
+
+    _run_in_independent_thread(_finalize)
+
+
 def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) -> None:
-    """Deliver a group broadcast to one specific WhatsApp group."""
-    broadcast = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
-    if not broadcast or broadcast.status == BroadcastStatus.CANCELLED:
+    """Deliver a group broadcast to one specific WhatsApp group with atomic reservation."""
+    reserved, reason = reserve_group_delivery(broadcast_id, group_jid)
+    if not reserved:
+        logger.info(
+            "Group %s for broadcast %s cannot be reserved (reason: %s); skipping",
+            group_jid,
+            broadcast_id,
+            reason,
+        )
         return
 
-    logs = list(broadcast.delivery_logs or [])
-    already_sent = {e.get("group_jid") for e in logs if e.get("status") == "ok"}
-    if group_jid in already_sent:
-        logger.info("Group %s already received broadcast %s; skipping", group_jid, broadcast.id)
+    broadcast = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
+    if not broadcast or broadcast.status == BroadcastStatus.CANCELLED:
         return
 
     group = WhatsAppGroup.objects.unscoped().filter(connection=broadcast.connection, jid=group_jid).first()
@@ -472,45 +627,24 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
         error_msg = str(exc)
         logger.error("Failed broadcast %s to group %s: %s", broadcast.id, group_jid, exc)
 
-    # If delivery failed and queue action has retries remaining, re-raise so worker retries ONLY this group
-    if not success and hasattr(action, "attempts") and hasattr(action, "max_attempts") and action.attempts < action.max_attempts:
+    will_retry = (
+        not success
+        and hasattr(action, "attempts")
+        and hasattr(action, "max_attempts")
+        and action.attempts < action.max_attempts
+    )
+
+    finalize_group_delivery(
+        broadcast_id=broadcast_id,
+        group_jid=group_jid,
+        group_name=group_name,
+        success=success,
+        error_msg=error_msg,
+        will_retry=will_retry,
+    )
+
+    if will_retry:
         raise RuntimeError(f"Delivery to group {group_jid} failed: {error_msg}")
-
-    # Finalize delivery log for this group (durable checkpoint)
-    with transaction.atomic():
-        broadcast = (
-            GroupBroadcast.objects.unscoped()
-            .select_for_update()
-            .filter(pk=broadcast_id)
-            .first()
-        )
-        if not broadcast:
-            return
-
-        logs = list(broadcast.delivery_logs or [])
-        logs.append({
-            "group_jid": group_jid,
-            "group_name": group_name,
-            "status": "ok" if success else "error",
-            "error": error_msg,
-            "sent_at": timezone.now().isoformat(),
-        })
-        broadcast.delivery_logs = logs
-        if success:
-            broadcast.sent_count += 1
-        else:
-            broadcast.error_count += 1
-
-        total = broadcast.total_groups_count
-        if total > 0 and len(logs) >= total:
-            if broadcast.sent_count > 0:
-                broadcast.status = BroadcastStatus.COMPLETED
-            else:
-                broadcast.status = BroadcastStatus.FAILED
-            broadcast.sent_at = timezone.now()
-
-        broadcast.updated_at = timezone.now()
-        broadcast.save()
 
 
 def claim_group_broadcast_for_sending(
@@ -582,6 +716,7 @@ def process_scheduled_broadcasts() -> int:
 
     For each candidate, reclaims the broadcast, ensures total_groups_count is set,
     and forwards remaining unsent groups to per-group queue tasks.
+    Checks existing ScheduledAction rows to avoid duplicate tasks or double-schedules.
     """
     now = timezone.now()
     stale_cutoff = now - timedelta(seconds=300)
@@ -597,6 +732,7 @@ def process_scheduled_broadcasts() -> int:
     processed = 0
     for broadcast_id in pending_ids:
         claim_owner = f"housekeeping:{uuid.uuid4().hex[:12]}"
+        broadcast = None
         try:
             broadcast = claim_group_broadcast_for_sending(
                 broadcast_id, claim_owner=claim_owner, allow_resume=True
@@ -610,14 +746,31 @@ def process_scheduled_broadcasts() -> int:
             already_sent_jids = {
                 entry.get("group_jid") for entry in logs if entry.get("status") == "ok"
             }
-            remaining_groups = [g for g in target_groups if g.jid not in already_sent_jids]
+
+            # Check for actively in-flight groups (< 5 min)
+            active_in_flight_jids = set()
+            for entry in logs:
+                if entry.get("status") == "in_flight":
+                    sent_at_str = entry.get("sent_at")
+                    if sent_at_str:
+                        try:
+                            st = datetime.fromisoformat(sent_at_str)
+                            if (now - st).total_seconds() < 300:
+                                active_in_flight_jids.add(entry.get("group_jid"))
+                        except Exception:
+                            pass
+
+            remaining_groups = [
+                g for g in target_groups
+                if g.jid not in already_sent_jids and g.jid not in active_in_flight_jids
+            ]
 
             if total_groups == 0:
                 set_broadcast_completed_committed(broadcast.id, total_groups=0)
                 processed += 1
                 continue
 
-            if len(remaining_groups) == 0:
+            if len(already_sent_jids) >= total_groups:
                 set_broadcast_completed_committed(broadcast.id, total_groups=total_groups)
                 processed += 1
                 continue
@@ -626,15 +779,40 @@ def process_scheduled_broadcasts() -> int:
 
             delay = min(max(broadcast.delay_seconds, 0), 15)
             for idx, group in enumerate(remaining_groups):
-                schedule(
-                    "group_broadcast_send",
-                    run_at=now + timedelta(seconds=idx * delay),
-                    payload={"broadcast_id": str(broadcast.id), "group_jid": group.jid},
-                    workspace=broadcast.workspace,
-                    idempotency_key=f"group_broadcast:{broadcast.id}:{group.jid}:hb:{now.strftime('%Y%m%d%H%M')}",
+                action_key = f"group_broadcast:{broadcast.id}:{group.jid}"
+                existing_action = (
+                    ScheduledAction.objects.unscoped()
+                    .filter(type="group_broadcast_send", idempotency_key=action_key)
+                    .first()
                 )
+
+                if existing_action:
+                    if existing_action.status in (ActionStatus.PENDING, ActionStatus.RUNNING):
+                        # Task is already pending or actively executing: do not duplicate
+                        continue
+                    elif existing_action.status == ActionStatus.DONE:
+                        # Task already marked done
+                        continue
+                    elif existing_action.status == ActionStatus.FAILED:
+                        # Task exhausted retries; re-arm it for recovery
+                        existing_action.status = ActionStatus.PENDING
+                        existing_action.attempts = 0
+                        existing_action.run_at = now + timedelta(seconds=idx * delay)
+                        existing_action.last_error = ""
+                        existing_action.save(
+                            update_fields=["status", "attempts", "run_at", "last_error", "updated_at"]
+                        )
+                else:
+                    schedule(
+                        "group_broadcast_send",
+                        run_at=now + timedelta(seconds=idx * delay),
+                        payload={"broadcast_id": str(broadcast.id), "group_jid": group.jid},
+                        workspace=broadcast.workspace,
+                        idempotency_key=action_key,
+                    )
             processed += 1
         except Exception as exc:
             logger.error("Error processing scheduled broadcast %s: %s", broadcast_id, exc)
-            _release_claim_on_failure(broadcast_id)
+            if broadcast is not None:
+                _release_claim_on_failure(broadcast_id, claim_owner=claim_owner)
     return processed
