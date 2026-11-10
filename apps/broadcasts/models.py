@@ -65,12 +65,12 @@ class BroadcastStatus(models.TextChoices):
     never re-opened: the messages are gone.
     """
 
-    DRAFT = "draft", "Draft"
-    SCHEDULED = "scheduled", "Scheduled"
-    SENDING = "sending", "Sending"
-    PAUSED = "paused", "Paused"
-    SENT = "sent", "Sent"
-    CANCELLED = "cancelled", "Cancelled"
+    DRAFT = "draft", "Rascunho"
+    SCHEDULED = "scheduled", "Agendado"
+    SENDING = "sending", "Enviando"
+    PAUSED = "paused", "Pausado"
+    SENT = "sent", "Enviado"
+    CANCELLED = "cancelled", "Cancelado"
 
 
 #: Statuses from which a broadcast still has work in the queue, and therefore the
@@ -88,11 +88,11 @@ class RecipientStatus(models.TextChoices):
     separately from a provider error.
     """
 
-    PENDING = "pending", "Pending"
-    SENT = "sent", "Sent"
-    FAILED = "failed", "Failed"
-    SKIPPED = "skipped", "Skipped"
-    CANCELLED = "cancelled", "Cancelled"
+    PENDING = "pending", "Pendente"
+    SENT = "sent", "Enviado"
+    FAILED = "failed", "Falhou"
+    SKIPPED = "skipped", "Ignorado"
+    CANCELLED = "cancelled", "Cancelado"
 
 
 #: Statuses a recipient never leaves. Everything else is still owed a send, which
