@@ -398,3 +398,10 @@ class LeadWebhookLog(models.Model):
     class Meta:
         db_table = "api_lead_webhook_log"
         ordering = ["-received_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["webhook", "idempotency_key"],
+                condition=models.Q(status__in=["pending", "success"]),
+                name="leadwebhooklog_unique_active_claim",
+            ),
+        ]

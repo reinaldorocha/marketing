@@ -9,7 +9,8 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import NoReverseMatch, reverse
@@ -218,6 +219,7 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
     recent_dup = LeadWebhookLog.objects.filter(
         webhook=webhook,
         idempotency_key=idempotency_key,
+        status="success",
         received_at__gte=timezone.now() - timedelta(days=7),
     ).first()
     if recent_dup:
@@ -226,6 +228,57 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                 "status": "duplicate",
                 "message": "Event already processed",
                 "log_id": str(recent_dup.pk),
+            },
+            status=200,
+        )
+
+    lock_key = f"lead_webhook_lock:{webhook.pk}:{idempotency_key}"
+    if not cache.add(lock_key, "locked", timeout=60):
+        return JsonResponse(
+            {
+                "status": "duplicate",
+                "message": "Event is currently being processed",
+            },
+            status=200,
+        )
+
+    pending_log = (
+        LeadWebhookLog.objects.filter(
+            webhook=webhook,
+            idempotency_key=idempotency_key,
+            status="pending",
+        ).first()
+    )
+    if pending_log:
+        if (timezone.now() - pending_log.received_at).total_seconds() > 300:
+            pending_log.status = "error"
+            pending_log.error_message = "Pending processing timed out"
+            pending_log.save(update_fields=["status", "error_message"])
+        else:
+            cache.delete(lock_key)
+            return JsonResponse(
+                {
+                    "status": "duplicate",
+                    "message": "Event is currently being processed",
+                },
+                status=200,
+            )
+
+    try:
+        with transaction.atomic():
+            log = LeadWebhookLog.objects.create(
+                webhook=webhook,
+                received_at=timezone.now(),
+                status="pending",
+                idempotency_key=idempotency_key,
+                payload=payload,
+            )
+    except IntegrityError:
+        cache.delete(lock_key)
+        return JsonResponse(
+            {
+                "status": "duplicate",
+                "message": "Event is currently being processed",
             },
             status=200,
         )
@@ -402,16 +455,12 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                 started_by=StartedBy.API,
             )
 
-            # 9. Record delivery log
-            log = LeadWebhookLog.objects.create(
-                webhook=webhook,
-                received_at=timezone.now(),
-                status="success",
-                idempotency_key=idempotency_key,
-                contact=contact,
-                execution=execution,
-                payload=payload,
-            )
+            # 9. Complete delivery log
+            log.status = "success"
+            log.contact = contact
+            log.execution = execution
+            log.save(update_fields=["status", "contact", "execution"])
+            cache.delete(lock_key)
 
             return JsonResponse(
                 {
@@ -425,25 +474,17 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
 
     except EngineError as exc:
         logger.warning("Lead webhook flow failed to start: %s", exc)
-        LeadWebhookLog.objects.create(
-            webhook=webhook,
-            received_at=timezone.now(),
-            status="error",
-            idempotency_key=idempotency_key,
-            contact=contact,
-            payload=payload,
-            error_message=str(exc),
-        )
+        cache.delete(lock_key)
+        log.status = "error"
+        log.contact = contact
+        log.error_message = str(exc)
+        log.save(update_fields=["status", "contact", "error_message"])
         return JsonResponse({"error": f"flow_error: {exc}"}, status=422)
     except Exception as exc:
         logger.exception("Lead webhook processing failed: %s", exc)
-        LeadWebhookLog.objects.create(
-            webhook=webhook,
-            received_at=timezone.now(),
-            status="error",
-            idempotency_key=idempotency_key,
-            contact=contact,
-            payload=payload,
-            error_message=str(exc),
-        )
+        cache.delete(lock_key)
+        log.status = "error"
+        log.contact = contact
+        log.error_message = str(exc)
+        log.save(update_fields=["status", "contact", "error_message"])
         return JsonResponse({"error": "internal_error", "detail": str(exc)}, status=500)

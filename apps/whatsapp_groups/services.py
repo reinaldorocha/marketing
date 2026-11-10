@@ -39,7 +39,11 @@ def sync_groups_from_evolution(connection: ChannelConnection) -> int:
     now = timezone.now()
 
     # Determine connection instance phone/JID to detect admin status
-    conn_phone = (connection.external_id or "").split("@")[0].replace("+", "").strip()
+    session = getattr(connection, "evolution_session", None)
+    raw_phone = session.phone_number if session else ""
+    if not raw_phone and connection.external_id:
+        raw_phone = connection.external_id
+    conn_phone = "".join(ch for ch in str(raw_phone) if ch.isdigit())
 
     for item in raw_groups:
         jid = item.get("jid")
@@ -57,7 +61,8 @@ def sync_groups_from_evolution(connection: ChannelConnection) -> int:
         if conn_phone and isinstance(participants, list):
             for p in participants:
                 p_jid = str(p.get("JID") or p.get("jid") or "")
-                if conn_phone in p_jid:
+                p_digits = "".join(ch for ch in p_jid.split("@")[0].split(":")[0] if ch.isdigit())
+                if p_digits and (conn_phone == p_digits or conn_phone in p_digits or p_digits in conn_phone):
                     is_admin = bool(p.get("IsAdmin") or p.get("isAdmin") or p.get("IsSuperAdmin") or p.get("isSuperAdmin"))
                     break
 
@@ -205,18 +210,24 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
     target_groups = list(target_groups_qs)
     total_groups = len(target_groups)
 
+    logs: list[dict[str, Any]] = list(broadcast.delivery_logs or [])
+    already_sent_jids = {
+        entry.get("group_jid") for entry in logs if entry.get("status") == "ok"
+    }
+    sent_count = len(already_sent_jids)
+    error_count = sum(1 for entry in logs if entry.get("status") != "ok")
+
     broadcast.status = BroadcastStatus.SENDING
     broadcast.total_groups_count = total_groups
-    broadcast.sent_count = 0
-    broadcast.error_count = 0
-    broadcast.delivery_logs = []
-    broadcast.save()
-
-    logs: list[dict[str, Any]] = []
-    sent_count = 0
-    error_count = 0
+    broadcast.sent_count = sent_count
+    broadcast.error_count = error_count
+    broadcast.delivery_logs = logs
+    broadcast.save(update_fields=["status", "total_groups_count", "sent_count", "error_count", "delivery_logs", "updated_at"])
 
     for idx, group in enumerate(target_groups):
+        if group.jid in already_sent_jids:
+            logger.info("Group %s already received broadcast %s; skipping", group.jid, broadcast.id)
+            continue
         mentions: list[str] = []
         if broadcast.mention_all and group.participants_cache:
             for p in group.participants_cache:
@@ -287,6 +298,11 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
             "error": error_msg,
             "sent_at": timezone.now().isoformat(),
         })
+        broadcast.delivery_logs = logs
+        broadcast.sent_count = sent_count
+        broadcast.error_count = error_count
+        broadcast.updated_at = timezone.now()
+        broadcast.save(update_fields=["delivery_logs", "sent_count", "error_count", "updated_at"])
 
         # Throttle between groups to prevent burst bans
         if idx < total_groups - 1 and broadcast.delay_seconds > 0:
@@ -309,21 +325,45 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
     }
 
 
-def claim_group_broadcast_for_sending(broadcast_id: Any) -> GroupBroadcast | None:
+def claim_group_broadcast_for_sending(broadcast_id: Any, allow_resume: bool = False) -> GroupBroadcast | None:
     """Atomically transition a scheduled group broadcast to sending status.
 
     Guarantees that between concurrent queue workers and hourly housekeeping,
     only one caller can claim and execute the broadcast.
+    If allow_resume is True (e.g. queue retry), also allows resuming a broadcast
+    currently in SENDING status that is owned by this execution.
+    Also reclaims stale SENDING broadcasts (> 5 minutes without update).
     """
     with transaction.atomic():
-        updated = (
+        broadcast = (
             GroupBroadcast.objects.unscoped()
-            .filter(pk=broadcast_id, status=BroadcastStatus.SCHEDULED)
-            .update(status=BroadcastStatus.SENDING, updated_at=timezone.now())
+            .select_for_update()
+            .filter(pk=broadcast_id)
+            .first()
         )
-        if not updated:
+        if not broadcast:
             return None
-        return GroupBroadcast.objects.unscoped().get(pk=broadcast_id)
+
+        now = timezone.now()
+        is_stale = (
+            broadcast.status == BroadcastStatus.SENDING
+            and broadcast.updated_at
+            and (now - broadcast.updated_at).total_seconds() > 300
+        )
+
+        can_claim = (
+            broadcast.status == BroadcastStatus.SCHEDULED
+            or (allow_resume and broadcast.status == BroadcastStatus.SENDING)
+            or is_stale
+        )
+
+        if not can_claim:
+            return None
+
+        broadcast.status = BroadcastStatus.SENDING
+        broadcast.updated_at = now
+        broadcast.save(update_fields=["status", "updated_at"])
+        return broadcast
 
 
 def process_scheduled_broadcasts() -> int:

@@ -20,6 +20,7 @@ from apps.channels import ingest
 from apps.channels.models import ChannelConnection, ConnectionStatus, EvolutionSession
 from apps.channels.plan import plan_refusal
 from apps.channels.providers.exceptions import APIError
+from apps.common.outbound import BlockedURLError
 from apps.channels.providers.whatsapp_evolution import EvolutionClient, WhatsAppEvolutionAdapter
 from apps.common.platforms import Platform
 from apps.members.decorators import require_permission
@@ -126,13 +127,13 @@ def whatsapp_evolution_connect(request: WorkspaceRequest, workspace_id: str) -> 
                         name=instance_name,
                         token=instance_token,
                     )
-                except APIError as exc:
+                except (APIError, BlockedURLError) as exc:
                     logger.warning("Evolution GO create_instance info: %s. Proceeding to connect.", exc)
 
                 try:
                     # Connect and bind webhook
                     client.connect_instance(webhook_url=webhook_url)
-                except APIError as exc:
+                except (APIError, BlockedURLError) as exc:
                     logger.warning("Evolution GO connect_instance: %s", exc)
                     session.last_error = str(exc)
                     session.save(update_fields=["last_error", "updated_at"])
@@ -223,7 +224,7 @@ def whatsapp_evolution_qr(request: WorkspaceRequest, workspace_id: str, connecti
             session.pairing_code = pairing_code
             session.state = "qrcode"
             session.save(update_fields=["qr_code_base64", "pairing_code", "state", "updated_at"])
-    except APIError as exc:
+    except (APIError, BlockedURLError) as exc:
         logger.warning("Could not fetch QR code from Evolution GO: %s", exc)
 
     if not qr_base64:
@@ -298,7 +299,7 @@ def whatsapp_evolution_status(request: WorkspaceRequest, workspace_id: str, conn
                     "updated_at",
                 ]
             )
-    except APIError as exc:
+    except (APIError, BlockedURLError) as exc:
         logger.warning("Could not fetch status from Evolution GO: %s", exc)
 
     status_data = {
@@ -352,7 +353,7 @@ def whatsapp_evolution_reconnect(request: WorkspaceRequest, workspace_id: str, c
         session.state = "connecting"
         session.save(update_fields=["state", "updated_at"])
         messages.success(request, "Tentativa de reconexão iniciada. Verifique o QR Code se necessário.")
-    except APIError as exc:
+    except (APIError, BlockedURLError) as exc:
         messages.error(request, f"Erro ao reconectar na Evolution GO: {exc}")
 
     return redirect(
@@ -374,7 +375,7 @@ def whatsapp_evolution_disconnect(request: WorkspaceRequest, workspace_id: str, 
 
     try:
         client.disconnect()
-    except APIError as exc:
+    except (APIError, BlockedURLError) as exc:
         logger.warning("Error disconnecting from Evolution GO: %s", exc)
 
     connection.status = ConnectionStatus.NEEDS_REAUTH

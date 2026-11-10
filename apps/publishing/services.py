@@ -179,6 +179,18 @@ def publish_post(post: ContentPost, execution_id: str | None = None) -> ContentP
             post.refresh_from_db()
             return locked
 
+        if execution_id:
+            if locked.status != PostStatus.PUBLISHING or locked.container_id != claim_token:
+                logger.info(
+                    "publish_post: post %s claim %r is no longer active (status=%s, container_id=%r); aborting",
+                    locked.pk,
+                    claim_token,
+                    locked.status,
+                    locked.container_id,
+                )
+                post.refresh_from_db()
+                return locked
+
         if locked.status == PostStatus.PUBLISHING:
             # If another execution already owns the publishing lock
             if locked.container_id != claim_token:

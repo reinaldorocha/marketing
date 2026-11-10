@@ -10,10 +10,11 @@ from __future__ import annotations
 import logging
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
+import httpx
 from django.utils import timezone
 
 from apps.channels.capabilities import capabilities_for
@@ -29,8 +30,9 @@ from apps.channels.events import (
     TextBlock,
 )
 from apps.channels.models import ChannelConnection, ConnectionStatus, EvolutionSession
-from apps.channels.providers.base import Adapter, request_json
-from apps.channels.providers.exceptions import APIError
+from apps.channels.providers.base import Adapter
+from apps.channels.providers.exceptions import APIError, RateLimitError
+from apps.common.outbound import BlockedURLError, OutboundError, OutboundTransportError, guarded_request
 from apps.common.platforms import Platform
 
 logger = logging.getLogger(__name__)
@@ -63,13 +65,75 @@ def _is_supported_recipient(recipient: str) -> bool:
     return 5 <= len(cleaned) <= 20
 
 
+def guarded_evolution_request(
+    method: str,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    json: Any = None,
+    params: dict[str, Any] | None = None,
+    timeout: float = 15.0,
+    client: httpx.Client | None = None,
+) -> Any:
+    """Execute an outbound HTTP request to the Evolution API via the SSRF guard."""
+    if params:
+        parsed = urlparse(url)
+        existing_q = parse_qsl(parsed.query)
+        new_q = [(k, str(v)) for k, v in params.items()]
+        new_query = urlencode(existing_q + new_q)
+        url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+
+    # All calls to configurable Evolution instance URL go through the SSRF guard (SECURITY-BASELINE §6)
+    try:
+        response = guarded_request(
+            method,
+            url,
+            headers=headers,
+            json=json,
+            timeout=timeout,
+            client=client,
+        )
+    except BlockedURLError:
+        raise
+    except OutboundTransportError as exc:
+        raise APIError(f"{method} {url} failed: {exc}") from exc
+    except OutboundError as exc:
+        raise APIError(f"{method} {url} outbound error: {exc}") from exc
+
+    if response.status_code == 429:
+        raise RateLimitError(
+            "Evolution API is rate limiting this connection",
+            retry_after=None,
+            code="rate_limit",
+        )
+    if not response.ok:
+        raise APIError(
+            f"{method} Evolution API was rejected",
+            status_code=response.status_code,
+        )
+
+    try:
+        data = response.json()
+    except (ValueError, Exception) as exc:
+        raise APIError("Evolution API returned a non-JSON body", status_code=response.status_code) from exc
+
+    return data
+
+
 class EvolutionClient:
     """HTTP client communicating with the Evolution GO REST API."""
 
-    def __init__(self, api_url: str, api_key: str, instance_id: str = ""):
+    def __init__(
+        self,
+        api_url: str,
+        api_key: str,
+        instance_id: str = "",
+        client: httpx.Client | None = None,
+    ):
         self.api_url = api_url.rstrip("/")
         self.api_key = api_key
         self.instance_id = instance_id
+        self.client = client
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -79,6 +143,26 @@ class EvolutionClient:
         if self.instance_id:
             headers["instanceId"] = self.instance_id
         return headers
+
+    def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        json: Any = None,
+        params: dict[str, Any] | None = None,
+        timeout: float = 15.0,
+    ) -> Any:
+        return guarded_evolution_request(
+            method,
+            url,
+            headers=headers if headers is not None else self._headers(),
+            json=json,
+            params=params,
+            timeout=timeout,
+            client=self.client,
+        )
 
     def create_instance(
         self,
@@ -101,7 +185,7 @@ class EvolutionClient:
                 "rejectCall": False,
             },
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/instance/create",
             headers=self._headers(),
@@ -127,7 +211,7 @@ class EvolutionClient:
             ],
             "immediate": immediate,
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/instance/connect",
             headers=self._headers(),
@@ -137,7 +221,7 @@ class EvolutionClient:
 
     def get_qr(self) -> dict[str, Any]:
         """Call GET /instance/qr."""
-        return request_json(
+        return self._request(
             "GET",
             f"{self.api_url}/instance/qr",
             headers=self._headers(),
@@ -146,7 +230,7 @@ class EvolutionClient:
 
     def get_status(self) -> dict[str, Any]:
         """Call GET /instance/status."""
-        return request_json(
+        return self._request(
             "GET",
             f"{self.api_url}/instance/status",
             headers=self._headers(),
@@ -155,7 +239,7 @@ class EvolutionClient:
 
     def disconnect(self) -> dict[str, Any]:
         """Call POST /instance/disconnect."""
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/instance/disconnect",
             headers=self._headers(),
@@ -181,7 +265,7 @@ class EvolutionClient:
             payload["delay"] = delay
         if mentions:
             payload["mentions"] = [_clean_recipient(m) for m in mentions if m]
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/text",
             headers=self._headers(),
@@ -220,7 +304,7 @@ class EvolutionClient:
             payload["delay"] = delay
         if mentions:
             payload["mentions"] = [_clean_recipient(m) for m in mentions if m]
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/media",
             headers=self._headers(),
@@ -255,7 +339,7 @@ class EvolutionClient:
             "number": _clean_recipient(number),
             "sticker": url,
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/sticker",
             headers=self._headers(),
@@ -280,7 +364,7 @@ class EvolutionClient:
             "options": clean_options[:12],
             "maxAnswer": max(1, min(len(clean_options), max_answers)),
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/poll",
             headers=self._headers(),
@@ -306,7 +390,7 @@ class EvolutionClient:
             payload["name"] = name
         if address:
             payload["address"] = address
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/location",
             headers=self._headers(),
@@ -330,7 +414,7 @@ class EvolutionClient:
                 "organization": organization or None,
             },
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/contact",
             headers=self._headers(),
@@ -354,7 +438,7 @@ class EvolutionClient:
             "footer": footer,
             "buttons": buttons,
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/button",
             headers=self._headers(),
@@ -380,7 +464,7 @@ class EvolutionClient:
             "buttonText": button_text or "Ver Opções",
             "sections": sections,
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/send/list",
             headers=self._headers(),
@@ -396,7 +480,7 @@ class EvolutionClient:
         """Call GET /group/list or /group/fetchAllGroups and normalize returned groups."""
         for endpoint in ("/group/list", "/group/fetchAllGroups"):
             try:
-                res = request_json(
+                res = self._request(
                     "GET",
                     f"{self.api_url}{endpoint}",
                     headers=self._headers(),
@@ -440,7 +524,7 @@ class EvolutionClient:
     def get_group_info(self, group_jid: str) -> dict[str, Any]:
         """Fetch details of one specific group."""
         try:
-            res = request_json(
+            res = self._request(
                 "GET",
                 f"{self.api_url}/group/info",
                 headers=self._headers(),
@@ -458,7 +542,7 @@ class EvolutionClient:
             "groupName": group_name,
             "participants": [_clean_phone(p) for p in participants if p],
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/group/create",
             headers=self._headers(),
@@ -472,7 +556,7 @@ class EvolutionClient:
             "groupJid": group_jid,
             "groupName": subject[:100],
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/group/updateSubject",
             headers=self._headers(),
@@ -486,7 +570,7 @@ class EvolutionClient:
             "groupJid": group_jid,
             "description": description,
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/group/updateDescription",
             headers=self._headers(),
@@ -500,7 +584,7 @@ class EvolutionClient:
             "groupJid": group_jid,
             "action": action,
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/group/updateSetting",
             headers=self._headers(),
@@ -513,7 +597,7 @@ class EvolutionClient:
         payload = {
             "groupJid": group_jid,
         }
-        return request_json(
+        return self._request(
             "POST",
             f"{self.api_url}/group/leaveGroup",
             headers=self._headers(),
@@ -524,7 +608,7 @@ class EvolutionClient:
     def get_group_invite_code(self, group_jid: str) -> str:
         """Fetch invite code / link for the group."""
         try:
-            res = request_json(
+            res = self._request(
                 "GET",
                 f"{self.api_url}/group/inviteCode",
                 headers=self._headers(),
@@ -542,7 +626,7 @@ class EvolutionClient:
     def revoke_group_invite_code(self, group_jid: str) -> str:
         """Revoke current invite link and generate a new one."""
         try:
-            res = request_json(
+            res = self._request(
                 "POST",
                 f"{self.api_url}/group/revokeInviteCode",
                 headers=self._headers(),
@@ -633,7 +717,7 @@ class WhatsAppEvolutionAdapter(Adapter):
     capabilities = _CAPABILITIES
     webhook_content = "json"
 
-    def get_client(self, connection: ChannelConnection) -> EvolutionClient:
+    def get_client(self, connection: ChannelConnection, client: httpx.Client | None = None) -> EvolutionClient:
         creds = connection.credentials or {}
         api_url = creds.get("api_url") or ""
         # Prefer instance token, fallback to global_api_key
@@ -644,7 +728,7 @@ class WhatsAppEvolutionAdapter(Adapter):
             if session:
                 api_url = api_url or session.api_url
                 instance_id = instance_id or session.instance_id
-        return EvolutionClient(api_url=api_url, api_key=api_key, instance_id=instance_id)
+        return EvolutionClient(api_url=api_url, api_key=api_key, instance_id=instance_id, client=client)
 
     def resolve_connection(self, request: Any, raw_body: bytes) -> ChannelConnection | None:
         """Resolve which ChannelConnection owns an inbound Evolution GO delivery."""
@@ -936,7 +1020,7 @@ class WhatsAppEvolutionAdapter(Adapter):
                 raw_ts = item.get("messageTimestamp") or (data.get("messageTimestamp") if isinstance(data, dict) else None)
                 if raw_ts:
                     try:
-                        ts = datetime.fromtimestamp(int(raw_ts), tz=timezone.utc)
+                        ts = datetime.fromtimestamp(int(raw_ts), tz=dt_timezone.utc)
                     except Exception:
                         pass
 

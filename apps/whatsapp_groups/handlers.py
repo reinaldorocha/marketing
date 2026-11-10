@@ -15,7 +15,7 @@ def handle_group_broadcast_send(payload: dict, action) -> None:
     if not broadcast_id:
         return
 
-    broadcast = claim_group_broadcast_for_sending(broadcast_id)
+    broadcast = claim_group_broadcast_for_sending(broadcast_id, allow_resume=True)
     if not broadcast:
         # Already claimed or no longer scheduled
         return
@@ -24,4 +24,12 @@ def handle_group_broadcast_send(payload: dict, action) -> None:
         dispatch_group_broadcast(broadcast)
     except Exception as exc:
         logger.error("Error executing scheduled group broadcast %s: %s", broadcast.id, exc)
+        # If this action reached its max attempts, mark as FAILED so it doesn't get stuck in SENDING
+        if hasattr(action, "attempts") and hasattr(action, "max_attempts") and action.attempts >= action.max_attempts:
+            try:
+                broadcast.refresh_from_db()
+                broadcast.status = BroadcastStatus.FAILED
+                broadcast.save(update_fields=["status", "updated_at"])
+            except Exception:
+                pass
         raise
