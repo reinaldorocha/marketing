@@ -35,9 +35,9 @@ describe("tagged unions", () => {
     const block = deref(SCHEMA.$defs["message_block"]);
     expect(isTaggedUnion(block)).toBe(true);
     // Seven tags…
-    expect(variantChoices(block)).toHaveLength(7);
+    expect(variantChoices(block)).toHaveLength(12);
     // …over four shapes, because image/audio/video/file all map to block_media.
-    expect(block?.oneOf).toHaveLength(4);
+    expect(block?.oneOf).toHaveLength(9);
     expect(variantSchema(block, "image")).toBe(variantSchema(block, "video"));
   });
 

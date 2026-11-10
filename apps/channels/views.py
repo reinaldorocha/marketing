@@ -380,6 +380,16 @@ def connection_detail(request: WorkspaceRequest, workspace_id: str, connection_i
     """
     connection = get_scoped_object_or_404(ChannelConnection, request.workspace, pk=connection_id)
     context = _connection_context(request, connection)
+    if connection.platform == Platform.INSTAGRAM.value:
+        from apps.flows.models import Flow, FlowStatus
+        from apps.flows.services import published_version
+        flows = list(Flow.objects.for_workspace(request.workspace).filter(status=FlowStatus.ACTIVE).order_by("name"))
+        available_flows = []
+        for fl in flows:
+            if published_version(fl):
+                fl.flow_payload = f"flow:{fl.id}"
+                available_flows.append(fl)
+        context["available_flows"] = available_flows
     # The same sentence the card on the list page shows. This page used to print
     # the status word and "last event received" as two separate rows — exactly
     # the split _health exists to close, and the one a reader had to join up

@@ -55,12 +55,16 @@ _KEYWORD = f.obj(
             "any_word",
             description="exact: the whole message. contains: anywhere, even inside a word. any_word: a whole word.",
         ),
+        "ignore_accents": f.boolean(description="Ignore accents when matching this keyword."),
     },
     required=["text", "mode"],
 )
 
 KEYWORD = f.obj(
-    {"keywords": f.array(_KEYWORD, min_items=1, max_items=MAX_KEYWORDS)},
+    {
+        "keywords": f.array(_KEYWORD, min_items=1, max_items=MAX_KEYWORDS),
+        "ignore_accents": f.boolean(description="Ignore accents when matching keywords."),
+    },
     required=["keywords"],
     description="Runs when a message matches one of these words.",
 )
@@ -87,7 +91,10 @@ REF_URL = f.obj(
 
 #: SPEC §10: "optional keywords". No keywords means every story reply matches.
 STORY_REPLY = f.obj(
-    {"keywords": f.array(_KEYWORD, max_items=MAX_KEYWORDS)},
+    {
+        "keywords": f.array(_KEYWORD, max_items=MAX_KEYWORDS),
+        "ignore_accents": f.boolean(description="Ignore accents when matching keywords."),
+    },
     description="Runs when somebody replies to one of your stories.",
 )
 
@@ -109,6 +116,8 @@ COMMENT = f.obj(
         ),
         "like_comment": f.boolean(),
         "once_per_contact_per_post": f.boolean(),
+        "keyword_match_mode": f.enum("contains", "exact", description="Whether comment keywords match exact or contains."),
+        "ignore_accents": f.boolean(description="Ignore accents when matching comment keywords."),
     },
     required=["post_scope"],
     description="Runs when somebody comments on a post, and answers them privately.",

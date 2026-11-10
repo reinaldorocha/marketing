@@ -40,6 +40,8 @@ function FlowNodeCardInner({
   const picklists = useBuilder((state) => state.picklists);
   const issues = useBuilder((state) => state.validation.byNode[nodeId]);
   const isEntry = useBuilder((state) => selectEntryIds(state).has(nodeId));
+  const isSimulatedActive = useBuilder((state) => state.simulatedActiveNodeId === nodeId);
+  const isSimulatedVisited = useBuilder((state) => state.simulatedVisitedNodeIds.includes(nodeId));
   const stats = useBuilder((state) =>
     state.statsVisible ? state.stats : null,
   );
@@ -89,12 +91,19 @@ function FlowNodeCardInner({
         isNote ? "fb-node-note" : "",
         selected ? "is-selected" : "",
         severity === "error" ? "is-invalid" : "",
+        isSimulatedActive ? "is-simulated-active ring-2 ring-emerald-500 shadow-lg shadow-emerald-500/20" : "",
+        isSimulatedVisited && !isSimulatedActive ? "is-simulated-visited border-emerald-400" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       data-node-type={type}
       data-group={group}
     >
+      {isSimulatedActive ? (
+        <span className="absolute -top-2.5 -right-2 px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500 text-white rounded-full shadow animate-pulse z-10">
+          Ativo
+        </span>
+      ) : null}
       {/* A note takes part in no routing at all (SPEC §11.11), so it gets no
           handles — which is also what stops `note_node_connected`. */}
       {!isNote ? <Handle type="target" position={HandlePosition.Left} /> : null}

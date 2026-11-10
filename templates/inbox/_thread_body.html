@@ -197,6 +197,18 @@ are until they are sniffed at fetch time.
             {% for reply in item.quick_replies %}<span class="ib-chip">{{ reply.label }}</span>{% endfor %}
           </div>
         {% endif %}
+
+        {% if item.message.body.reactions %}
+          <div class="ib-bubble-reactions flex items-center gap-1 mt-1.5 flex-wrap">
+            {% for uid, r in item.message.body.reactions.items %}
+              {% if r.emoji %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-black/5 dark:bg-white/10 border border-border shadow-xs cursor-default" title="Reação">
+                  {{ r.emoji }}
+                </span>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endif %}
       </div>
 
       {% comment %}

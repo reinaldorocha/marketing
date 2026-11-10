@@ -558,6 +558,74 @@ class EvolutionClient:
             return ""
 
 
+def _normalize_evolution_button(btn: dict[str, Any]) -> dict[str, Any] | None:
+    b_type = str(btn.get("type") or btn.get("action") or "reply").lower().strip()
+    label = str(btn.get("displayText") or btn.get("label") or btn.get("text") or "").strip()
+    if b_type == "pix":
+        key = str(btn.get("key") or btn.get("pix_key") or "").strip()
+        key_type = str(btn.get("keyType") or btn.get("pix_key_type") or "phone").strip().lower()
+        if not key:
+            return None
+        res: dict[str, Any] = {
+            "type": "pix",
+            "key": key,
+            "keyType": key_type,
+            "currency": str(btn.get("currency") or "BRL"),
+        }
+        name = str(btn.get("name") or btn.get("pix_name") or "").strip()
+        if name:
+            res["name"] = name
+        return res
+    if not label:
+        return None
+    if b_type == "copy":
+        copy_code = str(btn.get("copyCode") or btn.get("copy_code") or "").strip()
+        if not copy_code:
+            return None
+        return {"type": "copy", "displayText": label, "copyCode": copy_code}
+    if b_type == "url":
+        url = str(btn.get("url") or "").strip()
+        if not url:
+            return None
+        return {"type": "url", "displayText": label, "url": url}
+    if b_type == "call":
+        phone = re.sub(r"\D+", "", str(btn.get("phoneNumber") or btn.get("phone_number") or btn.get("phone") or ""))
+        if not phone:
+            return None
+        return {"type": "call", "displayText": label, "phoneNumber": phone}
+    b_id = str(btn.get("id") or btn.get("button_id") or "").strip() or f"btn-{hashlib.sha1(label.encode()).hexdigest()[:8]}"
+    return {"type": "reply", "displayText": label, "id": b_id}
+
+
+def _normalize_list_sections(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized = []
+    for sec in sections:
+        if not isinstance(sec, dict):
+            continue
+        title = str(sec.get("title") or "").strip()
+        rows = []
+        for r in sec.get("rows") or []:
+            if not isinstance(r, dict):
+                continue
+            r_title = str(r.get("title") or "").strip()
+            if not r_title:
+                continue
+            row_dict: dict[str, Any] = {"title": r_title}
+            desc = str(r.get("description") or "").strip()
+            if desc:
+                row_dict["description"] = desc
+            row_id = str(r.get("rowId") or r.get("row_id") or r.get("id") or "").strip()
+            if row_id:
+                row_dict["rowId"] = row_id
+            rows.append(row_dict)
+        if rows:
+            sec_dict: dict[str, Any] = {"rows": rows}
+            if title:
+                sec_dict["title"] = title
+            normalized.append(sec_dict)
+    return normalized
+
+
 class WhatsAppEvolutionAdapter(Adapter):
     """Adapter integrating WhatsApp via Evolution GO."""
 
@@ -676,11 +744,21 @@ class WhatsAppEvolutionAdapter(Adapter):
         except Exception:
             return []
 
-        event_name = (payload.get("event") or "").lower()
+        raw_event = str(
+            payload.get("event")
+            or payload.get("type")
+            or payload.get("eventType")
+            or (payload.get("data") if isinstance(payload.get("data"), dict) else {}).get("event")
+            or ""
+        ).strip().lower()
+        event_name = raw_event.replace("_", ".").replace("-", ".")
+        data = payload.get("data", {})
+        if not event_name and ("key" in payload or (isinstance(data, dict) and "key" in data)):
+            event_name = "messages.upsert" 
         data = payload.get("data", {})
 
         # 1. Update Connection Status
-        if event_name in {"connection.update", "status.instance"}:
+        if event_name in {"connection.update", "status.instance", "instance.status", "connection"}:
             state = (data.get("state") or data.get("status") or "").lower()
             session = EvolutionSession.objects.filter(connection=connection).first()
             if session and state:
@@ -696,7 +774,7 @@ class WhatsAppEvolutionAdapter(Adapter):
             return []
 
         # 2. Update QR code if pushed via webhook
-        if event_name in {"qrcode.updated", "qrcode"}:
+        if event_name in {"qrcode.updated", "qrcode", "qr.updated"}:
             qr = data.get("qrcode") or data.get("base64") or ""
             session = EvolutionSession.objects.filter(connection=connection).first()
             if session and qr:
@@ -706,7 +784,7 @@ class WhatsAppEvolutionAdapter(Adapter):
             return []
 
         # 3. Message Receipt / Status Update
-        if event_name in {"messages.update", "message.receipt", "read_receipt"}:
+        if event_name in {"messages.update", "message.receipt", "read.receipt", "read_receipt", "message.update", "receipt"}:
             key = data.get("key", {})
             msg_id = key.get("id") or data.get("id") or ""
             status_val = (data.get("status") or data.get("receipt") or "").lower()
@@ -732,75 +810,180 @@ class WhatsAppEvolutionAdapter(Adapter):
             return []
 
         # 4. Inbound Message Handling
-        if event_name in {"message", "messages.upsert", "messages.create"}:
-            key = data.get("key", {})
-            if key.get("fromMe", False):
-                # Outbound message originated on user's own device; do not duplicate
-                return []
+        if event_name in {"message", "messages.upsert", "messages.create", "message.upsert", "messages.set", "send.message"}:
+            items = []
+            raw_data = payload.get("data")
+            if isinstance(raw_data, dict):
+                if isinstance(raw_data.get("messages"), list):
+                    items = raw_data["messages"]
+                else:
+                    items = [raw_data]
+            elif isinstance(raw_data, list):
+                items = raw_data
+            elif isinstance(payload.get("messages"), list):
+                items = payload["messages"]
+            elif isinstance(payload.get("key"), dict):
+                items = [payload]
+            else:
+                items = [data] if data else []
 
-            remote_jid = key.get("remoteJid", "")
-            if not remote_jid or "@g.us" in remote_jid or "@broadcast" in remote_jid:
-                # Groups and status broadcasts are ignored
-                return []
+            events: list[NormalizedEvent] = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
 
-            msg_id = key.get("id") or ""
-            if not msg_id:
-                return []
+                info = item.get("Info") if isinstance(item.get("Info"), dict) else {}
+                key = item.get("key") if isinstance(item.get("key"), dict) else {}
 
-            phone = _clean_phone(remote_jid)
-            push_name = data.get("pushName") or data.get("senderName") or ""
-            msg_content = data.get("message") or {}
-
-            # Extract text
-            text = (
-                msg_content.get("conversation")
-                or msg_content.get("extendedTextMessage", {}).get("text")
-                or ""
-            )
-
-            # Check for media attachments
-            attachments: list[str] = []
-            caption = ""
-            for m_key in ("imageMessage", "videoMessage", "audioMessage", "documentMessage"):
-                if m_key in msg_content:
-                    media_info = msg_content[m_key]
-                    media_url = media_info.get("url") or ""
-                    caption = media_info.get("caption") or ""
-                    if media_url:
-                        attachments.append(media_url)
-                    break
-
-            if not text and caption:
-                text = caption
-
-            # Timestamp
-            ts = timezone.now()
-            raw_ts = data.get("messageTimestamp")
-            if raw_ts:
-                try:
-                    ts = datetime.fromtimestamp(int(raw_ts), tz=timezone.utc)
-                except Exception:
-                    pass
-
-            return [
-                NormalizedEvent(
-                    type=EventType.MESSAGE,
-                    connection=connection,
-                    platform_user_id=f"+{phone}" if phone else remote_jid,
-                    provider_event_id=msg_id,
-                    timestamp=ts,
-                    payload=EventPayload(
-                        text=text,
-                        attachments=tuple(attachments),
-                        extra={
-                            "sender_name": push_name,
-                            "phone": phone,
-                            "remote_jid": remote_jid,
-                        },
-                    ),
-                    raw=payload,
+                from_me = bool(
+                    item.get("fromMe")
+                    or key.get("fromMe")
+                    or info.get("IsFromMe")
                 )
-            ]
+                if from_me:
+                    continue
+
+                remote_jid = str(
+                    info.get("Chat")
+                    or key.get("remoteJid")
+                    or item.get("remoteJid")
+                    or item.get("from")
+                    or ""
+                )
+                if not remote_jid or "@g.us" in remote_jid or "@broadcast" in remote_jid or info.get("IsGroup"):
+                    continue
+
+                msg_id = str(key.get("id") or item.get("id") or info.get("ID") or info.get("id") or "")
+                if not msg_id:
+                    continue
+
+                phone = _clean_phone(remote_jid)
+                push_name = str(item.get("pushName") or item.get("senderName") or "")
+                msg_content = item.get("Message") or item.get("message") or {}
+                if not isinstance(msg_content, dict):
+                    msg_content = {}
+                if not msg_content and "conversation" in item:
+                    msg_content = item
+
+                button_id = ""
+                text = ""
+
+                # 4.1 Buttons response
+                btn_resp = msg_content.get("buttonsResponseMessage")
+                if isinstance(btn_resp, dict):
+                    button_id = str(btn_resp.get("selectedButtonId") or "")
+                    text = str(btn_resp.get("selectedDisplayText") or button_id)
+
+                # 4.2 Template button reply
+                if not button_id:
+                    tpl_resp = msg_content.get("templateButtonReplyMessage")
+                    if isinstance(tpl_resp, dict):
+                        button_id = str(tpl_resp.get("selectedId") or "")
+                        text = str(tpl_resp.get("selectedDisplayText") or button_id)
+
+                # 4.3 List response
+                if not button_id:
+                    list_resp = msg_content.get("listResponseMessage")
+                    if isinstance(list_resp, dict):
+                        single_select = list_resp.get("singleSelectReply") if isinstance(list_resp.get("singleSelectReply"), dict) else {}
+                        button_id = str(single_select.get("selectedRowId") or list_resp.get("rowId") or "")
+                        text = str(list_resp.get("title") or list_resp.get("description") or button_id)
+
+                # 4.4 Interactive response (Native Flow)
+                if not button_id:
+                    interactive_resp = msg_content.get("interactiveResponseMessage")
+                    if isinstance(interactive_resp, dict):
+                        body_txt = interactive_resp.get("body", {}).get("text") if isinstance(interactive_resp.get("body"), dict) else None
+                        if body_txt:
+                            text = str(body_txt)
+                        native_flow = interactive_resp.get("nativeFlowResponseMessage")
+                        if isinstance(native_flow, dict):
+                            params_json = native_flow.get("paramsJson")
+                            if isinstance(params_json, str):
+                                try:
+                                    decoded = json.loads(params_json)
+                                    if isinstance(decoded, dict):
+                                        button_id = str(decoded.get("id") or "")
+                                        cand_title = str(decoded.get("title") or "")
+                                        if cand_title:
+                                            text = cand_title
+                                except Exception:
+                                    pass
+
+                # 4.5 Text / Extended text / Captions
+                if not text:
+                    text = str(
+                        msg_content.get("conversation")
+                        or (msg_content.get("extendedTextMessage", {}).get("text") if isinstance(msg_content.get("extendedTextMessage"), dict) else "")
+                        or ""
+                    )
+
+                attachments: list[str] = []
+                caption = ""
+                for m_key in ("imageMessage", "videoMessage", "audioMessage", "documentMessage"):
+                    if m_key in msg_content and isinstance(msg_content[m_key], dict):
+                        media_info = msg_content[m_key]
+                        media_url = str(media_info.get("url") or "")
+                        caption = str(media_info.get("caption") or "")
+                        if media_url:
+                            attachments.append(media_url)
+                        break
+
+                if not text and caption:
+                    text = caption
+
+                ts = timezone.now()
+                raw_ts = item.get("messageTimestamp") or (data.get("messageTimestamp") if isinstance(data, dict) else None)
+                if raw_ts:
+                    try:
+                        ts = datetime.fromtimestamp(int(raw_ts), tz=timezone.utc)
+                    except Exception:
+                        pass
+
+                if button_id:
+                    events.append(
+                        NormalizedEvent(
+                            type=EventType.POSTBACK,
+                            connection=connection,
+                            platform_user_id=f"+{phone}" if phone else remote_jid,
+                            provider_event_id=msg_id,
+                            timestamp=ts,
+                            payload=EventPayload(
+                                button_id=button_id,
+                                text=text,
+                                attachments=tuple(attachments),
+                                extra={
+                                    "reply_id": button_id,
+                                    "sender_name": push_name,
+                                    "phone": phone,
+                                    "remote_jid": remote_jid,
+                                },
+                            ),
+                            raw=item,
+                        )
+                    )
+                elif text or attachments:
+                    events.append(
+                        NormalizedEvent(
+                            type=EventType.MESSAGE,
+                            connection=connection,
+                            platform_user_id=f"+{phone}" if phone else remote_jid,
+                            provider_event_id=msg_id,
+                            timestamp=ts,
+                            payload=EventPayload(
+                                text=text,
+                                attachments=tuple(attachments),
+                                extra={
+                                    "sender_name": push_name,
+                                    "phone": phone,
+                                    "remote_jid": remote_jid,
+                                },
+                            ),
+                            raw=item,
+                        )
+                    )
+
+            return events
 
         return []
 
@@ -814,8 +997,8 @@ class WhatsAppEvolutionAdapter(Adapter):
         if connection.platform != self.platform or connection.status != ConnectionStatus.ACTIVE:
             raise APIError("This channel is not available for sending.", status_code=409, code="channel_unavailable")
 
-        recipient_raw = str(getattr(identity, "platform_user_id", ""))
-        number = _clean_phone(recipient_raw)
+        recipient_raw = str(outbound.recipient_override or getattr(identity, "platform_user_id", ""))
+        number = _clean_recipient(recipient_raw)
         if not _is_supported_recipient(number):
             raise APIError(
                 f"Invalid or unsupported WhatsApp recipient: {recipient_raw}",
@@ -829,18 +1012,72 @@ class WhatsAppEvolutionAdapter(Adapter):
         last_provider_id = ""
         for message in rendered.messages:
             body = message.to_body()
-            blocks = body.get("blocks", [])
+            blocks = list(body.get("blocks", []))
+            raw_buttons = list(body.get("buttons", []))
+            raw_qrs = list(body.get("quick_replies", []))
 
-            # Handle media blocks
-            media_blocks = [b for b in blocks if b.get("type") in ("image", "video", "audio", "file", "ptt")]
-            if media_blocks:
-                for block in media_blocks:
-                    media_url = block.get("url", "")
+            combined_buttons = list(raw_buttons)
+            if raw_qrs:
+                existing_ids = {
+                    str(b.get("id") or b.get("button_id") or "").strip()
+                    for b in raw_buttons
+                    if isinstance(b, dict) and (b.get("id") or b.get("button_id"))
+                }
+                for qr in raw_qrs:
+                    if isinstance(qr, dict) and qr.get("label"):
+                        qr_id = str(qr.get("id") or qr.get("button_id") or "").strip()
+                        if not qr_id or qr_id not in existing_ids:
+                            combined_buttons.append({
+                                "id": qr.get("id"),
+                                "label": str(qr.get("label") or "").strip(),
+                                "action": "postback",
+                                "type": "reply",
+                            })
+                            if qr_id:
+                                existing_ids.add(qr_id)
+
+            norm_buttons = []
+            for b in combined_buttons:
+                norm = _normalize_evolution_button(b)
+                if norm:
+                    norm_buttons.append(norm)
+
+            buttons_sent = False
+            for block in blocks:
+                b_type = block.get("type")
+                if b_type == "text":
+                    text_val = str(block.get("text") or "")
+                    if not text_val:
+                        continue
+                    if norm_buttons and not buttons_sent:
+                        try:
+                            res = client.send_buttons(
+                                number=number,
+                                title="",
+                                description=text_val,
+                                footer="",
+                                buttons=norm_buttons,
+                            )
+                            last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
+                            buttons_sent = True
+                        except APIError as exc:
+                            logger.error("Evolution GO send_buttons failed for connection %s: %s", connection.pk, exc)
+                            return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
+                    else:
+                        try:
+                            res = client.send_text(number=number, text=text_val)
+                            last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
+                        except APIError as exc:
+                            logger.error("Evolution GO send_text failed for connection %s: %s", connection.pk, exc)
+                            return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
+
+                elif b_type in ("image", "video", "audio", "file", "ptt"):
+                    media_url = str(block.get("url", ""))
                     if not media_url:
                         continue
-                    m_kind = block.get("type", "image")
-                    caption = block.get("caption") or block.get("text") or ""
-                    filename = block.get("filename") or ""
+                    m_kind = str(block.get("type", "image"))
+                    caption = str(block.get("caption") or block.get("text") or "")
+                    filename = str(block.get("filename") or "")
                     is_ptt = bool(
                         block.get("is_ptt")
                         or m_kind == "ptt"
@@ -859,25 +1096,95 @@ class WhatsAppEvolutionAdapter(Adapter):
                             filename=filename,
                             ptt=is_ptt,
                         )
-                        last_provider_id = res.get("key", {}).get("id") or res.get("id") or last_provider_id
+                        last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     except APIError as exc:
                         logger.error("Evolution GO send_media failed for connection %s: %s", connection.pk, exc)
                         return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
 
-            # Handle text blocks
-            text_blocks = [b for b in blocks if b.get("type") == "text"]
-            if text_blocks:
-                full_text = "\n\n".join(b.get("text", "") for b in text_blocks if b.get("text"))
-                if full_text:
+                elif b_type == "location":
                     try:
-                        res = client.send_text(number=number, text=full_text)
-                        last_provider_id = res.get("key", {}).get("id") or res.get("id") or last_provider_id
+                        res = client.send_location(
+                            number=number,
+                            latitude=float(block.get("latitude", 0.0)),
+                            longitude=float(block.get("longitude", 0.0)),
+                            name=str(block.get("name", "")),
+                            address=str(block.get("address", "")),
+                        )
+                        last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
                     except APIError as exc:
-                        logger.error("Evolution GO send_text failed for connection %s: %s", connection.pk, exc)
+                        logger.error("Evolution GO send_location failed: %s", exc)
                         return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
 
+                elif b_type == "contact":
+                    try:
+                        res = client.send_contact(
+                            number=number,
+                            full_name=str(block.get("full_name", "")),
+                            phone=str(block.get("phone", "")),
+                            organization=str(block.get("organization", "")),
+                        )
+                        last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
+                    except APIError as exc:
+                        logger.error("Evolution GO send_contact failed: %s", exc)
+                        return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
+
+                elif b_type == "poll":
+                    try:
+                        res = client.send_poll(
+                            number=number,
+                            question=str(block.get("question", "")),
+                            options=list(block.get("options", [])),
+                            max_answers=int(block.get("max_answers", 1)),
+                        )
+                        last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
+                    except APIError as exc:
+                        logger.error("Evolution GO send_poll failed: %s", exc)
+                        return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
+
+                elif b_type == "list":
+                    try:
+                        sections = _normalize_list_sections(list(block.get("sections", [])))
+                        res = client.send_list(
+                            number=number,
+                            title=str(block.get("title", "")),
+                            description=str(block.get("description", "")),
+                            footer_text=str(block.get("footer_text", "")),
+                            button_text=str(block.get("button_text", "Ver Opções")),
+                            sections=sections,
+                        )
+                        last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
+                    except APIError as exc:
+                        logger.error("Evolution GO send_list failed: %s", exc)
+                        return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
+
+                elif b_type == "sticker":
+                    url = str(block.get("url", ""))
+                    if url:
+                        try:
+                            res = client.send_sticker(number=number, url=url)
+                            last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
+                        except APIError as exc:
+                            logger.error("Evolution GO send_sticker failed: %s", exc)
+                            return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
+
+            # If buttons exist but no text block was available, send buttons with default prompt
+            if norm_buttons and not buttons_sent:
+                try:
+                    res = client.send_buttons(
+                        number=number,
+                        title="",
+                        description="Opções:",
+                        footer="",
+                        buttons=norm_buttons,
+                    )
+                    last_provider_id = str(res.get("key", {}).get("id") or res.get("id") or last_provider_id)
+                    buttons_sent = True
+                except APIError as exc:
+                    logger.error("Evolution GO send_buttons failed for connection %s: %s", connection.pk, exc)
+                    return SendResult(SendStatus.FAILED, error=exc.code or "send_failed")
+
         if not last_provider_id:
-            last_provider_id = f"evo:{int(timezone.now().timestamp())}"
+            return SendResult(SendStatus.FAILED, error="no_content_sent")
 
         return SendResult(SendStatus.SENT, provider_message_id=last_provider_id[:200])
 

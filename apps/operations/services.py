@@ -58,7 +58,7 @@ def get_operations_overview(workspace: Workspace) -> dict[str, Any]:
     lead_total = lead_logs_24h.count()
     lead_failed = lead_logs_24h.filter(status="error").count()
 
-    outbound_deliveries_24h = WebhookDelivery.objects.filter(webhook__workspace=workspace, created_at__gte=since_24h)
+    outbound_deliveries_24h = WebhookDelivery.objects.for_workspace(workspace).filter(created_at__gte=since_24h)
     outbound_total = outbound_deliveries_24h.count()
     outbound_failed = outbound_deliveries_24h.filter(status=DeliveryStatus.FAILED).count()
 
@@ -171,8 +171,7 @@ def get_failures_summary(workspace: Workspace) -> dict[str, Any]:
 
     # 4. Failed Outbound Webhooks
     failed_outbound = list(
-        WebhookDelivery.objects.filter(
-            webhook__workspace=workspace,
+        WebhookDelivery.objects.for_workspace(workspace).filter(
             status=DeliveryStatus.FAILED,
         )
         .select_related("webhook")
@@ -292,51 +291,66 @@ def test_channel_connection(workspace: Workspace, connection_id: str | UUID) -> 
         return {"success": False, "status": "not_found", "message": "Canal não encontrado."}
 
     # WhatsApp Evolution
-    if hasattr(conn, "evolution_session"):
-        session: EvolutionSession = conn.evolution_session
-        api_url = session.api_url or ""
-        instance = session.instance_id or ""
+    if conn.platform == "whatsapp_evolution" or hasattr(conn, "evolution_session"):
+        from apps.channels.providers.whatsapp_evolution import WhatsAppEvolutionAdapter
 
-        if not api_url or not instance:
+        adapter = WhatsAppEvolutionAdapter()
+        client = adapter.get_client(conn)
+
+        if not client.api_url or not (client.api_key or client.instance_id):
+            conn.status = ConnectionStatus.NEEDS_REAUTH
+            conn.save(update_fields=["status"])
             return {
                 "success": False,
                 "status": "unconfigured",
-                "message": "Instância Evolution GO não configurada (URL ou Nome da Instância ausente).",
+                "message": "Instância Evolution GO não configurada (URL ou credenciais ausentes).",
             }
 
-        try:
-            import urllib.request
-            import json
+        session = getattr(conn, "evolution_session", None)
+        if not session:
+            session = EvolutionSession.objects.filter(connection=conn).first()
 
-            # Safe timeout query to instance state
-            url = f"{api_url.rstrip('/')}/instance/connectionState/{instance}"
-            api_key = conn.credentials.get("apikey", "") if isinstance(conn.credentials, dict) else ""
-            req = urllib.request.Request(
-                url,
-                headers={"apikey": api_key, "Content-Type": "application/json"},
-                method="GET",
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                state = data.get("instance", {}).get("state", "unknown")
-                session.state = state
-                if state == "open":
+        try:
+            res = client.get_status()
+            state = "unknown"
+            if isinstance(res, dict):
+                inst = res.get("instance") if isinstance(res.get("instance"), dict) else {}
+                st = res.get("state") or inst.get("state") or inst.get("status") or res.get("status") or ""
+                if st:
+                    state = str(st).lower()
+
+            if state in ("open", "connected"):
+                if session:
+                    session.state = "open"
                     session.last_connected_at = timezone.now()
                     session.last_error = ""
-                    conn.status = ConnectionStatus.ACTIVE
-                else:
-                    session.last_disconnected_at = timezone.now()
-                    session.last_error = f"Evolution retornou estado: {state}"
-                session.save(update_fields=["state", "last_connected_at", "last_disconnected_at", "last_error"])
+                    session.save(update_fields=["state", "last_connected_at", "last_error"])
+                conn.status = ConnectionStatus.ACTIVE
                 conn.save(update_fields=["status"])
                 return {
-                    "success": state == "open",
+                    "success": True,
+                    "status": "open",
+                    "message": "Instância conectada e pronta (OPEN).",
+                }
+            else:
+                if session:
+                    session.state = state
+                    session.last_disconnected_at = timezone.now()
+                    session.last_error = f"Evolution retornou estado: {state}"
+                    session.save(update_fields=["state", "last_disconnected_at", "last_error"])
+                conn.status = ConnectionStatus.NEEDS_REAUTH
+                conn.save(update_fields=["status"])
+                return {
+                    "success": False,
                     "status": state,
-                    "message": f"Status sincronizado: {state.upper()}",
+                    "message": f"Instância desconectada ou pendente: {state.upper()}",
                 }
         except Exception as exc:
-            session.last_error = str(exc)
-            session.save(update_fields=["last_error"])
+            if session:
+                session.last_error = str(exc)
+                session.save(update_fields=["last_error"])
+            conn.status = ConnectionStatus.NEEDS_REAUTH
+            conn.save(update_fields=["status"])
             return {
                 "success": False,
                 "status": "error",
@@ -346,19 +360,47 @@ def test_channel_connection(workspace: Workspace, connection_id: str | UUID) -> 
     # Instagram
     if conn.platform == "instagram":
         from apps.channels import instagram_oauth
+        from apps.channels.providers.exceptions import APIError
+
         try:
             token = instagram_oauth.access_token(conn)
-            if token:
-                conn.status = ConnectionStatus.ACTIVE
-                conn.save(update_fields=["status"])
-                return {"success": True, "status": "active", "message": "Token do Instagram ativo e válido."}
-            else:
+            if not token:
                 conn.status = ConnectionStatus.NEEDS_REAUTH
                 conn.save(update_fields=["status"])
-                return {"success": False, "status": "needs_reauth", "message": "Token ausente ou expirado."}
+                return {"success": False, "status": "needs_reauth", "message": "Token do Instagram ausente."}
+
+            expires = instagram_oauth.token_expires_at(conn)
+            if expires and expires <= timezone.now():
+                conn.status = ConnectionStatus.NEEDS_REAUTH
+                conn.save(update_fields=["status"])
+                return {
+                    "success": False,
+                    "status": "needs_reauth",
+                    "message": f"Token expirou em {expires.strftime('%d/%m/%Y %H:%M')}.",
+                }
+
+            # Actively verify token validity against Meta Graph API
+            profile = instagram_oauth.account_profile(token)
+            username = profile.get("username", "")
+
+            conn.status = ConnectionStatus.ACTIVE
+            conn.save(update_fields=["status"])
+            return {
+                "success": True,
+                "status": "active",
+                "message": f"Token verificado na Meta com sucesso (@{username}).",
+            }
+        except APIError as exc:
+            conn.status = ConnectionStatus.NEEDS_REAUTH
+            conn.save(update_fields=["status"])
+            return {
+                "success": False,
+                "status": "needs_reauth",
+                "message": f"Token recusado pela Meta: {exc}",
+            }
         except Exception as exc:
             conn.status = ConnectionStatus.NEEDS_REAUTH
             conn.save(update_fields=["status"])
-            return {"success": False, "status": "error", "message": f"Erro de autenticação Meta: {exc}"}
+            return {"success": False, "status": "error", "message": f"Erro verificando conta Meta: {exc}"}
 
     return {"success": True, "status": conn.status, "message": f"Canal verificado: {conn.get_status_display()}"}

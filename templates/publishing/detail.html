@@ -57,7 +57,7 @@
     </div>
     {% endif %}
 
-    {% if post.last_error %}
+    {% if post.last_error and post.status == 'failed' %}
     <div class="p-4 bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-900 rounded-xl">
         <div class="flex items-start justify-between">
             <div>
@@ -91,12 +91,22 @@
                 </p>
             </div>
         </div>
-        <form method="post" action="{% url 'publishing:refresh' workspace_id=request.workspace.id post_id=post.id %}">
-            {% csrf_token %}
-            <button type="submit" class="btn-pill-secondary text-xs py-1 px-2.5">
-                Atualizar Agora
-            </button>
-        </form>
+        <div class="flex items-center gap-2">
+            {% if "claim:" in post.container_id %}
+            <form method="post" action="{% url 'publishing:retry' workspace_id=request.workspace.id post_id=post.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-primary text-xs py-1 px-2.5">
+                    Destravar e Tentar Novamente
+                </button>
+            </form>
+            {% endif %}
+            <form method="post" action="{% url 'publishing:refresh' workspace_id=request.workspace.id post_id=post.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-secondary text-xs py-1 px-2.5">
+                    Atualizar Agora
+                </button>
+            </form>
+        </div>
     </div>
     {% endif %}
 
@@ -181,11 +191,11 @@
                     </a>
                     {% endif %}
 
-                    {% if post.status == "failed" %}
+                    {% if post.status == "failed" or post.status == "publishing" and "claim:" in post.container_id %}
                     <form method="post" action="{% url 'publishing:retry' workspace_id=request.workspace.id post_id=post.id %}">
                         {% csrf_token %}
                         <button type="submit" class="btn-pill-primary text-xs">
-                            Repetir Tentativa
+                            {% if post.status == "publishing" %}Destravar e Reenviar{% else %}Repetir Tentativa{% endif %}
                         </button>
                     </form>
                     {% endif %}

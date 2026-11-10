@@ -37,6 +37,7 @@ from apps.members.requests import WorkspaceRequest
 from apps.members.roles import WorkspaceRole
 
 __all__ = [
+    "render_trigger_panel",
     "trigger_create",
     "trigger_delete",
     "trigger_form",
@@ -69,6 +70,17 @@ _RULE_EVENTS: list[tuple[str, str]] = [
 ]
 
 
+def render_trigger_panel(request: WorkspaceRequest, flow: Flow) -> HttpResponse:
+    """Render the triggers drawer body for a flow, usable from GET or POST."""
+    context = _panel_context(request, flow)
+    focus = (request.GET.get("trigger") or "").strip()
+    if focus and context["can_edit"]:
+        focused = next((row["trigger"] for row in context["triggers"] if str(row["trigger"].pk) == focus), None)
+        if focused is not None:
+            context.update(_form_context(request, flow, focused, focused.type))
+    return render(request, "flows/_triggers_panel.html", context)
+
+
 @login_required
 @require_workspace_member
 @require_GET
@@ -84,13 +96,7 @@ def trigger_panel(request: WorkspaceRequest, workspace_id: str, flow_id: str) ->
     another workspace simply does not match, so it is not an existence oracle.
     """
     flow = get_scoped_object_or_404(Flow, request.workspace, pk=flow_id)
-    context = _panel_context(request, flow)
-    focus = (request.GET.get("trigger") or "").strip()
-    if focus and context["can_edit"]:
-        focused = next((row["trigger"] for row in context["triggers"] if str(row["trigger"].pk) == focus), None)
-        if focused is not None:
-            context.update(_form_context(request, flow, focused, focused.type))
-    return render(request, "flows/_triggers_panel.html", context)
+    return render_trigger_panel(request, flow)
 
 
 @login_required

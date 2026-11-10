@@ -48,6 +48,11 @@ class Capabilities:
     file: bool = False
     card: bool = False
     gallery: bool = False
+    location: bool = False
+    contact: bool = False
+    poll: bool = False
+    list: bool = False
+    sticker: bool = False
 
     # -- interaction --------------------------------------------------------
     buttons: bool = False
@@ -148,7 +153,7 @@ class Capabilities:
 #: The capability names that describe a renderable block. Kept as a frozen set
 #: so ``supports_block`` cannot be talked into reading ``inbound`` or
 #: ``broadcast_allowed`` by passing their names as a block kind.
-_BLOCK_FLAGS = frozenset({"text", "image", "audio", "video", "file", "card", "gallery"})
+_BLOCK_FLAGS = frozenset({"text", "image", "audio", "video", "file", "card", "gallery", "location", "contact", "poll", "list", "sticker"})
 
 #: The block kinds that name a file and therefore have a byte ceiling. A subset
 #: of :data:`_BLOCK_FLAGS`: text, cards and galleries are structure rather than
@@ -338,8 +343,17 @@ CAPABILITIES: dict[str, Capabilities] = {
         video=True,
         file=True,
         buttons=True,
+        quick_replies=True,
+        url_buttons=True,
+        location=True,
+        contact=True,
+        poll=True,
+        list=True,
+        sticker=True,
         proactive_send=True,
         broadcast_allowed=True,
+        max_buttons=10,
+        max_quick_replies=10,
         max_text_len=4096,
         max_image_bytes=25 * _MB,
         max_audio_bytes=25 * _MB,

@@ -35,10 +35,15 @@ from apps.channels.events import (
     Block,
     Button,
     CardBlock,
+    ContactBlock,
     GalleryBlock,
+    ListBlock,
+    LocationBlock,
     MediaBlock,
     OutboundMessage,
+    PollBlock,
     QuickReply,
+    StickerBlock,
     TextBlock,
 )
 
@@ -112,6 +117,7 @@ def downgrade(outbound: OutboundMessage, capabilities: Capabilities) -> Downgrad
         template_ref=outbound.template_ref,
         template_variables=outbound.template_variables,
         node_id=outbound.node_id,
+        recipient_override=outbound.recipient_override,
     )
 
 
@@ -143,8 +149,72 @@ class _State:
             self.add_card(block)
         elif isinstance(block, MediaBlock):
             self.add_media(block)
+        elif isinstance(block, LocationBlock):
+            self.add_location(block)
+        elif isinstance(block, ContactBlock):
+            self.add_contact(block)
+        elif isinstance(block, PollBlock):
+            self.add_poll(block)
+        elif isinstance(block, ListBlock):
+            self.add_list(block)
+        elif isinstance(block, StickerBlock):
+            self.add_sticker(block)
         else:
             self.current.blocks.append(block)
+
+    def add_location(self, block: LocationBlock) -> None:
+        if self.caps.location:
+            self.current.blocks.append(block)
+            return
+        lines = [line for line in (block.name, block.address) if line]
+        maps_url = f"https://maps.google.com/?q={block.latitude},{block.longitude}"
+        lines.append(maps_url)
+        self.current.blocks.append(TextBlock(text="\n".join(lines)))
+
+    def add_contact(self, block: ContactBlock) -> None:
+        if self.caps.contact:
+            self.current.blocks.append(block)
+            return
+        lines = [line for line in (block.full_name, block.phone, block.organization) if line]
+        self.current.blocks.append(TextBlock(text="\n".join(lines)))
+
+    def add_poll(self, block: PollBlock) -> None:
+        if self.caps.poll:
+            self.current.blocks.append(block)
+            return
+        lines = [block.question]
+        for i, opt in enumerate(block.options, start=1):
+            lines.append(f"{i}. {opt}")
+        self.current.blocks.append(TextBlock(text="\n".join(lines)))
+
+    def add_list(self, block: ListBlock) -> None:
+        if self.caps.list:
+            self.current.blocks.append(block)
+            return
+        lines = [line for line in (block.title, block.description) if line]
+        for section in block.sections:
+            if isinstance(section, dict):
+                s_title = section.get("title")
+                if s_title:
+                    lines.append(f"[{s_title}]")
+                for row in section.get("rows") or []:
+                    if isinstance(row, dict):
+                        r_title = row.get("title") or ""
+                        r_desc = row.get("description") or ""
+                        row_line = f"• {r_title}" + (f" - {r_desc}" if r_desc else "")
+                        lines.append(row_line)
+        if block.footer_text:
+            lines.append(block.footer_text)
+        self.current.blocks.append(TextBlock(text="\n".join(lines)))
+
+    def add_sticker(self, block: StickerBlock) -> None:
+        if self.caps.sticker:
+            self.current.blocks.append(block)
+            return
+        if self.caps.image:
+            self.add_media(MediaBlock(kind="image", url=block.url))
+        else:
+            self.current.blocks.append(TextBlock(text=block.url))
 
     def add_gallery(self, block: GalleryBlock) -> None:
         """gallery -> sequential messages, one per card (SPEC §6.1)."""
@@ -274,6 +344,7 @@ class _State:
         template_ref: str | None,
         template_variables: tuple[tuple[str, str], ...] = (),
         node_id: str = "",
+        recipient_override: str = "",
     ) -> DowngradeResult:
         """Append trailers, apply the length cap, and freeze into messages.
 
@@ -298,6 +369,7 @@ class _State:
                     template_ref=template_ref,
                     template_variables=template_variables,
                     node_id=node_id,
+                    recipient_override=recipient_override,
                 )
             )
 

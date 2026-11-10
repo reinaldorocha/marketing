@@ -45,6 +45,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from apps.channels import instagram_oauth as oauth
 from apps.channels.forms import DUPLICATE_ACCOUNT_ERROR
 from apps.channels.models import ChannelConnection, ConnectionStatus, InstagramProfileSettings
+from apps.flows.models import Flow, FlowStatus
 from apps.channels.plan import plan_refusal
 from apps.channels.providers import instagram
 from apps.channels.providers.exceptions import APIError
@@ -427,9 +428,14 @@ def instagram_ice_breakers(request: WorkspaceRequest, workspace_id: str, connect
             items = []
             for i in range(1, 5):
                 q = request.POST.get(f"question_{i}", "").strip()
+                flow_id = request.POST.get(f"flow_id_{i}", "").strip()
                 p = request.POST.get(f"payload_{i}", "").strip()
                 if q:
-                    items.append({"question": q[:80], "payload": (p or q)[:1000]})
+                    if flow_id:
+                        final_payload = f"flow:{flow_id}"
+                    else:
+                        final_payload = p or q
+                    items.append({"question": q[:80], "payload": final_payload[:1000]})
 
             try:
                 if items:
@@ -447,10 +453,21 @@ def instagram_ice_breakers(request: WorkspaceRequest, workspace_id: str, connect
             except Exception as exc:
                 error_msg = f"Falha ao sincronizar com a Meta: {exc}"
 
+    raw_flows = (
+        Flow.objects.for_workspace(request.workspace)
+        .filter(status=FlowStatus.ACTIVE, versions__published=True)
+        .distinct()
+        .order_by("name")
+    )
+    available_flows = []
+    for fl in raw_flows:
+        fl.flow_payload = f"flow:{fl.id}"
+        available_flows.append(fl)
     context = {
         "connection": connection,
         "settings": settings,
         "ice_breakers": settings.ice_breakers,
+        "available_flows": available_flows,
         "error_msg": error_msg,
         "success_msg": success_msg,
     }
@@ -516,14 +533,18 @@ def instagram_persistent_menu(request: WorkspaceRequest, workspace_id: str, conn
             titles = request.POST.getlist("menu_title")
             types = request.POST.getlist("menu_type")
             values = request.POST.getlist("menu_value")
+            flow_ids = request.POST.getlist("menu_flow_id")
 
-            for t, kind, val in zip(titles, types, values):
+            for idx, (t, kind) in enumerate(zip(titles, types)):
                 t = t.strip()
-                val = val.strip()
+                val = values[idx].strip() if idx < len(values) else ""
+                flow_id = flow_ids[idx].strip() if idx < len(flow_ids) else ""
                 if not t:
                     continue
                 if kind == "web_url":
                     items.append({"type": "web_url", "title": t[:30], "url": val})
+                elif kind == "flow" and flow_id:
+                    items.append({"type": "postback", "title": t[:30], "payload": f"flow:{flow_id}"})
                 else:
                     items.append({"type": "postback", "title": t[:30], "payload": (val or t)[:1000]})
 
@@ -543,10 +564,21 @@ def instagram_persistent_menu(request: WorkspaceRequest, workspace_id: str, conn
             except Exception as exc:
                 error_msg = f"Falha ao sincronizar menu na Meta: {exc}"
 
+    raw_flows = (
+        Flow.objects.for_workspace(request.workspace)
+        .filter(status=FlowStatus.ACTIVE, versions__published=True)
+        .distinct()
+        .order_by("name")
+    )
+    available_flows = []
+    for fl in raw_flows:
+        fl.flow_payload = f"flow:{fl.id}"
+        available_flows.append(fl)
     context = {
         "connection": connection,
         "settings": settings,
         "menu_items": settings.persistent_menu,
+        "available_flows": available_flows,
         "error_msg": error_msg,
         "success_msg": success_msg,
     }

@@ -47,6 +47,22 @@ export function sourceHandles(spec: NodeTypeSpec, config: unknown): string[] {
       }
     }
   }
+  const blocks = config["blocks"];
+  if (Array.isArray(blocks)) {
+    for (const block of blocks) {
+      if (isRecord(block) && block["type"] === "list" && Array.isArray(block["sections"])) {
+        for (const section of block["sections"]) {
+          if (isRecord(section) && Array.isArray(section["rows"])) {
+            for (const row of section["rows"]) {
+              if (isRecord(row) && typeof row["id"] === "string") {
+                handles.push(`btn:${row["id"]}`);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   return handles;
 }
 
@@ -95,6 +111,20 @@ export function handleLabel(handle: string, config: unknown): string {
       }
       if (typeof item["weight"] === "number") {
         return `${item["weight"]}%`;
+      }
+    }
+  }
+  if (prefix === "btn" && isRecord(config) && Array.isArray(config["blocks"])) {
+    for (const block of config["blocks"] as unknown[]) {
+      if (isRecord(block) && block["type"] === "list" && Array.isArray(block["sections"])) {
+        for (const section of block["sections"] as unknown[]) {
+          if (isRecord(section) && Array.isArray(section["rows"])) {
+            const row = (section["rows"] as unknown[]).find((r) => isRecord(r) && r["id"] === id);
+            if (isRecord(row) && typeof row["title"] === "string" && row["title"]) {
+              return row["title"];
+            }
+          }
+        }
       }
     }
   }

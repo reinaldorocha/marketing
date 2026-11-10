@@ -95,6 +95,13 @@ def waiting_execution(context: RoutingContext) -> HookOutcome:
     if context.event.type not in REPLY_EVENTS or context.contact is None:
         return Passed("not a reply")
 
+    # Direct flow postbacks (persistent menu, ice breakers) and follower checks do not target waiting executions
+    if context.event.type == EventType.POSTBACK:
+        extra = context.event.payload.extra if isinstance(context.event.payload.extra, dict) else {}
+        raw_payload = str(extra.get("payload") or "")
+        if raw_payload.startswith("flow:") or raw_payload.startswith("ig_follow_check:"):
+            return Passed("flow or follower check postback not for waiting execution")
+
     execution = waiting_execution_for(context)
     if execution is None:
         return Passed("nothing waiting")
@@ -107,6 +114,22 @@ def waiting_execution(context: RoutingContext) -> HookOutcome:
 
 def trigger_match(context: RoutingContext) -> HookOutcome:
     """SPEC §9.3 step 3: the first trigger that matches, in priority order."""
+    if context.event.type == EventType.POSTBACK:
+        extra = context.event.payload.extra if isinstance(context.event.payload.extra, dict) else {}
+        raw_payload = str(extra.get("payload") or "")
+        if raw_payload.startswith("flow:"):
+            return _handle_flow_postback(context, raw_payload)
+        if raw_payload.startswith("ig_follow_check:"):
+            from apps.channels.providers.instagram import _handle_follow_recheck
+            _handle_follow_recheck(
+                context.connection,
+                context.event.platform_user_id,
+                raw_payload,
+                event_id=context.event.provider_event_id,
+                when=context.event.timestamp,
+            )
+            return Consumed("follower check handled")
+
     found = match(MatchContext.from_event(context.connection, context.event, contact=context.contact))
     if found is None:
         return Passed("no trigger matched")
@@ -122,9 +145,138 @@ def trigger_match(context: RoutingContext) -> HookOutcome:
         # off the claim.
         return _claim_comment(context, found.trigger, found.variables)
 
+    # Always enrich Instagram contact data if on Instagram (Point 12)
+    if context.connection.platform == "instagram":
+        from apps.channels.providers.instagram import enrich_instagram_contact
+        enrich_instagram_contact(context.connection, context.event.platform_user_id)
+
+    # Check follower gate for matched flow if on Instagram
+    if context.connection.platform == "instagram":
+        from apps.channels.instagram_oauth import access_token
+        from apps.channels.providers.instagram import (
+            check_is_follower,
+            enrich_instagram_contact,
+            get_flow_follower_settings,
+            send_follower_gate_message,
+        )
+
+        flow_settings = get_flow_follower_settings(found.trigger.flow, context.connection)
+        if flow_settings.require_follower:
+            sender_id = context.event.platform_user_id
+            token = access_token(context.connection)
+            is_follower, profile = check_is_follower(sender_id, token)
+            if profile:
+                enrich_instagram_contact(context.connection, sender_id, token, profile_data=profile)
+            # Point 5: Only explicit True allows bypass; None or False keeps gate closed
+            if is_follower is not True:
+                logger.info(
+                    "Instagram: sender %s does not follow profile; sending follower gate prompt for flow %s",
+                    sender_id,
+                    found.trigger.flow_id,
+                )
+                try:
+                    send_follower_gate_message(
+                        context.connection,
+                        {"id": sender_id},
+                        f"flow:{found.trigger.flow_id}",
+                        flow_settings,
+                        comment_text=context.event.payload.text or "",
+                        sender_id=sender_id,
+                    )
+                except Exception as exc:
+                    logger.warning("Instagram: failed to send follower gate prompt for flow: %s", exc)
+                return Consumed("awaiting follower confirmation")
+
     if not _start(context, found.trigger, found.variables):
         return Passed("the matched flow could not run")
     return Consumed(f"{found.trigger.type} trigger")
+
+
+def _handle_flow_postback(context: RoutingContext, raw_payload: str) -> HookOutcome:
+    """Handle direct flow trigger from persistent menu or ice breakers."""
+    from uuid import UUID
+    from apps.flows.models import Flow, FlowStatus
+    from apps.flows.services import published_version
+
+    parts = raw_payload.split(":", 1)
+    flow_id_str = parts[1].strip() if len(parts) > 1 else ""
+    try:
+        flow_uuid = UUID(flow_id_str)
+    except (ValueError, TypeError):
+        logger.info("Invalid flow ID %r in postback payload; ignored.", flow_id_str)
+        return Passed("invalid flow id")
+
+    # Scoped to workspace and active
+    flow = (
+        Flow.objects.for_workspace(context.connection.workspace_id)
+        .filter(pk=flow_uuid, status=FlowStatus.ACTIVE)
+        .first()
+    )
+    if flow is None:
+        logger.info(
+            "Flow %s not found, inactive, or foreign to workspace %s; ignored.",
+            flow_id_str,
+            context.connection.workspace_id,
+        )
+        return Passed("flow not found, inactive or foreign")
+
+    # Point 2: Use published_version() to avoid UnscopedQueryError on flow.versions
+    if published_version(flow) is None:
+        logger.info("Flow %s has no published version; ignored.", flow_id_str)
+        return Passed("flow has no published version")
+
+    if context.connection.platform == "instagram":
+        from apps.channels.instagram_oauth import access_token
+        from apps.channels.providers.instagram import (
+            check_is_follower,
+            enrich_instagram_contact,
+            get_flow_follower_settings,
+            send_follower_gate_message,
+        )
+
+        flow_settings = get_flow_follower_settings(flow, context.connection)
+        enrich_instagram_contact(context.connection, context.event.platform_user_id)
+        if flow_settings.require_follower:
+            sender_id = context.event.platform_user_id
+            token = access_token(context.connection)
+            is_follower, profile = check_is_follower(sender_id, token)
+            if profile:
+                enrich_instagram_contact(context.connection, sender_id, token, profile_data=profile)
+            # Point 5: Only explicit True allows bypass; None or False keeps gate closed
+            if is_follower is not True:
+                logger.info(
+                    "Instagram: sender %s does not follow profile; sending follower gate prompt for flow %s",
+                    sender_id,
+                    flow.id,
+                )
+                try:
+                    send_follower_gate_message(
+                        context.connection,
+                        {"id": sender_id},
+                        f"flow:{flow.id}",
+                        flow_settings,
+                        sender_id=sender_id,
+                    )
+                except Exception as exc:
+                    logger.warning("Instagram: failed to send follower gate prompt for flow: %s", exc)
+                return Consumed("awaiting follower confirmation")
+
+    if context.contact is None:
+        return Consumed("awaiting contact for flow postback")
+
+    try:
+        start_flow(
+            context.contact,
+            flow,
+            started_by=StartedBy.stamp(StartedBy.TRIGGER, f"postback:{flow.id}"),
+            variables={"trigger_type": "postback", "payload": raw_payload},
+            connection=context.connection,
+        )
+    except FlowNotRunnableError as exc:
+        logger.warning("Flow %s cannot run from postback: %s", flow.id, exc)
+        return Passed("the flow could not run")
+
+    return Consumed("flow postback")
 
 
 class _StartFailedError(Exception):
@@ -139,6 +291,43 @@ def default_reply(context: RoutingContext) -> HookOutcome:
     trigger = default_reply_trigger_for(context)
     if trigger is None:
         return Passed("no default reply configured")
+
+    # Point 6: Verify follower gate for default reply if on Instagram
+    if context.connection.platform == "instagram":
+        from apps.channels.instagram_oauth import access_token
+        from apps.channels.providers.instagram import (
+            check_is_follower,
+            enrich_instagram_contact,
+            get_flow_follower_settings,
+            send_follower_gate_message,
+        )
+
+        flow_settings = get_flow_follower_settings(trigger.flow, context.connection)
+        enrich_instagram_contact(context.connection, context.event.platform_user_id)
+        if flow_settings.require_follower:
+            sender_id = context.event.platform_user_id
+            token = access_token(context.connection)
+            is_follower, profile = check_is_follower(sender_id, token)
+            if profile:
+                enrich_instagram_contact(context.connection, sender_id, token, profile_data=profile)
+            if is_follower is not True:
+                logger.info(
+                    "Instagram: sender %s does not follow profile; sending follower gate prompt for default reply flow %s",
+                    sender_id,
+                    trigger.flow_id,
+                )
+                try:
+                    send_follower_gate_message(
+                        context.connection,
+                        {"id": sender_id},
+                        f"flow:{trigger.flow_id}",
+                        flow_settings,
+                        comment_text=context.event.payload.text or "",
+                        sender_id=sender_id,
+                    )
+                except Exception as exc:
+                    logger.warning("Instagram: failed to send follower gate prompt for default reply: %s", exc)
+                return Consumed("awaiting follower confirmation")
 
     # The claim has to be taken *before* the send, or two events arriving
     # together would both find the guard open. But a claim taken and then not

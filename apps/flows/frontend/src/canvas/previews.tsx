@@ -54,24 +54,68 @@ function SendMessagePreview({ config }: PreviewProps) {
   const blocks = list(isRecord(config) ? config["blocks"] : undefined);
   const first = blocks[0];
   const text = blocks.find((block) => block["type"] === "text");
+  const recipientType = isRecord(config) && typeof config["recipient_type"] === "string" ? config["recipient_type"] : "contact";
+
+  let mainPreview: ReactNode = null;
+  if (text && typeof text["text"] === "string") {
+    mainPreview = <p>{truncate(text["text"])}</p>;
+  } else if (first) {
+    const fType = String(first["type"] ?? "block");
+    if (fType === "location") {
+      mainPreview = <p>📍 {truncate(String(first["name"] || first["address"] || "Localização"))}</p>;
+    } else if (fType === "contact") {
+      mainPreview = <p>👤 {truncate(String(first["full_name"] || first["phone"] || "Contato"))}</p>;
+    } else if (fType === "poll") {
+      mainPreview = <p>📊 {truncate(String(first["question"] || "Enquete"))}</p>;
+    } else if (fType === "list") {
+      mainPreview = <p>📋 {truncate(String(first["title"] || first["description"] || "Lista"))}</p>;
+    } else if (fType === "sticker") {
+      mainPreview = <p>🎭 Figurinha (Sticker)</p>;
+    } else {
+      mainPreview = (
+        <Empty>
+          {fType}
+          {blocks.length > 1 ? ` +${blocks.length - 1}` : ""}
+        </Empty>
+      );
+    }
+  } else {
+    mainPreview = <Empty>Nothing to send yet</Empty>;
+  }
+
+  const listRows: string[] = [];
+  for (const block of blocks) {
+    if (block["type"] === "list" && Array.isArray(block["sections"])) {
+      for (const sec of block["sections"]) {
+        if (isRecord(sec) && Array.isArray(sec["rows"])) {
+          for (const r of sec["rows"]) {
+            if (isRecord(r) && typeof r["title"] === "string" && r["title"]) {
+              listRows.push(r["title"]);
+            }
+          }
+        }
+      }
+    }
+  }
 
   return (
     <>
-      {text && typeof text["text"] === "string" ? (
-        <p>{truncate(text["text"])}</p>
-      ) : first ? (
-        <Empty>
-          {String(first["type"] ?? "block")}
-          {blocks.length > 1 ? ` +${blocks.length - 1}` : ""}
-        </Empty>
-      ) : (
-        <Empty>Nothing to send yet</Empty>
-      )}
+      {recipientType === "group" ? (
+        <span className="text-[10px] uppercase font-semibold tracking-wider text-emerald-600 block mb-1">
+          👥 Grupo WhatsApp
+        </span>
+      ) : recipientType === "custom" ? (
+        <span className="text-[10px] uppercase font-semibold tracking-wider text-blue-600 block mb-1">
+          📞 Telefone específico
+        </span>
+      ) : null}
+      {mainPreview}
       <Pills items={list(isRecord(config) ? config["buttons"] : undefined).map((b) => String(b["label"] ?? ""))} />
       <Pills
         quick
         items={list(isRecord(config) ? config["quick_replies"] : undefined).map((q) => String(q["label"] ?? ""))}
       />
+      {listRows.length > 0 ? <Pills items={listRows} /> : null}
     </>
   );
 }
@@ -182,6 +226,16 @@ function SmartDelayPreview({ config }: PreviewProps) {
   }
   if (isRecord(config["duration"])) {
     const duration = config["duration"];
+    if (duration["delay_mode"] === "random") {
+      const minVal = duration["min_value"] ?? duration["min_delay"] ?? "?";
+      const maxVal = duration["max_value"] ?? duration["max_delay"] ?? "?";
+      const unit = String(duration["unit"] ?? "seconds");
+      return (
+        <p>
+          Wait {String(minVal)} to {String(maxVal)} {unit}
+        </p>
+      );
+    }
     return (
       <p>
         Wait {String(duration["value"] ?? "?")} {String(duration["unit"] ?? "")}

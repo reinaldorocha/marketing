@@ -169,6 +169,7 @@ def context_for(
     variables: dict[str, Any] | None = None,
     *,
     custom_fields: dict[str, Any] | None = None,
+    connection: Any = None,
 ) -> RenderContext:
     """Assemble a :class:`RenderContext` for one contact and one variable bag.
 
@@ -183,9 +184,70 @@ def context_for(
     """
     system = {name: _coerce(getattr(contact, name, "")) for name in SYSTEM_FIELDS}
 
+    conn = connection or getattr(contact, "_connection", None) or getattr(contact, "connection", None)
+    if conn is None and isinstance(variables, dict):
+        conn = variables.get("connection") or variables.get("_connection")
+
+    # Extract Instagram enrichment fields if present on contact/identity
+    if contact is not None:
+        ig_extra = getattr(contact, "instagram_profile", None)
+        if ig_extra is None and hasattr(contact, "channel_identities"):
+            try:
+                ws = getattr(contact, "workspace_id", None) or getattr(contact, "workspace", None)
+                qs = contact.channel_identities
+                if ws and hasattr(qs, "for_workspace"):
+                    qs = qs.for_workspace(ws)
+                qs = qs.filter(platform="instagram")
+                if conn is not None:
+                    conn_id = getattr(conn, "pk", conn)
+                    ident = qs.filter(channel_connection_id=conn_id).first()
+                else:
+                    ident = qs.first()
+                if ident and isinstance(ident.extra, dict):
+                    ig_extra = ident.extra
+            except Exception:
+                pass
+        if ig_extra is None:
+            attrs = {}
+            for attr in (
+                "username",
+                "instagram_username",
+                "name",
+                "instagram_name",
+                "follower_count",
+                "instagram_follower_count",
+                "is_user_follow_business",
+                "is_follower",
+                "is_business_follow_user",
+            ):
+                if hasattr(contact, attr) and getattr(contact, attr) is not None:
+                    attrs[attr] = getattr(contact, attr)
+            if attrs:
+                ig_extra = attrs
+        if isinstance(ig_extra, dict):
+            if "username" in ig_extra or "instagram_username" in ig_extra:
+                u = ig_extra.get("username") or ig_extra.get("instagram_username")
+                system["instagram_username"] = _coerce(u)
+                system.setdefault("username", _coerce(u))
+            if "name" in ig_extra or "instagram_name" in ig_extra:
+                n = ig_extra.get("name") or ig_extra.get("instagram_name")
+                system["instagram_name"] = _coerce(n)
+            fc = ig_extra.get("follower_count") if "follower_count" in ig_extra else ig_extra.get("instagram_follower_count")
+            if fc is not None:
+                system["instagram_follower_count"] = _coerce(fc)
+                system.setdefault("follower_count", _coerce(fc))
+            foll = ig_extra.get("is_user_follow_business") if "is_user_follow_business" in ig_extra else ig_extra.get("is_follower")
+            if foll is not None:
+                system["is_user_follow_business"] = _coerce(foll)
+                system["is_follower"] = _coerce(foll)
+            if "is_business_follow_user" in ig_extra and ig_extra["is_business_follow_user"] is not None:
+                system["is_business_follow_user"] = _coerce(ig_extra["is_business_follow_user"])
+
     fields: dict[str, Any] = {}
     if custom_fields is not None:
         fields = {str(name).casefold(): _coerce(value) for name, value in custom_fields.items()}
+    elif contact is not None and isinstance(getattr(contact, "custom_fields", None), dict):
+        fields = {str(name).casefold(): _coerce(value) for name, value in contact.custom_fields.items()}
     elif contact is not None and getattr(contact, "pk", None) is not None:
         fields = _custom_fields_for(contact)
 

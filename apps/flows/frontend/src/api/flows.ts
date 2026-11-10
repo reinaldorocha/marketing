@@ -114,3 +114,82 @@ export function fetchPicker(env: BuilderEnv, query: PickerQuery = {}): Promise<P
   const suffix = params.toString();
   return request<PickerPayload>(suffix ? `${env.mediaPickerUrl}?${suffix}` : env.mediaPickerUrl);
 }
+
+
+export interface SimulatorTraceItem {
+  type: "bot_message" | "user_reply" | "system" | "error";
+  timestamp: string;
+  node_id?: string;
+  kind?: string;
+  message?: string;
+  text?: string;
+  button_id?: string;
+  recipient_override?: string;
+  blocks?: Array<Record<string, unknown>>;
+  buttons?: Array<{
+    id: string;
+    label: string;
+    action?: string;
+    url?: string;
+    copy_code?: string;
+    phone_number?: string;
+    pix_key?: string;
+    pix_name?: string;
+    currency?: string;
+  }>;
+  quick_replies?: Array<{ id: string; label: string }>;
+  is_retry?: boolean;
+}
+
+export interface SimulatorState {
+  session_id: string;
+  workspace_id: string;
+  flow_id: string;
+  status: "idle" | "running" | "waiting_reply" | "waiting_delay" | "completed" | "failed";
+  virtual_time: string;
+  virtual_contact: {
+    first_name: string;
+    last_name: string;
+    phone: string;
+    email: string;
+    custom_fields: Record<string, unknown>;
+    tags: string[];
+  };
+  variables: Record<string, unknown>;
+  current_node_id: string | null;
+  wait_config: Record<string, unknown>;
+  visited_nodes: string[];
+  trace: SimulatorTraceItem[];
+}
+
+export function startSimulator(
+  env: BuilderEnv,
+  payload: { graph?: unknown; contact?: unknown; variables?: unknown } = {},
+): Promise<SimulatorState> {
+  const url = `${env.detailUrl.replace(/\/$/, "")}/simulator/start/`;
+  return request<SimulatorState>(url, { method: "POST", body: payload });
+}
+
+export function replySimulator(
+  env: BuilderEnv,
+  payload: { session_id: string; text?: string; button_id?: string },
+): Promise<SimulatorState> {
+  const url = `${env.detailUrl.replace(/\/$/, "")}/simulator/reply/`;
+  return request<SimulatorState>(url, { method: "POST", body: payload });
+}
+
+export function advanceSimulator(
+  env: BuilderEnv,
+  payload: { session_id: string; seconds?: number; force_timeout?: boolean },
+): Promise<SimulatorState> {
+  const url = `${env.detailUrl.replace(/\/$/, "")}/simulator/advance/`;
+  return request<SimulatorState>(url, { method: "POST", body: payload });
+}
+
+export function resetSimulator(
+  env: BuilderEnv,
+  payload: { session_id: string },
+): Promise<SimulatorState> {
+  const url = `${env.detailUrl.replace(/\/$/, "")}/simulator/reset/`;
+  return request<SimulatorState>(url, { method: "POST", body: payload });
+}

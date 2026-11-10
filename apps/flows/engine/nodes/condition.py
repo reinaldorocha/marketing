@@ -37,7 +37,9 @@ class ConditionNode(Node):
 
     def execute(self, ctx: NodeContext) -> StepResult:
         try:
-            matched = evaluate(ctx.contact, ctx.config)
+            now = getattr(ctx, "current_now", None) or getattr(ctx, "now", None) or getattr(getattr(ctx, "execution", None), "now", None)
+            conn = getattr(ctx, "connection", None) or getattr(ctx, "channel_connection", None) or getattr(getattr(ctx, "execution", None), "channel_connection", None)
+            matched = evaluate(ctx.contact, ctx.config, now=now, connection=conn)
         except ConditionError as exc:
             # Diagnosable and permanent: the filter names a tag or field that
             # has been deleted, or a source whose owner has not landed

@@ -76,5 +76,6 @@ class DataCollectionNode(Node):
                 target=target,
                 retry=ctx.config.get("retry"),
                 timeout=ctx.config.get("timeout"),
+                now=getattr(ctx, "current_now", None),
             )
         )

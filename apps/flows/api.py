@@ -78,6 +78,11 @@ def _flow_payload(flow: Flow) -> dict[str, Any]:
         "status": flow.status,
         "folder": flow.folder,
         "updated_at": flow.updated_at.isoformat(),
+        "require_follower": flow.require_follower,
+        "non_follower_message": flow.non_follower_message,
+        "follow_button_label": flow.follow_button_label,
+        "confirm_button_label": flow.confirm_button_label,
+        "follower_confirmation_text": flow.follower_confirmation_text,
     }
 
 
@@ -196,6 +201,28 @@ def _detail_save(request: WorkspaceRequest, workspace_id: str, flow_id: str) -> 
         # carries a key no node type declares. A half-wired graph — a dangling
         # edge, no entry node — is an ordinary autosave and saves below.
         return JsonResponse({"validation": result.as_dict()}, status=422)
+
+    if "flow_settings" in payload and isinstance(payload["flow_settings"], dict):
+        settings_data = payload["flow_settings"]
+        update_fields = []
+        if "require_follower" in settings_data:
+            flow.require_follower = settings_data["require_follower"]
+            update_fields.append("require_follower")
+        if "non_follower_message" in settings_data:
+            flow.non_follower_message = str(settings_data["non_follower_message"])
+            update_fields.append("non_follower_message")
+        if "follow_button_label" in settings_data:
+            flow.follow_button_label = str(settings_data["follow_button_label"])[:50]
+            update_fields.append("follow_button_label")
+        if "confirm_button_label" in settings_data:
+            flow.confirm_button_label = str(settings_data["confirm_button_label"])[:50]
+            update_fields.append("confirm_button_label")
+        if "follower_confirmation_text" in settings_data:
+            flow.follower_confirmation_text = str(settings_data["follower_confirmation_text"])
+            update_fields.append("follower_confirmation_text")
+        if update_fields:
+            update_fields.append("updated_at")
+            flow.save(update_fields=update_fields)
 
     version = services.save_draft(flow, payload["graph"], user=request.user)
     return JsonResponse({"flow": _flow_payload(flow), "version": version.as_dict(), "validation": result.as_dict()})
@@ -384,3 +411,59 @@ def flow_schema(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
     with the one validating its saves.
     """
     return JsonResponse(json_schema())
+
+
+
+# ---------------------------------------------------------------------------
+# GET / POST /w/<workspace_id>/api/flows/<flow_id>/settings/
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@require_permission("edit_flows")
+def flow_settings(request: WorkspaceRequest, workspace_id: str, flow_id: str) -> HttpResponse:
+    flow = _get_flow(request, flow_id)
+    if request.method == "POST":
+        is_json = request.content_type == "application/json"
+        if is_json:
+            payload = _read_json_object(request)
+            if isinstance(payload, JsonResponse):
+                return payload
+        else:
+            payload = request.POST.dict()
+
+        update_fields = []
+        if "require_follower" in payload:
+            raw_rf = payload["require_follower"]
+            if raw_rf in (True, "true", "True", "1"):
+                flow.require_follower = True
+            elif raw_rf in (False, "false", "False", "0"):
+                flow.require_follower = False
+            else:
+                flow.require_follower = None
+            update_fields.append("require_follower")
+        if "non_follower_message" in payload:
+            flow.non_follower_message = str(payload["non_follower_message"])
+            update_fields.append("non_follower_message")
+        if "follow_button_label" in payload:
+            flow.follow_button_label = str(payload["follow_button_label"])[:50]
+            update_fields.append("follow_button_label")
+        if "confirm_button_label" in payload:
+            flow.confirm_button_label = str(payload["confirm_button_label"])[:50]
+            update_fields.append("confirm_button_label")
+        if "follower_confirmation_text" in payload:
+            flow.follower_confirmation_text = str(payload["follower_confirmation_text"])
+            update_fields.append("follower_confirmation_text")
+        if update_fields:
+            update_fields.append("updated_at")
+            flow.save(update_fields=update_fields)
+
+        if not is_json and (request.headers.get("HX-Request") or "text/html" in request.headers.get("Accept", "")):
+            from apps.flows.views_triggers import render_trigger_panel
+            response = render_trigger_panel(request, flow)
+            response["HX-Trigger"] = json.dumps({"triggersChanged": True})
+            return response
+
+        return JsonResponse({"flow": _flow_payload(flow), "saved": True})
+
+    return JsonResponse({"flow": _flow_payload(flow)})

@@ -46,7 +46,7 @@ __all__ = ["WEEKDAYS", "SmartDelayNode"]
 
 logger = logging.getLogger(__name__)
 
-_UNITS = ("minutes", "hours", "days")
+_UNITS = ("seconds", "minutes", "hours", "days")
 
 
 @register_node
@@ -61,8 +61,13 @@ class SmartDelayNode(Node):
 
     def execute(self, ctx: NodeContext) -> StepResult:
         mode = ctx.config.get("mode")
+        chosen_seconds = None
         if mode == "duration":
-            run_at = _from_duration(ctx)
+            res = _from_duration(ctx)
+            if res is not None:
+                run_at, chosen_seconds = res
+            else:
+                run_at = None
         elif mode == "date":
             run_at = _from_date(ctx)
         else:
@@ -73,7 +78,10 @@ class SmartDelayNode(Node):
 
         adjusted = into_window(run_at, ctx.config.get("continue_window"), _clock(ctx))
         logger.debug("Execution %s: node %s sleeping until %s", ctx.execution.pk, ctx.node_id, adjusted)
-        return Schedule(adjusted, resume_handle="default", config={"node_id": ctx.node_id})
+        cfg = {"node_id": ctx.node_id}
+        if chosen_seconds is not None:
+            cfg["scheduled_seconds"] = chosen_seconds
+        return Schedule(adjusted, resume_handle="default", config=cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -81,14 +89,47 @@ class SmartDelayNode(Node):
 # ---------------------------------------------------------------------------
 
 
-def _from_duration(ctx: NodeContext) -> datetime | None:
+def _from_duration(ctx: NodeContext) -> tuple[datetime, int] | None:
     duration = ctx.config.get("duration")
     if not isinstance(duration, dict):
         return None
-    value, unit = duration.get("value"), duration.get("unit")
-    if not isinstance(value, int) or value <= 0 or unit not in _UNITS:
+    unit = duration.get("unit")
+    if unit not in _UNITS:
         return None
-    return timezone.now() + timedelta(**{str(unit): value})
+
+    # Check if already drawn on execution wait_config (retries must NOT re-randomize)
+    existing_cfg = getattr(getattr(ctx, "execution", None), "wait_config", {}) or {}
+    scheduled_seconds = existing_cfg.get("scheduled_seconds") if isinstance(existing_cfg, dict) else None
+    if isinstance(scheduled_seconds, int) and scheduled_seconds > 0:
+        chosen_seconds = scheduled_seconds
+    else:
+        delay_mode = duration.get("delay_mode") or "fixed"
+        multiplier = 1
+        if unit == "minutes":
+            multiplier = 60
+        elif unit == "hours":
+            multiplier = 3600
+        elif unit == "days":
+            multiplier = 86400
+
+        if delay_mode == "random":
+            min_v = int(duration.get("min_value") or duration.get("min_delay") or duration.get("value") or 1)
+            max_v = int(duration.get("max_value") or duration.get("max_delay") or duration.get("value") or min_v)
+            if max_v < min_v:
+                max_v = min_v
+            import random
+            chosen_seconds = random.randint(min_v, max_v) * multiplier
+        else:
+            val = int(duration.get("value") or duration.get("delay") or 1)
+            chosen_seconds = val * multiplier
+
+    now = (
+        getattr(ctx, "current_now", None)
+        or getattr(ctx, "now", None)
+        or getattr(getattr(ctx, "execution", None), "now", None)
+        or timezone.now()
+    )
+    return now + timedelta(seconds=chosen_seconds), chosen_seconds
 
 
 def _from_date(ctx: NodeContext) -> datetime | None:

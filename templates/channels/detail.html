@@ -97,11 +97,11 @@ Never renders the webhook secret — see the views module docstring.
         </div>
 
         <div class="border-t border-gray-100 dark:border-gray-800 pt-5">
-            {% include "channels/_instagram_ice_breakers.html" with connection=connection settings=connection.instagram_settings ice_breakers=connection.instagram_settings.ice_breakers only %}
+            {% include "channels/_instagram_ice_breakers.html" with connection=connection settings=connection.instagram_settings ice_breakers=connection.instagram_settings.ice_breakers available_flows=available_flows only %}
         </div>
 
         <div class="border-t border-gray-100 dark:border-gray-800 pt-5">
-            {% include "channels/_instagram_menu.html" with connection=connection settings=connection.instagram_settings menu_items=connection.instagram_settings.persistent_menu only %}
+            {% include "channels/_instagram_menu.html" with connection=connection settings=connection.instagram_settings menu_items=connection.instagram_settings.persistent_menu available_flows=available_flows only %}
         </div>
     </section>
     {% endif %}

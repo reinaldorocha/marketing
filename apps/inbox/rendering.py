@@ -330,6 +330,21 @@ class RenderedMessage:
         return self.message.status == MessageStatus.FAILED
 
     @property
+    def reactions_list(self) -> list[dict[str, Any]]:
+        raw = (self.message.body or {}).get("reactions")
+        if isinstance(raw, dict):
+            return [
+                r for r in raw.values()
+                if isinstance(r, dict) and r.get("emoji") and r.get("action") not in ("unreact", "remove")
+            ]
+        if isinstance(raw, list):
+            return [
+                r for r in raw
+                if isinstance(r, dict) and r.get("emoji") and r.get("action") not in ("unreact", "remove")
+            ]
+        return []
+
+    @property
     def is_deleted(self) -> bool:
         """Retracted at the platform's request (SPEC §6.3, §19).
 

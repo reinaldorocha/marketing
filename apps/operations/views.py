@@ -93,7 +93,7 @@ def dashboard(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
             .order_by("-received_at")[:40]
         )
         outbound_deliveries = (
-            WebhookDelivery.objects.filter(webhook__workspace=request.workspace)
+            WebhookDelivery.objects.for_workspace(request.workspace)
             .select_related("webhook")
             .order_by("-created_at")[:40]
         )

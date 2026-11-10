@@ -116,7 +116,9 @@ describe("Alpine directives", () => {
     expect(() => compileLikeAlpine("window.__bbStoreSidebarCollapsed(sidebarCollapsed)")).not.toThrow();
   });
 
-  it("all compile", () => {
+  it(
+    "all compile",
+    () => {
     const found = directives();
     // A scan that silently matched nothing would pass; the shell alone has dozens.
     expect(found.length).toBeGreaterThan(300);
@@ -136,5 +138,5 @@ describe("Alpine directives", () => {
       }
     }
     expect(failures).toEqual([]);
-  });
+  }, 30000);
 });

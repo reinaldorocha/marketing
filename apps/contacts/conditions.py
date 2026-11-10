@@ -320,6 +320,13 @@ SYSTEM_FIELDS: dict[str, SystemField] = {
     "timezone": SystemField("timezone", TYPE_TEXT, "Timezone"),
     "created_at": SystemField("created_at", TYPE_DATETIME, "Created"),
     "last_interaction_at": SystemField("last_interaction_at", TYPE_DATETIME, "Last interaction", nullable=True),
+    "is_follower": SystemField("channel_identities__extra__is_user_follow_business", TYPE_BOOLEAN, "Is Instagram follower", nullable=True),
+    "is_user_follow_business": SystemField("channel_identities__extra__is_user_follow_business", TYPE_BOOLEAN, "Follows business profile", nullable=True),
+    "is_business_follow_user": SystemField("channel_identities__extra__is_business_follow_user", TYPE_BOOLEAN, "Business follows user", nullable=True),
+    "follower_count": SystemField("channel_identities__extra__follower_count", TYPE_NUMBER, "Instagram follower count", nullable=True),
+    "instagram_follower_count": SystemField("channel_identities__extra__follower_count", TYPE_NUMBER, "Instagram follower count", nullable=True),
+    "instagram_username": SystemField("channel_identities__extra__username", TYPE_TEXT, "Instagram username", nullable=True),
+    "username": SystemField("channel_identities__extra__username", TYPE_TEXT, "Instagram username", nullable=True),
 }
 
 RELATIVE_UNITS: tuple[str, ...] = ("days",)
@@ -1050,9 +1057,10 @@ class _Ctx:
     """Per-compilation state. The timezone is resolved lazily, so a filter with
     no date rule never pays for the workspace lookup."""
 
-    def __init__(self, workspace: Any, now: datetime) -> None:
+    def __init__(self, workspace: Any, now: datetime, connection: Any = None) -> None:
         self.workspace = workspace
         self.now = now
+        self.connection = connection
         self._tz: tzinfo | None = None
 
     @property
@@ -1204,6 +1212,44 @@ def _custom_field_q(ctx: _Ctx, rule: Rule) -> Q:
 def _system_field_q(ctx: _Ctx, rule: Rule) -> Q:
     spec = SYSTEM_FIELDS[rule.key]
     positive_op = _POSITIVE_OF.get(rule.op, rule.op)
+    if spec.column.startswith("channel_identities__"):
+        from apps.messaging.models import ContactChannelIdentity
+        extra_key = spec.column.split("__")[-1]
+        ident_rows = ContactChannelIdentity.objects.for_workspace(ctx.workspace).filter(
+            contact=OuterRef("pk"),
+            platform="instagram",
+        )
+        if ctx.connection is not None:
+            conn_id = getattr(ctx.connection, "pk", ctx.connection)
+            ident_rows = ident_rows.filter(channel_connection_id=conn_id)
+
+        if positive_op == "has_value":
+            inner = Q(**{f"extra__{extra_key}__isnull": False}) & ~Q(**{f"extra__{extra_key}": ""})
+        elif spec.type == TYPE_BOOLEAN:
+            val = rule.value
+            if isinstance(val, str):
+                val = val.lower() in ("true", "1", "yes", "sim")
+            inner = Q(**{f"extra__{extra_key}": val})
+        elif spec.type == TYPE_NUMBER:
+            lookup = _NUMBER_LOOKUPS.get(positive_op, "exact")
+            val = rule.value
+            if isinstance(val, Decimal):
+                val = int(val) if val % 1 == 0 else float(val)
+            elif isinstance(val, str):
+                try:
+                    val = int(val) if "." not in val else float(val)
+                except (ValueError, TypeError):
+                    pass
+            inner = Q(**{f"extra__{extra_key}__{lookup}": val})
+        elif spec.type == TYPE_TEXT:
+            lookup = "icontains" if positive_op == "contains" else "iexact"
+            inner = Q(**{f"extra__{extra_key}__{lookup}": rule.value})
+        else:
+            inner = Q(**{f"extra__{extra_key}": rule.value})
+
+        present = Q(Exists(ident_rows.filter(inner)))
+        return present if positive_op == rule.op else ~present
+
     if positive_op == "has_value":
         positive = _populated_q(spec.column, spec.type)
     else:
@@ -1251,7 +1297,9 @@ def _compile_group(ctx: _Ctx, group: Group) -> Q:
 # ---------------------------------------------------------------------------
 
 
-def queryset(workspace: Any, filter_json: Any, *, now: datetime | None = None) -> QuerySet[Contact]:
+def queryset(
+    workspace: Any, filter_json: Any, *, now: datetime | None = None, connection: Any = None
+) -> QuerySet[Contact]:
     """The contacts in ``workspace`` matching ``filter_json``.
 
     Lazy: the returned queryset is a single SQL statement, so a caller may count
@@ -1259,7 +1307,7 @@ def queryset(workspace: Any, filter_json: Any, *, now: datetime | None = None) -
     :class:`CompiledFilter` from a previous :func:`validate`.
     """
     compiled = filter_json if isinstance(filter_json, CompiledFilter) else validate(workspace, filter_json)
-    ctx = _Ctx(workspace, now or timezone.now())
+    ctx = _Ctx(workspace, now or timezone.now(), connection=connection)
     return (
         Contact.objects.for_workspace(workspace)
         # Filter in rather than exclude out: a status added later is excluded by
@@ -1269,7 +1317,9 @@ def queryset(workspace: Any, filter_json: Any, *, now: datetime | None = None) -
     )
 
 
-def evaluate(contact: Contact, filter_json: Any, *, now: datetime | None = None) -> bool:
+def evaluate(
+    contact: Contact, filter_json: Any, *, now: datetime | None = None, connection: Any = None
+) -> bool:
     """Whether ``contact`` is in the set :func:`queryset` would return.
 
     One implementation of the operator semantics, one query. A second, in-Python
@@ -1277,19 +1327,32 @@ def evaluate(contact: Contact, filter_json: Any, *, now: datetime | None = None)
     match algebra twice, and a disagreement between the two would show up as a
     contact receiving a message their segment says they will not receive.
     """
+    evaluator = getattr(contact, "_evaluate_condition", None)
+    if evaluator is not None:
+        return bool(evaluator(filter_json, now=now))
     if contact.pk is None:
         raise ValueError("evaluate() needs a saved contact.")
-    return queryset(contact.workspace_id, filter_json, now=now).filter(pk=contact.pk).exists()
+    conn = connection or getattr(contact, "_connection", None) or getattr(contact, "connection", None)
+    return queryset(contact.workspace_id, filter_json, now=now, connection=conn).filter(pk=contact.pk).exists()
 
 
 def evaluate_many(
-    workspace: Any, contacts: Iterable[Contact], filter_json: Any, *, now: datetime | None = None
+    workspace: Any,
+    contacts: Iterable[Contact],
+    filter_json: Any,
+    *,
+    now: datetime | None = None,
+    connection: Any = None,
 ) -> set[Any]:
     """Which of ``contacts`` match — one query for the whole batch."""
     ids = [contact.pk for contact in contacts]
     if not ids:
         return set()
-    return set(queryset(workspace, filter_json, now=now).filter(pk__in=ids).values_list("pk", flat=True))
+    return set(
+        queryset(workspace, filter_json, now=now, connection=connection)
+        .filter(pk__in=ids)
+        .values_list("pk", flat=True)
+    )
 
 
 # ---------------------------------------------------------------------------

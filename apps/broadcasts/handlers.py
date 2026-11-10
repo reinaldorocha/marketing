@@ -377,7 +377,7 @@ def _send_template(broadcast: Broadcast, contact: Any, connection: Any, probe: O
         )
         return None
 
-    context = context_for(contact)
+    context = context_for(contact, connection=connection)
     values = {str(slot): render(str(value), context) for slot, value in (broadcast.template_variables or {}).items()}
     text = whatsapp_templates.rendered_text(template, values)
     outbound = OutboundMessage(

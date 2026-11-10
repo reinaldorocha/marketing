@@ -79,6 +79,69 @@ inside it would be swapped away mid-request.
             {% endfor %}
         </div>
     </details>
+
+    <div class="card p-3 mb-4 mt-4 text-xs" style="background: var(--surface-2); border: 1px solid var(--border-default);">
+        <details {% if flow.require_follower is not None %}open{% endif %}>
+            <summary class="font-semibold cursor-pointer list-none flex items-center justify-between" style="color: var(--text-primary);">
+                <span class="flex items-center gap-1.5">
+                    <span>🛡️ Exigência de Seguidor (Instagram)</span>
+                    {% if flow.require_follower is True %}
+                        <span class="bb-chip bb-chip-selected text-[10px]">Ativo</span>
+                    {% elif flow.require_follower is False %}
+                        <span class="bb-chip text-[10px]">Desabilitado</span>
+                    {% else %}
+                        <span class="text-[10px]" style="color: var(--text-tertiary);">Herda conexão</span>
+                    {% endif %}
+                </span>
+                <span class="text-[11px] text-primary">Configurar ▾</span>
+            </summary>
+
+            <form class="mt-3 space-y-2.5"
+                  hx-post="{% url 'flows:api_settings' workspace_id=request.workspace.id flow_id=flow.id %}"
+                  hx-target="#flow-triggers"
+                  hx-swap="outerHTML">
+                {% csrf_token %}
+                <div>
+                    <label class="block font-medium mb-1" style="color: var(--text-secondary);">Regra para este fluxo</label>
+                    <select name="require_follower" class="form-input-styled text-xs w-full"
+                            onchange="this.closest('form').querySelector('.custom-gate-fields').style.display = (this.value === 'true' ? 'block' : 'none')">
+                        <option value="inherit" {% if flow.require_follower is None %}selected{% endif %}>Padrão da Conexão Instagram (Herança)</option>
+                        <option value="true" {% if flow.require_follower is True %}selected{% endif %}>Exigir que seja seguidor (Ativo)</option>
+                        <option value="false" {% if flow.require_follower is False %}selected{% endif %}>Não exigir seguidor (Livre)</option>
+                    </select>
+                </div>
+
+                <div class="custom-gate-fields space-y-2" style="display: {% if flow.require_follower is True %}block{% else %}none{% endif %};">
+                    <div>
+                        <label class="block font-medium mb-0.5" style="color: var(--text-secondary);">Mensagem para não-seguidor</label>
+                        <textarea name="non_follower_message" rows="2" class="form-input-styled text-xs w-full"
+                                  placeholder="Primeiro você precisa me seguir para receber o acesso! Siga nosso perfil e clique no botão abaixo...">{{ flow.non_follower_message }}</textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block font-medium mb-0.5" style="color: var(--text-secondary);">Rótulo botão Seguir</label>
+                            <input type="text" name="follow_button_label" value="{{ flow.follow_button_label }}"
+                                   placeholder="Seguir no Instagram" class="form-input-styled text-xs w-full">
+                        </div>
+                        <div>
+                            <label class="block font-medium mb-0.5" style="color: var(--text-secondary);">Rótulo botão Confirmação</label>
+                            <input type="text" name="confirm_button_label" value="{{ flow.confirm_button_label }}"
+                                   placeholder="Já estou seguindo ✅" class="form-input-styled text-xs w-full">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block font-medium mb-0.5" style="color: var(--text-secondary);">Mensagem após confirmação</label>
+                        <textarea name="follower_confirmation_text" rows="2" class="form-input-styled text-xs w-full"
+                                  placeholder="Obrigado por nos seguir! 🎉 Seu acesso foi liberado com sucesso.">{{ flow.follower_confirmation_text }}</textarea>
+                    </div>
+                </div>
+
+                <div class="pt-1 flex justify-end">
+                    <button type="submit" class="btn-pill-primary btn-pill-sm text-xs">Salvar Configurações</button>
+                </div>
+            </form>
+        </details>
+    </div>
     {% endif %}
 
     {% comment %}

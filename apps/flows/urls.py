@@ -9,7 +9,7 @@ is SPEC §16's path with the workspace segment RBACMiddleware requires prepended
 
 from django.urls import path
 
-from apps.flows import api, views, views_portability, views_triggers
+from apps.flows import api, views, views_portability, views_simulator, views_triggers
 
 app_name = "flows"
 
@@ -78,6 +78,7 @@ urlpatterns = [
     path("api/flows/schema/", api.flow_schema, name="api_schema"),
     path("api/flows/<uuid:flow_id>/", api.flow_detail, name="api_detail"),
     path("api/flows/<uuid:flow_id>/publish/", api.flow_publish, name="api_publish"),
+    path("api/flows/<uuid:flow_id>/settings/", api.flow_settings, name="api_settings"),
     path("api/flows/<uuid:flow_id>/offline/", api.flow_take_offline, name="api_offline"),
     path("api/flows/<uuid:flow_id>/rename/", api.flow_rename, name="api_rename"),
     path(
@@ -86,4 +87,8 @@ urlpatterns = [
         name="api_trigger_enabled",
     ),
     path("api/flows/<uuid:flow_id>/stats/", api.flow_stats, name="api_stats"),
+    path("api/flows/<uuid:flow_id>/simulator/start/", views_simulator.simulator_start, name="api_simulator_start"),
+    path("api/flows/<uuid:flow_id>/simulator/reply/", views_simulator.simulator_reply, name="api_simulator_reply"),
+    path("api/flows/<uuid:flow_id>/simulator/advance/", views_simulator.simulator_advance, name="api_simulator_advance"),
+    path("api/flows/<uuid:flow_id>/simulator/reset/", views_simulator.simulator_reset, name="api_simulator_reset"),
 ]

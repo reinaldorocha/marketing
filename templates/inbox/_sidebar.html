@@ -22,7 +22,20 @@ thing. The panel only says so while a pause is on, with the way back out.
     <dt>Name</dt><dd>{{ contact.display_name }}</dd>
     {% for row in identities %}
       <dt>{{ row.get_platform_display }}</dt>
-      <dd class="truncate" title="{{ row.platform_user_id }}">{{ row.platform_user_id }}</dd>
+      <dd class="truncate" title="{{ row.platform_user_id }}">
+        {{ row.platform_user_id }}
+        {% if row.extra.username %}<span class="text-xs text-muted block">@{{ row.extra.username }}</span>{% endif %}
+      </dd>
+      {% if row.extra.follower_count is not None %}
+        <dt>Seguidores</dt>
+        <dd>{{ row.extra.follower_count }}</dd>
+      {% endif %}
+      {% if row.extra.is_user_follow_business is not None %}
+        <dt>Segue o perfil</dt>
+        <dd class="{% if row.extra.is_user_follow_business %}ib-side-good{% else %}ib-side-muted{% endif %}">
+          {% if row.extra.is_user_follow_business %}Sim ✅{% else %}Não{% endif %}
+        </dd>
+      {% endif %}
     {% endfor %}
     {% if contact.email %}<dt>Email</dt><dd>{{ contact.email }}</dd>{% endif %}
     {% if contact.phone %}<dt>Phone</dt><dd>{{ contact.phone }}</dd>{% endif %}

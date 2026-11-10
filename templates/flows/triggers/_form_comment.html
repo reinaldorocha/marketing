@@ -43,8 +43,24 @@ Two things are driven by that registry rather than by markup:
 {% endif %}
 
 <label class="block text-xs font-medium mb-1" for="trigger-include" style="color: var(--text-primary);">Only when the comment contains</label>
-<textarea id="trigger-include" name="include_keywords" rows="2" class="form-input-styled mb-3"
+<textarea id="trigger-include" name="include_keywords" rows="2" class="form-input-styled mb-2"
           placeholder="One word or phrase per line. Blank matches every comment.">{{ config.include_keywords|lines }}</textarea>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+    <div>
+        <label class="block text-xs font-medium mb-1" for="trigger-match-mode" style="color: var(--text-primary);">Matching mode</label>
+        <select id="trigger-match-mode" name="keyword_match_mode" class="form-input-styled text-xs">
+            <option value="contains" {% if config.keyword_match_mode != "exact" %}selected{% endif %}>Contains keyword</option>
+            <option value="exact" {% if config.keyword_match_mode == "exact" %}selected{% endif %}>Exact comment match</option>
+        </select>
+    </div>
+    <div class="flex items-end pb-2">
+        <label class="flex items-center gap-2 text-xs" style="color: var(--text-primary);">
+            <input type="checkbox" name="ignore_accents" {% if config.ignore_accents %}checked{% endif %}>
+            Ignore accents
+        </label>
+    </div>
+</div>
 
 <label class="block text-xs font-medium mb-1" for="trigger-exclude" style="color: var(--text-primary);">Never when it contains</label>
 <textarea id="trigger-exclude" name="exclude_keywords" rows="2" class="form-input-styled mb-3">{{ config.exclude_keywords|lines }}</textarea>

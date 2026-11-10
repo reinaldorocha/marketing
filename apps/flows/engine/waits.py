@@ -88,7 +88,7 @@ DEFAULT_RETRY_DATA_COLLECTION = 3
 #: SPEC §11.8's reply types.
 REPLY_TYPES = ("text", "email", "phone", "number", "date", "url")
 
-_UNITS = {"minutes": "minutes", "hours": "hours", "days": "days"}
+_UNITS = {"seconds": "seconds", "minutes": "minutes", "hours": "hours", "days": "days"}
 
 #: Longest answer accepted for a free-text question. Inbound text is
 #: attacker-controlled (SECURITY-BASELINE §2) and lands in a contact field.
@@ -136,25 +136,64 @@ class InvalidAnswerError(ValueError):
 # ---------------------------------------------------------------------------
 
 
-def deadline(config: Any, *, handle: str = "timeout", now: datetime | None = None) -> dict[str, Any] | None:
+def deadline(
+    config: Any,
+    *,
+    handle: str = "timeout",
+    now: datetime | None = None,
+    existing_timeout: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Turn a ``{enabled, delay, unit}`` block into a wait's ``timeout`` entry.
 
     Shared by SPEC §11.1's ``followup`` and §11.8's ``timeout``: the same three
     keys, the same meaning, and the runner arms the queue row from whatever this
     returns. ``None`` means the wait has no deadline and simply waits.
+    Supports fixed delay or random delay within [min_delay, max_delay] in seconds/minutes/hours/days.
+    Retries do NOT re-randomize.
     """
     if not isinstance(config, dict) or not config.get("enabled"):
         return None
-    delay = config.get("delay")
-    unit = _UNITS.get(str(config.get("unit") or ""))
-    if not isinstance(delay, int) or delay <= 0 or unit is None:
-        # Enabled with nothing to count: the builder allows it (only `enabled`
-        # is required), and a wait that silently never times out is a better
-        # answer than one that fires immediately.
-        logger.warning("A timeout block is enabled but carries no usable delay: %r", config)
+
+    unit_name = str(config.get("unit") or "")
+    unit = _UNITS.get(unit_name)
+    if unit is None:
+        logger.warning("A timeout block is enabled but carries an unknown unit: %r", config)
         return None
-    run_at = (now or timezone.now()) + timedelta(**{unit: delay})
-    return {"handle": handle, "run_at": run_at.isoformat()}
+
+    # Check if a deadline was already drawn and persisted (retries must NOT re-randomize)
+    scheduled_sec = None
+    if isinstance(existing_timeout, dict) and isinstance(existing_timeout.get("scheduled_seconds"), int):
+        scheduled_sec = existing_timeout["scheduled_seconds"]
+    elif isinstance(config.get("scheduled_seconds"), int):
+        scheduled_sec = config["scheduled_seconds"]
+
+    if scheduled_sec is None:
+        delay_mode = config.get("delay_mode") or "fixed"
+        multiplier = 1
+        if unit == "minutes":
+            multiplier = 60
+        elif unit == "hours":
+            multiplier = 3600
+        elif unit == "days":
+            multiplier = 86400
+
+        if delay_mode == "random":
+            min_d = int(config.get("min_delay") or config.get("min_value") or config.get("delay") or 1)
+            max_d = int(config.get("max_delay") or config.get("max_value") or config.get("delay") or min_d)
+            if max_d < min_d:
+                max_d = min_d
+            import random
+            chosen = random.randint(min_d, max_d)
+            scheduled_sec = chosen * multiplier
+        else:
+            delay = config.get("delay")
+            if not isinstance(delay, int) or delay <= 0:
+                logger.warning("A timeout block is enabled but carries no usable delay: %r", config)
+                return None
+            scheduled_sec = delay * multiplier
+
+    run_at = (now or timezone.now()) + timedelta(seconds=scheduled_sec)
+    return {"handle": handle, "run_at": run_at.isoformat(), "scheduled_seconds": scheduled_sec}
 
 
 def buttons_wait(
@@ -165,6 +204,8 @@ def buttons_wait(
     followup: Any = None,
     retry_unmatched: Any = None,
     labels: dict[str, str] | None = None,
+    list_rows: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """SPEC §9.3's "map of expected ids -> handles", plus its two options.
 
@@ -198,13 +239,20 @@ def buttons_wait(
         handles[reply_id] = handle
 
     for button in buttons or []:
-        # A URL button opens a link; it never comes back as an event, so it gets
+        # A URL/call/copy/pix button opens a link or client tool; it never comes back as an event, so it gets
         # no entry here even though the graph exposes a `btn:<id>` handle for it.
-        if isinstance(button, dict) and isinstance(button.get("id"), str) and button.get("action") != "url":
+        if (
+            isinstance(button, dict)
+            and isinstance(button.get("id"), str)
+            and button.get("action") not in ("url", "call", "copy", "pix")
+        ):
             _claim(button["id"], f"btn:{button['id']}")
     for reply in quick_replies or []:
         if isinstance(reply, dict) and isinstance(reply.get("id"), str):
             _claim(reply["id"], f"qr:{reply['id']}")
+    for row in list_rows or []:
+        if isinstance(row, dict) and isinstance(row.get("id"), str):
+            _claim(row["id"], f"btn:{row['id']}")
 
     config: dict[str, Any] = {
         "type": WAIT_BUTTONS,
@@ -215,7 +263,7 @@ def buttons_wait(
     retry = _retry_block(retry_unmatched, cap=MAX_RETRY_BUTTONS, text_key="text")
     if retry is not None:
         config["retry"] = retry
-    timeout = deadline(followup)
+    timeout = deadline(followup, now=now)
     if timeout is not None:
         config["timeout"] = timeout
     return config
@@ -228,6 +276,7 @@ def data_collection_wait(
     target: dict[str, Any],
     retry: Any = None,
     timeout: Any = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """SPEC §11.8's wait: what to validate, where to put it, how often to re-ask."""
     config: dict[str, Any] = {
@@ -238,7 +287,7 @@ def data_collection_wait(
         "retry": _retry_block(retry, cap=MAX_RETRY_DATA_COLLECTION, text_key="invalid_text")
         or {"max": DEFAULT_RETRY_DATA_COLLECTION, "count": 0, "text": ""},
     }
-    parsed = deadline(timeout)
+    parsed = deadline(timeout, now=now)
     if parsed is not None:
         config["timeout"] = parsed
     return config
@@ -395,7 +444,14 @@ def _send_prompt(execution: FlowExecution, text: str, *, attempt: int) -> None:
     from apps.flows.rendering import context_for, render
 
     node_id = str(execution.wait_config.get("node_id") or execution.current_node_id)
-    rendered = render(text, context_for(execution.contact, execution.variables))
+    rendered = render(
+        text,
+        context_for(
+            execution.contact,
+            execution.variables,
+            connection=execution.channel_connection,
+        ),
+    )
     try:
         deliver(execution, text_message(rendered), node_id=node_id, attempt=attempt)
     except FacadeUnavailableError:

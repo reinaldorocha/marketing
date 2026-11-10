@@ -10,7 +10,7 @@
                 {% endif %}
             </h3>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Menu fixo de navegação no rodapé da conversa do Instagram Direct. Suporta botões de Link externo ou Ação/Payload.
+                Menu fixo de navegação no rodapé da conversa do Instagram Direct. Suporta botões de Link externo, Fluxos de automação ou Ação/Payload.
                 {% if settings.persistent_menu_synced_at %}
                     <span class="text-gray-400">· Última sincronização: {{ settings.persistent_menu_synced_at|date:"d/m/Y H:i:s" }}</span>
                 {% endif %}
@@ -45,15 +45,26 @@
                            class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
                 </div>
                 <div class="w-1/4">
-                    <select name="menu_type" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    <select name="menu_type" onchange="toggleMenuRowType(this)" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
                         <option value="web_url" {% if item.type == "web_url" %}selected{% endif %}>Link Externo (URL)</option>
-                        <option value="postback" {% if item.type == "postback" %}selected{% endif %}>Ação / Palavra-chave</option>
+                        <option value="flow" {% if item.payload|slice:":5" == "flow:" %}selected{% endif %}>Iniciar Fluxo</option>
+                        <option value="postback" {% if item.type == "postback" and item.payload|slice:":5" != "flow:" %}selected{% endif %}>Ação / Palavra-chave</option>
                     </select>
                 </div>
-                <div class="flex-1">
-                    <input type="text" name="menu_value" placeholder="https://... ou palavra-chave"
-                           value="{{ item.url|default:item.payload }}"
-                           class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                <div class="flex-1 menu-val-container">
+                    <div class="menu-url-input {% if item.payload|slice:":5" == "flow:" %}hidden{% endif %}">
+                        <input type="text" name="menu_value" placeholder="https://... ou palavra-chave"
+                               value="{{ item.url|default:item.payload }}"
+                               class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    </div>
+                    <div class="menu-flow-select {% if item.payload|slice:":5" != "flow:" %}hidden{% endif %}">
+                        <select name="menu_flow_id" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                            <option value="">Selecione um fluxo do workspace...</option>
+                            {% for f in available_flows %}
+                                <option value="{{ f.id }}" {% if item.payload == f.flow_payload %}selected{% endif %}>{{ f.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
                 <button type="button" onclick="this.closest('.menu-item-row').remove();"
                         class="text-gray-400 hover:text-rose-500 p-1">
@@ -67,14 +78,25 @@
                            class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
                 </div>
                 <div class="w-1/4">
-                    <select name="menu_type" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    <select name="menu_type" onchange="toggleMenuRowType(this)" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
                         <option value="web_url">Link Externo (URL)</option>
+                        <option value="flow">Iniciar Fluxo</option>
                         <option value="postback">Ação / Palavra-chave</option>
                     </select>
                 </div>
-                <div class="flex-1">
-                    <input type="text" name="menu_value" placeholder="https://seusite.com.br"
-                           class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                <div class="flex-1 menu-val-container">
+                    <div class="menu-url-input">
+                        <input type="text" name="menu_value" placeholder="https://seusite.com.br"
+                               class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    </div>
+                    <div class="menu-flow-select hidden">
+                        <select name="menu_flow_id" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                            <option value="">Selecione um fluxo do workspace...</option>
+                            {% for f in available_flows %}
+                                <option value="{{ f.id }}">{{ f.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -84,11 +106,30 @@
             const container = document.getElementById('menu-items-container');
             const row = document.createElement('div');
             row.className = 'menu-item-row p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800 flex items-center gap-3';
+            let flowOptions = '<option value="">Selecione um fluxo...</option>';
+            {% for f in available_flows %}
+            flowOptions += '<option value="{{ f.id }}">{{ f.name }}</option>';
+            {% endfor %}
             row.innerHTML = `
                 <div class='w-1/3'><input type='text' name='menu_title' maxlength='30' placeholder='Título' class='w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800'></div>
-                <div class='w-1/4'><select name='menu_type' class='w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800'><option value='web_url'>Link Externo (URL)</option><option value='postback'>Ação / Palavra-chave</option></select></div>
-                <div class='flex-1'><input type='text' name='menu_value' placeholder='Valor ou link' class='w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800'></div>
-                <button type='button' onclick='this.closest(\x22.menu-item-row\x22).remove();' class='text-gray-400 hover:text-rose-500 p-1'><svg class='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12'/></svg></button>
+                <div class='w-1/4'>
+                    <select name='menu_type' onchange='toggleMenuRowType(this)' class='w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800'>
+                        <option value='web_url'>Link Externo (URL)</option>
+                        <option value='flow'>Iniciar Fluxo</option>
+                        <option value='postback'>Ação / Palavra-chave</option>
+                    </select>
+                </div>
+                <div class='flex-1 menu-val-container'>
+                    <div class='menu-url-input'>
+                        <input type='text' name='menu_value' placeholder='Valor ou link' class='w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800'>
+                    </div>
+                    <div class='menu-flow-select hidden'>
+                        <select name='menu_flow_id' class='w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800'>
+                            ${flowOptions}
+                        </select>
+                    </div>
+                </div>
+                <button type='button' onclick='this.closest(".menu-item-row").remove();' class='text-gray-400 hover:text-rose-500 p-1'><svg class='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12'/></svg></button>
             `;
             container.appendChild(row);
         " class="text-xs text-primary hover:text-primary-hover font-semibold inline-flex items-center gap-1">
@@ -117,4 +158,20 @@
             {% endif %}
         </div>
     </form>
+
+    <script>
+    function toggleMenuRowType(selectEl) {
+        const row = selectEl.closest('.menu-item-row');
+        if (!row) return;
+        const valInput = row.querySelector('.menu-url-input');
+        const flowSelect = row.querySelector('.menu-flow-select');
+        if (selectEl.value === 'flow') {
+            if (valInput) valInput.classList.add('hidden');
+            if (flowSelect) flowSelect.classList.remove('hidden');
+        } else {
+            if (valInput) valInput.classList.remove('hidden');
+            if (flowSelect) flowSelect.classList.add('hidden');
+        }
+    }
+    </script>
 </div>

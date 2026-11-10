@@ -36,15 +36,20 @@ __all__ = [
     "Button",
     "Card",
     "CardBlock",
+    "ContactBlock",
     "EventPayload",
     "EventType",
     "GalleryBlock",
+    "ListBlock",
+    "LocationBlock",
     "MediaBlock",
     "NormalizedEvent",
     "OutboundMessage",
+    "PollBlock",
     "QuickReply",
     "SendResult",
     "SendStatus",
+    "StickerBlock",
     "TextBlock",
 ]
 
@@ -83,6 +88,7 @@ class EventType(StrEnum):
     DELIVERY_STATUS = "delivery_status"
     #: The platform says a message it delivered no longer exists. SPEC §6.3.
     MESSAGE_DELETED = "message_deleted"
+    MESSAGE_REACTION = "message_reaction"
     OPT_OUT = "opt_out"
 
 
@@ -206,10 +212,17 @@ class Button:
     id: str
     label: str
     url: str = ""
+    action: str = ""
+    copy_code: str = ""
+    phone_number: str = ""
+    pix_key: str = ""
+    pix_key_type: str = ""
+    pix_name: str = ""
+    currency: str = "BRL"
 
     @property
     def is_url(self) -> bool:
-        return bool(self.url)
+        return bool(self.url) or self.action == "url"
 
 
 @dataclass(frozen=True)
@@ -262,8 +275,49 @@ class GalleryBlock:
     kind: str = "gallery"
 
 
+@dataclass(frozen=True)
+class LocationBlock:
+    latitude: float = 0.0
+    longitude: float = 0.0
+    name: str = ""
+    address: str = ""
+    kind: str = "location"
+
+
+@dataclass(frozen=True)
+class ContactBlock:
+    full_name: str = ""
+    phone: str = ""
+    organization: str = ""
+    kind: str = "contact"
+
+
+@dataclass(frozen=True)
+class PollBlock:
+    question: str = ""
+    options: tuple[str, ...] = ()
+    max_answers: int = 1
+    kind: str = "poll"
+
+
+@dataclass(frozen=True)
+class ListBlock:
+    title: str = ""
+    description: str = ""
+    button_text: str = ""
+    footer_text: str = ""
+    sections: tuple[dict[str, Any], ...] = ()
+    kind: str = "list"
+
+
+@dataclass(frozen=True)
+class StickerBlock:
+    url: str = ""
+    kind: str = "sticker"
+
+
 #: Anything that may appear in ``OutboundMessage.blocks``.
-type Block = TextBlock | MediaBlock | CardBlock | GalleryBlock
+type Block = TextBlock | MediaBlock | CardBlock | GalleryBlock | LocationBlock | ContactBlock | PollBlock | ListBlock | StickerBlock
 
 
 @dataclass(frozen=True)
@@ -347,6 +401,7 @@ class OutboundMessage:
     #: Set it *and* a ``TextBlock`` holding the plain-text equivalent: the blocks
     #: are what the inbox thread renders, and they should not be raw markup.
     html_body: str = ""
+    recipient_override: str = ""
 
     def to_body(self) -> dict[str, Any]:
         """The SPEC §7.2 ``message.body`` json.
@@ -372,11 +427,24 @@ class OutboundMessage:
             "subject": self.subject,
             "from_override": self.from_override,
             "html_body": self.html_body,
+            "recipient_override": self.recipient_override or "",
         }
 
 
 def _button_json(button: Button) -> dict[str, Any]:
-    return {"id": button.id, "label": button.label, "url": button.url or None}
+    data: dict[str, Any] = {"id": button.id, "label": button.label, "url": button.url or None}
+    if button.action:
+        data["action"] = button.action
+    if button.copy_code:
+        data["copy_code"] = button.copy_code
+    if button.phone_number:
+        data["phone_number"] = button.phone_number
+    if button.pix_key:
+        data["pix_key"] = button.pix_key
+        data["pix_key_type"] = button.pix_key_type
+        data["pix_name"] = button.pix_name
+        data["currency"] = button.currency
+    return data
 
 
 def _card_json(card: Card) -> dict[str, Any]:
@@ -397,7 +465,42 @@ def _block_json(block: Block) -> dict[str, Any]:
         return {"type": block.kind, "url": block.url, "caption": block.caption}
     if isinstance(block, CardBlock):
         return {"type": "card", **_card_json(block.card)}
-    return {"type": "gallery", "cards": [_card_json(card) for card in block.cards]}
+    if isinstance(block, GalleryBlock):
+        return {"type": "gallery", "cards": [_card_json(card) for card in block.cards]}
+    if isinstance(block, LocationBlock):
+        return {
+            "type": "location",
+            "latitude": block.latitude,
+            "longitude": block.longitude,
+            "name": block.name,
+            "address": block.address,
+        }
+    if isinstance(block, ContactBlock):
+        return {
+            "type": "contact",
+            "full_name": block.full_name,
+            "phone": block.phone,
+            "organization": block.organization,
+        }
+    if isinstance(block, PollBlock):
+        return {
+            "type": "poll",
+            "question": block.question,
+            "options": list(block.options),
+            "max_answers": block.max_answers,
+        }
+    if isinstance(block, ListBlock):
+        return {
+            "type": "list",
+            "title": block.title,
+            "description": block.description,
+            "button_text": block.button_text,
+            "footer_text": block.footer_text,
+            "sections": list(block.sections),
+        }
+    if isinstance(block, StickerBlock):
+        return {"type": "sticker", "url": block.url}
+    return {"type": getattr(block, "kind", "unknown")}
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from apps.common.platforms import Platform
 from apps.flows.capabilities import capabilities_for
 from apps.flows.schema.envelope import validate_document
 from apps.flows.schema.handles import parse_handle
@@ -418,6 +419,20 @@ def _capability_warnings(nodes: list[dict[str, Any]], platforms: Sequence[str]) 
             if node.get("type") == "send_message" and isinstance(node.get("config"), dict):
                 issues.extend(_send_message_warnings(node, node["config"], platform, capabilities))
 
+    if platforms and Platform.WHATSAPP_EVOLUTION.value not in platforms:
+        for node in nodes:
+            if node.get("type") == "send_message" and isinstance(node.get("config"), dict):
+                r_type = str(node["config"].get("recipient_type") or "contact").lower().strip()
+                if r_type in ("custom", "group"):
+                    issues.append(
+                        _warn(
+                            "no_connection_for_node",
+                            f"This step uses {r_type} recipient, but no WhatsApp Evolution account is connected here.",
+                            node,
+                            "config.recipient_type",
+                        )
+                    )
+
     if platforms:
         for node in nodes:
             node_type = node.get("type")
@@ -444,6 +459,15 @@ def _warn(code: str, message: str, node: dict[str, Any], path: str | None = None
 def _send_message_warnings(
     node: dict[str, Any], config: dict[str, Any], platform: str, capabilities: Any
 ) -> Iterable[Issue]:
+    recipient_type = str(config.get("recipient_type") or "contact").lower().strip()
+    if recipient_type in ("custom", "group") and platform != Platform.WHATSAPP_EVOLUTION.value:
+        yield _warn(
+            "unsupported_recipient_type",
+            f"{platform} does not support alternative recipient ({recipient_type}). "
+            f"Messages would be misdirected to the customer contact.",
+            node,
+            "config.recipient_type",
+        )
     for index, block in enumerate(config.get("blocks") or []):
         if not isinstance(block, dict):
             continue

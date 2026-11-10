@@ -9,6 +9,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -306,51 +307,84 @@ def post_edit(request: WorkspaceRequest, workspace_id: str, post_id: str) -> Htt
     )
 
     if request.method == "POST":
-        connection_id = request.POST.get("connection_id")
-        connection = connections.filter(pk=connection_id).first() or post.connection
-        publish_type = request.POST.get("publish_type", post.publish_type)
-        caption = request.POST.get("caption", "").strip()
-        media_url = request.POST.get("media_url", "").strip()
-        cover_url = request.POST.get("cover_url", "").strip() or None
-        action = request.POST.get("action", "save")
-        scheduled_at_raw = request.POST.get("scheduled_at", "").strip()
-
-        # Parse carousel items
-        media_items = []
-        if publish_type == PublishType.CAROUSEL:
-            types = request.POST.getlist("carousel_type")
-            urls = request.POST.getlist("carousel_url")
-            covers = request.POST.getlist("carousel_cover")
-            for t, u, c in zip(types, urls, covers):
-                u = u.strip()
-                if u:
-                    media_items.append({"type": t, "url": u, "cover_url": c.strip() or None})
-
-        post.connection = connection
-        post.publish_type = publish_type
-        post.caption = caption
-        post.media_url = media_url
-        post.cover_url = cover_url
-        post.media_items = media_items
-        post.save()
-
-        if action == "publish":
-            publish_post(post)
-            messages.success(request, "Publicação enviada para a Meta com sucesso.")
-            return redirect("publishing:detail", workspace_id=workspace_id, post_id=post.pk)
-        elif action == "schedule" and scheduled_at_raw:
-            try:
-                scheduled_dt = datetime.datetime.fromisoformat(scheduled_at_raw)
-                if timezone.is_naive(scheduled_dt):
-                    scheduled_dt = timezone.make_aware(scheduled_dt)
-                schedule_post(post, scheduled_dt)
-                messages.success(request, f"Publicação reagendada para {scheduled_dt.strftime('%d/%m/%Y às %H:%M')}.")
+        target_post = None
+        with transaction.atomic():
+            locked = (
+                ContentPost.objects.for_workspace(request.workspace)
+                .select_for_update()
+                .filter(pk=post.pk)
+                .first()
+            )
+            if not locked:
+                messages.error(request, "Publicação não encontrada.")
                 return redirect("publishing:calendar", workspace_id=workspace_id)
-            except Exception as exc:
-                messages.warning(request, f"Data inválida ({exc}). Alterações salvas como rascunho.")
+
+            if locked.status == PostStatus.PUBLISHED or locked.published_media_id:
+                messages.warning(request, "Esta publicação já foi concluída por outro processo e não pode ser editada.")
                 return redirect("publishing:detail", workspace_id=workspace_id, post_id=post.pk)
-        else:
-            messages.success(request, "Alterações salvas com sucesso.")
+
+            if locked.status == PostStatus.PUBLISHING:
+                messages.warning(request, "Esta publicação está sendo processada no momento e não pode ser editada.")
+                return redirect("publishing:detail", workspace_id=workspace_id, post_id=post.pk)
+
+            connection_id = request.POST.get("connection_id")
+            connection = connections.filter(pk=connection_id).first() or locked.connection
+            publish_type = request.POST.get("publish_type", locked.publish_type)
+            caption = request.POST.get("caption", "").strip()
+            media_url = request.POST.get("media_url", "").strip()
+            cover_url = request.POST.get("cover_url", "").strip() or None
+            action = request.POST.get("action", "save")
+            scheduled_at_raw = request.POST.get("scheduled_at", "").strip()
+
+            # Parse carousel items without dropping existing items if not provided
+            media_items = locked.media_items if isinstance(locked.media_items, list) else []
+            if publish_type == PublishType.CAROUSEL:
+                types = request.POST.getlist("carousel_type")
+                urls = request.POST.getlist("carousel_url")
+                covers = request.POST.getlist("carousel_cover")
+                parsed = []
+                for t, u, c in zip(types, urls, covers):
+                    u = u.strip()
+                    if u:
+                        parsed.append({"type": t, "url": u, "cover_url": c.strip() or None})
+                if parsed or "carousel_type" in request.POST:
+                    media_items = parsed
+
+            locked.connection = connection
+            locked.publish_type = publish_type
+            locked.caption = caption
+            locked.media_url = media_url
+            locked.cover_url = cover_url
+            locked.media_items = media_items
+            locked.save(update_fields=["connection", "publish_type", "caption", "media_url", "cover_url", "media_items", "updated_at"])
+
+            if action == "publish":
+                target_post = locked
+            elif action == "schedule" and scheduled_at_raw:
+                try:
+                    scheduled_dt = datetime.datetime.fromisoformat(scheduled_at_raw)
+                    if timezone.is_naive(scheduled_dt):
+                        scheduled_dt = timezone.make_aware(scheduled_dt)
+                    schedule_post(locked, scheduled_dt)
+                    messages.success(request, f"Publicação reagendada para {scheduled_dt.strftime('%d/%m/%Y às %H:%M')}.")
+                    return redirect("publishing:calendar", workspace_id=workspace_id)
+                except Exception as exc:
+                    messages.warning(request, f"Data inválida ({exc}). Alterações salvas como rascunho.")
+                    return redirect("publishing:detail", workspace_id=workspace_id, post_id=post.pk)
+            else:
+                # Action "save" (Salvar Rascunho)
+                if locked.status == PostStatus.SCHEDULED:
+                    cancel_schedule(locked)
+                    messages.success(request, "Agendamento cancelado e publicação salva como rascunho.")
+                else:
+                    locked.status = PostStatus.DRAFT
+                    locked.save(update_fields=["status", "updated_at"])
+                    messages.success(request, "Rascunho salvo com sucesso.")
+                return redirect("publishing:detail", workspace_id=workspace_id, post_id=post.pk)
+
+        if action == "publish" and target_post:
+            publish_post(target_post)
+            messages.success(request, "Publicação enviada para a Meta com sucesso.")
             return redirect("publishing:detail", workspace_id=workspace_id, post_id=post.pk)
 
     formatted_scheduled_at = ""
@@ -370,15 +404,21 @@ def post_edit(request: WorkspaceRequest, workspace_id: str, post_id: str) -> Htt
 @require_permission("manage_channels")
 @require_POST
 def post_retry(request: WorkspaceRequest, workspace_id: str, post_id: str) -> HttpResponse:
-    """One-click retry for a failed post."""
+    """One-click retry for a failed post or stuck publishing claim."""
     post = get_object_or_404(ContentPost.objects.for_workspace(request.workspace), pk=post_id)
+    prev_status = post.status
     retry_post(post)
     if post.status == PostStatus.PUBLISHED:
         messages.success(request, "Post publicado no Instagram com sucesso!")
     elif post.status == PostStatus.PUBLISHING:
-        messages.info(request, "Post em processamento na Meta.")
-    else:
+        if prev_status == PostStatus.PUBLISHING and not post.last_error:
+            messages.info(request, "Post em processamento na Meta.")
+        else:
+            messages.info(request, "Nova tentativa iniciada: post em processamento na Meta.")
+    elif post.status == PostStatus.FAILED:
         messages.error(request, f"Falha na nova tentativa: {post.last_error}")
+    else:
+        messages.warning(request, f"O post está com status '{post.get_status_display()}' e não pode ser reenviado agora.")
 
     return redirect("publishing:detail", workspace_id=workspace_id, post_id=post.pk)
 
