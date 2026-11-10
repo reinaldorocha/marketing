@@ -29,6 +29,7 @@ import { memo } from "react";
 
 import { TRIGGER_PHRASE } from "../schema/plain";
 import { useBuilder, useBuilderStore } from "../store/context";
+import { platformLabel, triggerPlatforms } from "../editor/ChannelGuide";
 
 /** The id the synthetic node and its edge are addressed by, and its React Flow type. */
 export const TRIGGER_NODE_ID = "__trigger__";
@@ -61,20 +62,27 @@ function TriggerCardInner() {
           `plain` is the whole thing — "When someone sends “quote”" — and it is
           the same sentence the flow list shows. */}
       <div className="fb-node-title">
-        {triggers.length === 0 ? "Nothing starts this flow yet" : triggers[0]?.plain}
+        {triggers.length === 0 ? "Este fluxo ainda não tem um gatilho" : triggers[0]?.plain}
       </div>
 
       <div className="fb-node-body">
         {triggers.length === 0 ? (
-          <span className="fb-empty">Click to choose what starts it.</span>
+          <span className="fb-empty">Clique para escolher o que inicia o fluxo.</span>
         ) : (
           <>
             {triggers.length > 1 ? (
               <span className="fb-empty">
-                and {triggers.length - 1} other way{triggers.length === 2 ? "" : "s"} in
+                e mais {triggers.length - 1} gatilho{triggers.length === 2 ? "" : "s"}
               </span>
             ) : null}
-            {off ? <span className="fb-node-warn">Switched off, so nothing reaches this flow</span> : null}
+            {off ? <span className="fb-node-warn">Desativado: nenhum contato chegará a este fluxo</span> : null}
+            {triggerPlatforms(triggers).length > 0 ? (
+              <span className="fb-trigger-platforms">
+                {triggerPlatforms(triggers).map((platform) => (
+                  <span key={platform} className="fb-trigger-platform">{platformLabel(platform)}</span>
+                ))}
+              </span>
+            ) : null}
           </>
         )}
       </div>

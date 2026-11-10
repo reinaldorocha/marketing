@@ -38,14 +38,14 @@ import type { NodeTypeSpec } from "./types";
 
 /** One phrase per palette group, written to sit above the step's own title. */
 export const GROUP_PHRASE: Record<string, string> = {
-  content: "Then send",
+  content: "Enviar",
   // Not "If they reply", which the artboards used: this group holds
   // `condition`, `smart_delay`, `randomizer` and `start_flow`, and only one of
   // them has anything to do with a reply. As a card eyebrow it was merely odd;
   // as the heading over those four in the Add a step menu it was wrong.
-  logic: "Then decide",
-  actions: "Then do",
-  other: "Also",
+  logic: "Decidir",
+  actions: "Executar",
+  other: "Outros",
 };
 
 /**
@@ -57,10 +57,33 @@ export const GROUP_PHRASE: Record<string, string> = {
  * keeps a node type registered by a later layer readable with no edit here.
  */
 export const TYPE_PHRASE: Record<string, string> = {
-  smart_delay: "Then wait",
-  start_flow: "Then hand over",
-  note: "Note",
+  smart_delay: "Aguardar",
+  start_flow: "Encaminhar",
+  note: "Anotação",
 };
+
+/** Portuguese copy used by the authoring surface, independent of wire names. */
+export const NODE_COPY: Record<string, { label: string; description: string; channel?: string }> = {
+  send_message: {
+    label: "Enviar mensagem",
+    description: "Envie texto, mídia e elementos interativos ao contato.",
+    channel: "WhatsApp e Instagram",
+  },
+  data_collection: { label: "Fazer uma pergunta", description: "Pergunte e salve a resposta no contato.", channel: "WhatsApp e Instagram" },
+  smart_delay: { label: "Aguardar", description: "Espere um período fixo ou aleatório antes de continuar." },
+  condition: { label: "Condição", description: "Envie o contato por caminhos diferentes conforme seus dados." },
+  randomizer: { label: "Teste A/B", description: "Divida contatos entre caminhos para comparar resultados." },
+  action: { label: "Atualizar contato ou conversa", description: "Aplique etiquetas, campos, sequências ou responsáveis." },
+  start_flow: { label: "Iniciar outro fluxo", description: "Transfira o contato para outra automação." },
+  external_request: { label: "Chamar API externa", description: "Envie dados a outro sistema e aproveite a resposta." },
+  send_sms: { label: "Enviar SMS", description: "Envie uma mensagem de texto por SMS.", channel: "Somente SMS" },
+  send_email: { label: "Enviar e-mail", description: "Envie um e-mail ao contato.", channel: "Somente e-mail" },
+  note: { label: "Anotação", description: "Registre uma observação no desenho; ela não é executada." },
+};
+
+export function nodeCopy(spec: NodeTypeSpec | undefined, type: string) {
+  return NODE_COPY[type] ?? { label: spec?.label ?? type, description: spec?.description ?? "" };
+}
 
 /** The eyebrow for a node type: what kind of step this is, in plain words. */
 export function plainKind(spec: NodeTypeSpec | undefined, type: string): string {
@@ -80,4 +103,4 @@ export function plainKind(spec: NodeTypeSpec | undefined, type: string): string 
  * A trigger is not a node and has no group, but it reads as the first step of
  * the flow and the design gives it the same treatment.
  */
-export const TRIGGER_PHRASE = "When";
+export const TRIGGER_PHRASE = "Quando";

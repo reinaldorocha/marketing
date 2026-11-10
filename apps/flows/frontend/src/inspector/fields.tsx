@@ -64,10 +64,10 @@ export function FieldShell({
         <label className="fb-field-label" htmlFor={fieldId(path)}>
           {labelFor(propertyName, schema.title)}
         </label>
-        {required ? null : <span className="fb-empty">optional</span>}
+        {required ? null : <span className="fb-empty">opcional</span>}
         {onClear && !required && !readOnly ? (
           <button type="button" className="btn-link ml-auto text-xs" onClick={onClear}>
-            Clear
+            Limpar
           </button>
         ) : null}
       </div>
@@ -194,7 +194,7 @@ export function ScalarField(props: FieldProps) {
         <select
           id={fieldId(path)}
           className="bb-select w-28"
-          aria-label="Value kind"
+          aria-label="Tipo do valor"
           value={kind}
           disabled={readOnly}
           onChange={(event) => {
@@ -202,9 +202,9 @@ export function ScalarField(props: FieldProps) {
             set(path, next === "number" ? 0 : next === "boolean" ? true : String(value ?? ""), `scalar:${path.join(".")}`);
           }}
         >
-          <option value="text">Text</option>
-          <option value="number">Number</option>
-          <option value="boolean">Yes / no</option>
+          <option value="text">Texto</option>
+          <option value="number">Número</option>
+          <option value="boolean">Sim / não</option>
         </select>
         {kind === "boolean" ? (
           <select
@@ -213,8 +213,8 @@ export function ScalarField(props: FieldProps) {
             disabled={readOnly}
             onChange={(event) => set(path, event.target.value === "true", `scalar:${path.join(".")}`)}
           >
-            <option value="true">Yes</option>
-            <option value="false">No</option>
+            <option value="true">Sim</option>
+            <option value="false">Não</option>
           </select>
         ) : (
           <input

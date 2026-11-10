@@ -83,7 +83,7 @@ export function picklistSelect(list: ListKey, { creatable }: { creatable: boolea
               "flow_id (no longer available)", and an id tells the reader
               nothing they can act on. What they need to know is that this one
               points at something gone, and to pick again. */}
-          {current && !known ? <option value={current}>Whatever this pointed at has gone</option> : null}
+          {current && !known ? <option value={current}>O item selecionado não existe mais</option> : null}
         </select>
         {options.length === 0 ? <p className="fb-field-help">{EMPTY_COPY[list]}</p> : null}
       </FieldShell>
@@ -113,7 +113,7 @@ export function MemberMultiSelect(props: FieldProps) {
 
   return (
     <FieldShell {...props}>
-      {picklists.members.length === 0 ? <p className="fb-field-help">No workspace members to choose from.</p> : null}
+      {picklists.members.length === 0 ? <p className="fb-field-help">Não há membros neste espaço para selecionar.</p> : null}
       {picklists.members.map((member) => (
         <label key={member.id} className="flex items-center gap-2 text-xs mb-1">
           <input

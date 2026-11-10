@@ -31,21 +31,21 @@ import { useBuilder, useBuilderStore } from "./store/context";
 import { ProblemsRail } from "./validation/ProblemsRail";
 
 const OFFLINE_CONFIRM =
-  "Set this flow offline? It stops replying straight away, including to people partway through it.";
+  "Desativar este fluxo? Ele deixará de responder imediatamente, inclusive para pessoas que já estão nele.";
 
 const BUSY_LABEL: Record<PublishAction, string> = {
-  publish: "Setting live…",
-  enable: "Turning on…",
-  offline: "Setting offline…",
+  publish: "Ativando…",
+  enable: "Ativando gatilhos…",
+  offline: "Desativando…",
 };
 
 function stoppedCopy(stopped: number): string {
   if (stopped === 0) {
-    return "Nothing new will start it.";
+    return "Nenhuma nova conversa o iniciará.";
   }
   return stopped === 1
-    ? "1 conversation in progress was stopped."
-    : `${stopped} conversations in progress were stopped.`;
+    ? "1 conversa em andamento foi interrompida."
+    : `${stopped} conversas em andamento foram interrompidas.`;
 }
 
 export function Toolbar({ autosave }: { autosave: Autosave | null }) {
@@ -77,7 +77,7 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
       // success, which is worse than doing nothing.
       if (autosave && !(await autosave.flush())) {
         store.getState().setSave({
-          message: "Not set live: your latest changes could not be saved. Fix the problems listed here and try again.",
+          message: "Não foi possível ativar: suas últimas alterações não foram salvas. Corrija os problemas e tente novamente.",
         });
         return;
       }
@@ -100,8 +100,8 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
       // Report the action where the person pressed it, as well as in status.
       showToast({
         tone: "success",
-        title: enablingOnly ? "Triggers turned on" : "Flow published",
-        body: enablingOnly ? "All triggers are now on." : `Version ${result.version.version} is published.`,
+        title: enablingOnly ? "Gatilhos ativados" : "Fluxo ativado",
+        body: enablingOnly ? "Todos os gatilhos estão ativados." : `A versão ${result.version.version} está ativa.`,
       });
     } catch (error) {
       if (error instanceof ApiError && error.status === 422) {
@@ -109,7 +109,7 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
         if (payload?.validation) {
           store.getState().applyValidation(payload.validation, store.getState().revision);
         }
-        store.getState().setSave({ message: "Not set live: fix the problems listed here and try again." });
+        store.getState().setSave({ message: "Não foi possível ativar: corrija os problemas listados e tente novamente." });
       } else if (error instanceof ApiError) {
         store.getState().setSave({ message: error.message });
       }
@@ -141,7 +141,7 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
           ? { version: result.version, publishedVersion: null, message: null }
           : { publishedVersion: null, message: null },
       );
-      showToast({ tone: "success", title: "Flow is offline", body: stoppedCopy(result.stopped) });
+      showToast({ tone: "success", title: "Fluxo desativado", body: stoppedCopy(result.stopped) });
     } catch (error) {
       if (error instanceof ApiError) {
         store.getState().setSave({ message: error.message });
@@ -168,13 +168,13 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
   };
 
   return (
-    <div className="fb-toolbar" role="toolbar" aria-label="Flow">
+    <div className="fb-toolbar" role="toolbar" aria-label="Fluxo">
       {/* The way back and the flow's own name and state, on the left. */}
       <div className="fb-toolbar-identity">
         {env.listUrl ? (
           <a className="fb-toolbar-back" href={env.listUrl}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
-            Flows
+            Fluxos
           </a>
         ) : null}
         {env.listUrl ? <span className="fb-toolbar-sep" aria-hidden="true">/</span> : null}
@@ -188,17 +188,17 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
             {view.saveLabel}
           </span>
         ) : (
-          <span className="fb-save-state">Read-only</span>
+          <span className="fb-save-state">Somente leitura</span>
         )}
       </div>
 
       <div className="fb-toolbar-actions">
         {canEdit ? (
           <>
-            <button type="button" className="fb-toolbar-icon" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={() => store.getState().undo()}>
+            <button type="button" className="fb-toolbar-icon" aria-label="Desfazer" title="Desfazer" disabled={!canUndo} onClick={() => store.getState().undo()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
             </button>
-            <button type="button" className="fb-toolbar-icon" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={() => store.getState().redo()}>
+            <button type="button" className="fb-toolbar-icon" aria-label="Refazer" title="Refazer" disabled={!canRedo} onClick={() => store.getState().redo()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></svg>
             </button>
           </>
@@ -207,15 +207,15 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
         <button
           type="button"
           className="fb-toolbar-icon"
-          aria-label={statsVisible ? "Hide stats" : "Show stats"}
-          title={statsVisible ? "Hide stats" : "Show stats"}
+          aria-label={statsVisible ? "Ocultar estatísticas" : "Mostrar estatísticas"}
+          title={statsVisible ? "Ocultar estatísticas" : "Mostrar estatísticas"}
           aria-pressed={statsVisible}
           onClick={() => store.getState().toggleStats()}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-8M22 20V8"/></svg>
         </button>
 
-        {statsFailed ? <span className="fb-badge fb-badge-warning">Stats unavailable</span> : null}
+        {statsFailed ? <span className="fb-badge fb-badge-warning">Estatísticas indisponíveis</span> : null}
 
         {/*
           Editors only. Testing runs the *draft* against a real chat and sends
@@ -262,7 +262,7 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
             title={OFFLINE_HINT}
             onClick={() => void takeOffline()}
           >
-            {busy === "offline" ? BUSY_LABEL.offline : "Set offline"}
+            {busy === "offline" ? BUSY_LABEL.offline : "Desativar"}
           </button>
         ) : null}
 
@@ -284,7 +284,7 @@ function FlowName() {
   const env = useBuilder((state) => state.env);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  const name = flow?.name || env.flowName || "Untitled flow";
+  const name = flow?.name || env.flowName || "Fluxo sem título";
   const canRename = env.canEdit && Boolean(env.renameUrl);
 
   const commit = async () => {
@@ -303,8 +303,8 @@ function FlowName() {
       store.getState().setFlow(flow);
       showToast({
         tone: "error",
-        title: "Not renamed",
-        body: error instanceof ApiError ? error.message : "The name could not be saved.",
+        title: "Nome não alterado",
+        body: error instanceof ApiError ? error.message : "Não foi possível salvar o nome.",
       });
     }
   };
@@ -313,7 +313,7 @@ function FlowName() {
     return (
       <input
         className="fb-flow-name-input"
-        aria-label="Flow name"
+        aria-label="Nome do fluxo"
         value={draft}
         maxLength={200}
         autoFocus
@@ -333,7 +333,7 @@ function FlowName() {
     <button
       type="button"
       className="fb-flow-name"
-      title="Rename this flow"
+      title="Renomear este fluxo"
       onClick={() => {
         setDraft(name);
         setEditing(true);
@@ -394,7 +394,7 @@ function ProblemsMenu({ errorCount, warningCount }: { errorCount: number; warnin
 
   const tone = errorCount > 0 ? "error" : warningCount > 0 ? "warning" : "ok";
   const label =
-    errorCount > 0 ? `${errorCount} to fix` : warningCount > 0 ? `${warningCount} to check` : "Ready";
+    errorCount > 0 ? `${errorCount} para corrigir` : warningCount > 0 ? `${warningCount} para verificar` : "Pronto";
 
   return (
     <div className="fb-problems-menu" ref={wrapper}>
@@ -409,10 +409,10 @@ function ProblemsMenu({ errorCount, warningCount }: { errorCount: number; warnin
         {label}
       </button>
       {open ? (
-        <div className="fb-problems-popover" role="dialog" aria-label="Problems">
+        <div className="fb-problems-popover" role="dialog" aria-label="Problemas">
           <ProblemsRail onPick={close} />
           {errorCount === 0 && warningCount === 0 && !message ? (
-            <p className="fb-empty">Nothing to fix. This flow is ready to go live.</p>
+            <p className="fb-empty">Nenhum ajuste pendente. Este fluxo pode ser ativado.</p>
           ) : null}
         </div>
       ) : null}
@@ -440,8 +440,8 @@ function OverflowMenu() {
       <button
         type="button"
         className="fb-toolbar-icon"
-        aria-label="More actions"
-        title="More actions"
+        aria-label="Mais ações"
+        title="Mais ações"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
@@ -451,10 +451,10 @@ function OverflowMenu() {
       {open ? (
         <div className="fb-overflow-menu" role="menu">
           {env.exportUrl ? (
-            <a role="menuitem" href={env.exportUrl} onClick={close}>Download a copy</a>
+            <a role="menuitem" href={env.exportUrl} onClick={close}>Baixar uma cópia</a>
           ) : null}
           {env.exportBundleUrl ? (
-            <a role="menuitem" href={env.exportBundleUrl} onClick={close}>Download with everything it uses</a>
+            <a role="menuitem" href={env.exportBundleUrl} onClick={close}>Baixar com os recursos usados</a>
           ) : null}
         </div>
       ) : null}

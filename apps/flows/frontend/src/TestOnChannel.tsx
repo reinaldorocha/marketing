@@ -47,7 +47,7 @@ export function TestOnChannel() {
       setState({
         kind: "error",
         message:
-          error instanceof ApiError ? error.message : "The test link could not be created. Try again.",
+          error instanceof ApiError ? error.message : "Não foi possível criar o link de teste. Tente novamente.",
       });
     }
   };
@@ -60,7 +60,7 @@ export function TestOnChannel() {
         disabled={state.kind === "loading"}
         onClick={() => void press()}
       >
-        {state.kind === "loading" ? "Preparing…" : "Test this flow"}
+        {state.kind === "loading" ? "Preparando…" : "Testar este fluxo"}
       </button>
 
       {state.kind === "ready" ? (
@@ -73,7 +73,7 @@ export function TestOnChannel() {
           // window.opener.
           rel="noopener noreferrer"
         >
-          Open {state.link.account} on {state.link.platform_label} →
+          Abrir {state.link.account} no {state.link.platform_label} →
         </a>
       ) : null}
 
@@ -94,7 +94,7 @@ export function TestOnChannel() {
           {state.settingsUrl ? (
             <>
               {" "}
-              <a href={state.settingsUrl}>Connect one</a>
+              <a href={state.settingsUrl}>Conectar um canal</a>
             </>
           ) : null}
         </span>

@@ -59,7 +59,7 @@ function Shell() {
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setFailure(error instanceof ApiError ? error.message : "This flow could not be loaded.");
+          setFailure(error instanceof ApiError ? error.message : "Não foi possível carregar este fluxo.");
         }
       });
     return () => {
@@ -147,7 +147,7 @@ function Shell() {
     return (
       <div className="h-full flex items-center justify-center p-8">
         <div className="alert-error max-w-lg">
-          <p className="font-medium">The flow builder could not load this flow.</p>
+          <p className="font-medium">Não foi possível carregar o editor deste fluxo.</p>
           <p className="mt-1">{failure}</p>
         </div>
       </div>
@@ -158,7 +158,7 @@ function Shell() {
     return (
       <div className="h-full flex items-center justify-center p-8">
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          Loading the flow builder…
+          Carregando o editor de fluxos…
         </p>
       </div>
     );
@@ -174,7 +174,7 @@ function Shell() {
       <div className="fb-shell">
         <TriggerSidebar />
         <Canvas />
-        <aside className="fb-right-sidebar" aria-label="Selected step">
+        <aside className="fb-right-sidebar" aria-label="Etapa selecionada">
           <StepEditor />
         </aside>
       </div>

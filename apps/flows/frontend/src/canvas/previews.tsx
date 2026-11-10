@@ -80,7 +80,7 @@ function SendMessagePreview({ config }: PreviewProps) {
       );
     }
   } else {
-    mainPreview = <Empty>Nothing to send yet</Empty>;
+    mainPreview = <Empty>Nada para enviar ainda</Empty>;
   }
 
   const listRows: string[] = [];
@@ -142,9 +142,9 @@ export function operatorCopy(op: unknown): string {
 
 function ConditionPreview({ config }: PreviewProps) {
   const rules = list(isRecord(config) ? config["rules"] : undefined);
-  const match = isRecord(config) && config["match"] === "any" ? "Any of" : "All of";
+  const match = isRecord(config) && config["match"] === "any" ? "Qualquer regra" : "Todas as regras";
   if (rules.length === 0) {
-    return <Empty>Nothing to check yet</Empty>;
+    return <Empty>Nada para verificar ainda</Empty>;
   }
   return (
     <>
@@ -166,7 +166,7 @@ function RandomizerPreview({ config }: PreviewProps) {
   const paths = list(isRecord(config) ? config["paths"] : undefined);
   const total = paths.reduce((sum, path) => sum + (typeof path["weight"] === "number" ? path["weight"] : 0), 0);
   if (paths.length === 0) {
-    return <Empty>No paths to split down yet</Empty>;
+    return <Empty>Nenhum caminho definido ainda</Empty>;
   }
   return (
     <>
@@ -188,22 +188,22 @@ function RandomizerPreview({ config }: PreviewProps) {
 }
 
 const VERB_COPY: Record<string, string> = {
-  add_tag: "Add tag",
-  remove_tag: "Remove tag",
-  set_field: "Set field",
-  clear_field: "Clear field",
-  subscribe_sequence: "Subscribe",
-  unsubscribe_sequence: "Unsubscribe",
-  open_conversation: "Open conversation",
-  close_conversation: "Close conversation",
-  assign_conversation: "Assign",
-  notify_members: "Notify",
+  add_tag: "Adicionar etiqueta",
+  remove_tag: "Remover etiqueta",
+  set_field: "Definir campo",
+  clear_field: "Limpar campo",
+  subscribe_sequence: "Inscrever",
+  unsubscribe_sequence: "Remover inscrição",
+  open_conversation: "Abrir conversa",
+  close_conversation: "Fechar conversa",
+  assign_conversation: "Atribuir",
+  notify_members: "Notificar",
 };
 
 function ActionPreview({ config }: PreviewProps) {
   const actions = list(isRecord(config) ? config["actions"] : undefined);
   if (actions.length === 0) {
-    return <Empty>Nothing to do yet</Empty>;
+    return <Empty>Nenhuma ação definida ainda</Empty>;
   }
   return (
     <Pills
@@ -218,11 +218,11 @@ function ActionPreview({ config }: PreviewProps) {
 
 function SmartDelayPreview({ config }: PreviewProps) {
   if (!isRecord(config)) {
-    return <Empty>Nothing set yet</Empty>;
+    return <Empty>Nada definido ainda</Empty>;
   }
   if (config["mode"] === "date" && isRecord(config["date"])) {
     const date = config["date"];
-    return <p>Wait until {String(date["field"] ?? date["datetime"] ?? "a date")}</p>;
+    return <p>Aguardar até {String(date["field"] ?? date["datetime"] ?? "uma data")}</p>;
   }
   if (isRecord(config["duration"])) {
     const duration = config["duration"];
@@ -232,17 +232,17 @@ function SmartDelayPreview({ config }: PreviewProps) {
       const unit = String(duration["unit"] ?? "seconds");
       return (
         <p>
-          Wait {String(minVal)} to {String(maxVal)} {unit}
+          Aguardar de {String(minVal)} a {String(maxVal)} {unit}
         </p>
       );
     }
     return (
       <p>
-        Wait {String(duration["value"] ?? "?")} {String(duration["unit"] ?? "")}
+        Aguardar {String(duration["value"] ?? "?")} {String(duration["unit"] ?? "")}
       </p>
     );
   }
-  return <Empty>Nothing set yet</Empty>;
+  return <Empty>Nada definido ainda</Empty>;
 }
 
 function DataCollectionPreview({ config }: PreviewProps) {
@@ -282,15 +282,15 @@ function StartFlowPreview({ config, picklists }: PreviewProps) {
   const id = isRecord(config) ? String(config["flow_id"] ?? "") : "";
   const target = picklists.flows.find((flow) => flow.id === id);
   if (!id) {
-    return <Empty>No flow picked yet</Empty>;
+    return <Empty>Nenhum fluxo selecionado ainda</Empty>;
   }
-  return target ? <p>{target.label}</p> : <Empty>Unknown flow ({truncate(id, 20)})</Empty>;
+  return target ? <p>{target.label}</p> : <Empty>Fluxo desconhecido ({truncate(id, 20)})</Empty>;
 }
 
 function TextFieldPreview(key: string) {
   return function Preview({ config }: PreviewProps) {
     const value = isRecord(config) ? config[key] : undefined;
-    return typeof value === "string" && value ? <p>{truncate(value)}</p> : <Empty>Empty</Empty>;
+    return typeof value === "string" && value ? <p>{truncate(value)}</p> : <Empty>Vazio</Empty>;
   };
 }
 
@@ -319,7 +319,7 @@ export function DefaultPreview({ config, type }: PreviewProps & { type: string }
     .slice(0, 3)
     .map((key) => `${key}: ${String(config[key] ?? "")}`);
 
-  return shown.length > 0 ? <Pills items={shown} /> : <Empty>Ready</Empty>;
+  return shown.length > 0 ? <Pills items={shown} /> : <Empty>Pronto</Empty>;
 }
 
 const PREVIEWS: Record<string, (props: PreviewProps) => ReactNode> = {

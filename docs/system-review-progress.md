@@ -44,6 +44,12 @@ Nesta nova varredura foram corrigidas listas e filtros de contatos, fluxos e seq
 
 O módulo de fluxos recebeu uma revisão específica: editor, importação, galeria de modelos, gatilhos, exportação, filtros e estados agora usam português. A migração `flows.0009` mantém os rótulos do banco sincronizados com os estados mostrados na interface.
 
+### Editor de fluxos: canais e blocos
+
+O editor agora identifica, em cada gatilho, os canais resolvidos para o fluxo. Ao criar uma etapa, os itens de envio mostram se funcionam em WhatsApp e Instagram ou se pertencem somente a SMS e e-mail. Ao editar **Enviar mensagem** ou **Fazer uma pergunta**, um painel de compatibilidade explica os formatos nativos de WhatsApp e Instagram, os limites de interação e a janela de 24 horas.
+
+Também foram traduzidos os controles de etapas, prévia, gatilhos, ações, campos de mensagem, estados de salvamento e publicação. A validação continua no servidor, com a mesma tabela de capacidades dos provedores; a nova interface apenas deixa as regras visíveis antes do envio.
+
 ## Critério de encerramento
 
 Esta revisão só será marcada como concluída depois de: migrações limpas; verificações do Django e testes relevantes aprovados; ausência de texto em inglês nas telas próprias; e confirmação de funcionamento da implantação em produção.

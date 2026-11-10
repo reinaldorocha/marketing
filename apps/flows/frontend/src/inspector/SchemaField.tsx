@@ -181,7 +181,7 @@ export function ObjectField({
         />
         {optional && !readOnly ? (
           <button type="button" className="btn-link text-xs -mt-2 mb-2 block" onClick={() => clear(childPath)}>
-            Remove {labelFor(key, deref(property)?.title)}
+            Remover {labelFor(key, deref(property)?.title)}
           </button>
         ) : null}
       </div>
@@ -205,7 +205,7 @@ export function ObjectField({
   const adders =
     readOnly || absent.length === 0 ? null : path.length === 0 ? (
       <div className="fb-adders">
-        <p className="fb-adders-label">Add to this step</p>
+        <p className="fb-adders-label">Adicionar a esta etapa</p>
         {groupAdders(absent).map(([label, group]) => (
           <div key={label} className="fb-adder-group">
             <p className="fb-adder-group-label">{label}</p>
@@ -232,7 +232,7 @@ export function ObjectField({
   return (
     <div className="fb-field">
       <span className="fb-field-label">{labelFor(propertyName, schema.title)}</span>
-      {required ? null : <span className="fb-empty"> optional</span>}
+      {required ? null : <span className="fb-empty"> opcional</span>}
       <div className="fb-subgroup">
         {unmet ? <p className="fb-field-error">Fill in one of: {alternatives.map((g) => g.join(" or ")).join(", ")}.</p> : null}
         {body}
@@ -252,7 +252,7 @@ export function ObjectField({
  */
 function groupAdders(absent: [string, JsonSchema][]): [string, [string, JsonSchema][]][] {
   const claimed = new Set(ADD_GROUPS.flatMap((group) => group.keys));
-  const fallback = ADD_GROUPS[ADD_GROUPS.length - 1]?.label ?? "More";
+  const fallback = ADD_GROUPS[ADD_GROUPS.length - 1]?.label ?? "Mais opções";
 
   return ADD_GROUPS.map((group): [string, [string, JsonSchema][]] => [
     group.label,
@@ -290,7 +290,7 @@ export function ArrayField({ schema, path, value, propertyName }: FieldProps) {
       <span className="fb-field-label">{labelFor(propertyName, schema.title)}</span>
       {max !== undefined ? <span className="fb-empty"> {items.length}/{max}</span> : null}
 
-      {items.length === 0 ? <p className="fb-empty">Nothing yet.</p> : null}
+      {items.length === 0 ? <p className="fb-empty">Nenhum item ainda.</p> : null}
 
       {items.map((item, index) => (
         <div key={index} className="fb-subgroup">
@@ -305,7 +305,7 @@ export function ArrayField({ schema, path, value, propertyName }: FieldProps) {
                   type="button"
                   className="fb-row-btn"
                   onClick={() => move(index, index - 1)}
-                  aria-label={`Move ${labelFor(propertyName, schema.title)} ${index + 1} up`}
+                  aria-label={`Mover ${labelFor(propertyName, schema.title)} ${index + 1} para cima`}
                 >
                   ↑
                 </button>
@@ -313,7 +313,7 @@ export function ArrayField({ schema, path, value, propertyName }: FieldProps) {
                   type="button"
                   className="fb-row-btn"
                   onClick={() => move(index, index + 1)}
-                  aria-label={`Move ${labelFor(propertyName, schema.title)} ${index + 1} down`}
+                  aria-label={`Mover ${labelFor(propertyName, schema.title)} ${index + 1} para baixo`}
                 >
                   ↓
                 </button>
@@ -322,7 +322,7 @@ export function ArrayField({ schema, path, value, propertyName }: FieldProps) {
                   className="fb-row-btn is-danger"
                   disabled={items.length <= min}
                   onClick={() => set(path, items.filter((_unused, at) => at !== index), `remove:${formatPath(path)}`)}
-                  aria-label={`Remove ${labelFor(propertyName, schema.title)} ${index + 1}`}
+                  aria-label={`Remover ${labelFor(propertyName, schema.title)} ${index + 1}`}
                 >
                   ✕
                 </button>
@@ -348,10 +348,10 @@ export function ArrayField({ schema, path, value, propertyName }: FieldProps) {
           // panel can hold several arrays and three controls called "Add" say
           // nothing about what they add. What changes is that the *visible*
           // label now says the same thing: it read "Add", full stop.
-          aria-label={`Add to ${labelFor(propertyName, schema.title)}`}
+          aria-label={`Adicionar a ${labelFor(propertyName, schema.title)}`}
           onClick={() => set(path, [...items, defaultFor(schema.items, propertyName)], `append:${formatPath(path)}`)}
         >
-          + {ADD_ONE[propertyName] ?? `Add to ${labelFor(propertyName, schema.title)}`}
+          + {ADD_ONE[propertyName] ?? `Adicionar a ${labelFor(propertyName, schema.title)}`}
         </button>
       )}
     </div>
@@ -406,7 +406,7 @@ export function VariantField({
           <label className="fb-field-label" htmlFor={fieldId(path)}>
             {labelFor(propertyName, schema.title)}
           </label>
-          {required ? null : <span className="fb-empty"> optional</span>}
+          {required ? null : <span className="fb-empty"> opcional</span>}
         </>
       )}
       <select
@@ -485,7 +485,7 @@ export function UnionField({
           <label className="fb-field-label" htmlFor={fieldId(path)}>
             {labelFor(propertyName, schema.title)}
           </label>
-          {required ? null : <span className="fb-empty"> optional</span>}
+          {required ? null : <span className="fb-empty"> opcional</span>}
         </>
       )}
       <select

@@ -22,9 +22,9 @@ describe("publishView", () => {
   it("offers Set offline on a published flow with nothing new to publish", () => {
     const view = publishView(published, "active", 2, 1);
 
-    expect(view.statusLabel).toBe("Live v2");
+    expect(view.statusLabel).toBe("Ativo v2");
     expect(view.action).toBe("offline");
-    expect(view.publishLabel).toBe("Set offline");
+    expect(view.publishLabel).toBe("Desativar");
     expect(view.publishHint).toBe("Stops this flow now, including conversations already in it.");
     expect(view.secondary).toBeNull();
   });
@@ -32,7 +32,7 @@ describe("publishView", () => {
   it("calls out a published flow whose triggers are all off and offers to turn them on", () => {
     const view = publishView(published, "active", 2, 0);
 
-    expect(view.statusLabel).toBe("Live v2 · Triggers off");
+    expect(view.statusLabel).toBe("Ativo v2 · Gatilhos desativados");
     expect(view.action).toBe("enable");
     expect(view.publishLabel).toBe("Turn on triggers");
     // Still live for the API, sequences and other flows, so it still needs a way out.
@@ -42,7 +42,7 @@ describe("publishView", () => {
   it("calls out a published flow with no triggers", () => {
     const view = publishView(published, "active", 0, 0);
 
-    expect(view.statusLabel).toBe("Live v2 · No triggers");
+    expect(view.statusLabel).toBe("Ativo v2 · Sem gatilhos");
     // "All off" needs at least one trigger, so there is nothing to turn on.
     expect(view.action).toBe("offline");
   });
@@ -51,7 +51,7 @@ describe("publishView", () => {
     const view = publishView(save({ ...published, state: "dirty" }), "active", 2, 1);
 
     expect(view.action).toBe("publish");
-    expect(view.publishLabel).toBe("Set live");
+    expect(view.publishLabel).toBe("Ativar");
     expect(view.publishHint).toBeNull();
     expect(view.saveLabel).toBe("Unsaved changes");
     // The flow is still live while the edit waits, so it can still be switched off.
@@ -64,15 +64,15 @@ describe("publishView", () => {
     const view = publishView(save({ version: version(3, false), publishedVersion: version(2, true) }), "active", 2, 1);
 
     expect(view.action).toBe("publish");
-    expect(view.publishLabel).toBe("Set live");
+    expect(view.publishLabel).toBe("Ativar");
     expect(view.secondary).toBe("offline");
   });
 
   it("names a saved draft while still showing the published status", () => {
     const view = publishView(save({ version: version(3, false), publishedVersion: version(2, true) }), "active", 2, 0);
 
-    expect(view.statusLabel).toBe("Live v2 · Triggers off");
-    expect(view.saveLabel).toBe("No changes · Draft v3");
+    expect(view.statusLabel).toBe("Ativo v2 · Gatilhos desativados");
+    expect(view.saveLabel).toBe("Sem alterações · Rascunho v3");
   });
 
   it("says Archived even when a published version exists", () => {
@@ -85,25 +85,25 @@ describe("publishView", () => {
   it("says Offline and offers Set live, without calling its last live version a draft", () => {
     const view = publishView(save({ version: version(2, false, "2026-10-01"), publishedVersion: null }), "offline", 2, 1);
 
-    expect(view.statusLabel).toBe("Offline");
+    expect(view.statusLabel).toBe("Desativado");
     expect(view.statusTone).toBe("warning");
     expect(view.action).toBe("publish");
-    expect(view.publishLabel).toBe("Set live");
+    expect(view.publishLabel).toBe("Ativar");
     expect(view.secondary).toBeNull();
-    expect(view.saveLabel).toBe("No changes");
+    expect(view.saveLabel).toBe("Sem alterações");
   });
 
   it("still names an edit made while offline, because Set live will publish it", () => {
     const view = publishView(save({ version: version(3, false), publishedVersion: null }), "offline", 2, 1);
 
-    expect(view.saveLabel).toBe("No changes · Draft v3");
+    expect(view.saveLabel).toBe("Sem alterações · Rascunho v3");
   });
 
   it("uses Draft before publication", () => {
     const view = publishView(save(), "draft");
 
     expect(view.secondary).toBeNull();
-    expect(view.statusLabel).toBe("Draft");
-    expect(view.saveLabel).toBe("No changes");
+    expect(view.statusLabel).toBe("Rascunho");
+    expect(view.saveLabel).toBe("Sem alterações");
   });
 });

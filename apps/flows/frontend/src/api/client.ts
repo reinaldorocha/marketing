@@ -23,14 +23,14 @@ export class ApiError extends Error {
 /** A non-JSON answer, which in practice is the login page or an HTML 500. */
 export class SessionExpiredError extends ApiError {
   constructor(status: number) {
-    super(status, "session_expired", "Your session expired. Reload the page to continue editing.");
+    super(status, "session_expired", "Sua sessão expirou. Recarregue a página para continuar editando.");
     this.name = "SessionExpiredError";
   }
 }
 
 export class RequestTimeoutError extends ApiError {
   constructor() {
-    super(0, "timeout", "The request took too long. Retrying\u2026");
+    super(0, "timeout", "A solicitação demorou demais. Tentando novamente\u2026");
     this.name = "RequestTimeoutError";
   }
 }
@@ -40,7 +40,7 @@ export class MissingCsrfTokenError extends ApiError {
     super(
       0,
       "missing_csrf_token",
-      "This page has no CSRF token, so nothing can be saved. Reload the page.",
+      "Esta página não tem o token de segurança necessário e não pode salvar. Recarregue a página.",
     );
     this.name = "MissingCsrfTokenError";
   }
@@ -82,15 +82,15 @@ function errorFrom(status: number, payload: unknown): ApiError {
     return new ApiError(status, envelope.code, envelope.message ?? envelope.code, payload);
   }
   if (status === 422) {
-    return new ApiError(status, "validation_failed", "This change cannot be saved.", payload);
+    return new ApiError(status, "validation_failed", "Esta alteração não pode ser salva.", payload);
   }
   if (status === 403) {
-    return new ApiError(status, "forbidden", "You no longer have permission to edit this flow.", payload);
+    return new ApiError(status, "forbidden", "Você não tem mais permissão para editar este fluxo.", payload);
   }
   if (status === 404) {
-    return new ApiError(status, "not_found", "This flow is no longer available.", payload);
+    return new ApiError(status, "not_found", "Este fluxo não está mais disponível.", payload);
   }
-  return new ApiError(status, "server_error", `The server answered ${status}.`, payload);
+  return new ApiError(status, "server_error", `O servidor respondeu com ${status}.`, payload);
 }
 
 /**

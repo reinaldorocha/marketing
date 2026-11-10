@@ -20,7 +20,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useEffect, useRef, useState } from "react";
 
 import { FALLBACK_GROUP, GROUPS, NODE_TYPES, groupOf } from "../schema/artifact";
-import { GROUP_PHRASE } from "../schema/plain";
+import { GROUP_PHRASE, nodeCopy } from "../schema/plain";
 import { useBuilder, useBuilderStore } from "../store/context";
 
 /** Where a new step goes: to the right of everything, vertically centred on it. */
@@ -91,7 +91,7 @@ export function AddStep() {
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
       >
-        <span aria-hidden="true">+</span> Add a step
+        <span aria-hidden="true">+</span> Adicionar etapa
       </button>
     </div>
   );
@@ -127,11 +127,13 @@ export function StepMenu({
   })).filter((drawer) => drawer.types.length > 0);
 
   return (
-    <div className={className} role="menu" aria-label="Kinds of step">
+    <div className={className} role="menu" aria-label="Tipos de etapa">
       {drawers.map((drawer) => (
         <div key={drawer.key}>
           <p className="fb-addstep-group">{drawer.phrase}</p>
-          {drawer.types.map((spec) => (
+          {drawer.types.map((spec) => {
+            const copy = nodeCopy(spec, spec.type);
+            return (
             <button
               key={spec.type}
               type="button"
@@ -151,11 +153,13 @@ export function StepMenu({
             >
               <span className="fb-addstep-swatch" aria-hidden="true" />
               <span className="min-w-0">
-                <span className="block truncate">{spec.label}</span>
-                {spec.description ? <span className="fb-addstep-hint block truncate">{spec.description}</span> : null}
+                <span className="block truncate">{copy.label}</span>
+                {copy.description ? <span className="fb-addstep-hint block truncate">{copy.description}</span> : null}
+                {copy.channel ? <span className="fb-addstep-channel">{copy.channel}</span> : null}
               </span>
             </button>
-          ))}
+            );
+          })}
         </div>
       ))}
     </div>

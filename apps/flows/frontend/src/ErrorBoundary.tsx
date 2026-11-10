@@ -24,9 +24,9 @@ export function BuilderFailure({ error }: { error: Error }) {
   return (
     <div className="h-full flex items-center justify-center p-8">
       <div className="alert-error max-w-lg">
-        <p className="font-medium">The flow builder stopped working.</p>
+        <p className="font-medium">O editor de fluxos parou de funcionar.</p>
         <p className="mt-1">
-          Reload the page. If it keeps happening, this message helps whoever looks into it:
+          Recarregue a página. Se o problema continuar, esta mensagem ajudará na investigação:
         </p>
         <p className="fb-problem-code mt-1">{error.message}</p>
       </div>

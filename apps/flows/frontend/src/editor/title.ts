@@ -12,6 +12,7 @@
  * renamed the step but not the message would be shown the stale one.
  */
 import { nodeSpec } from "../schema/artifact";
+import { nodeCopy } from "../schema/plain";
 
 const MAX = 48;
 
@@ -48,5 +49,5 @@ function textIn(config: unknown): string {
 
 export function titleOf(type: string, config: unknown): string {
   const found = clip(textIn(config));
-  return found || nodeSpec(type)?.label || type;
+  return found || nodeCopy(nodeSpec(type), type).label;
 }

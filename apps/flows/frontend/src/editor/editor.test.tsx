@@ -155,9 +155,9 @@ describe("the seam between the list and the editor", () => {
     const { container } = selectStep();
     const body = container.querySelector(".fb-editor-body") as HTMLElement;
 
-    fireEvent.click(screen.getByRole("tab", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Prévia" }));
     body.scrollTop = 400;
-    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Configurações" }));
 
     expect(body.scrollTop).toBe(0);
     expect(screen.getByText("Editing step 1")).toBeInTheDocument();
