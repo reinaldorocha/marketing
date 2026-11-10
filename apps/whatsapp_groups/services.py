@@ -528,6 +528,8 @@ def reserve_group_delivery(
             logs = list(broadcast.delivery_logs or [])
             if any(e.get("group_jid") == group_jid and e.get("status") == "ok" for e in logs):
                 return False, "already_sent"
+            if any(e.get("group_jid") == group_jid and e.get("status") in ("uncertain", "requires_reconciliation") for e in logs):
+                return False, "uncertain_pending"
 
             now = timezone.now()
             # Check for active in_flight reservation (< 300 seconds)
@@ -714,7 +716,7 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
     action_id = str(action.pk) if hasattr(action, "pk") and action.pk else ""
     reserved, reason = reserve_group_delivery(broadcast_id, group_jid, action_id=action_id)
     if not reserved:
-        if reason in ("already_sent", "not_found"):
+        if reason in ("already_sent", "not_found", "uncertain_pending"):
             logger.info(
                 "Group %s for broadcast %s cannot be reserved (reason: %s); completing normally",
                 group_jid,
@@ -1042,7 +1044,7 @@ def reconcile_group_delivery_manual(
     resolution can be:
     - 'confirm_sent': mark status as 'ok', increment sent_count
     - 'confirm_failed': mark status as 'error', increment error_count
-    - 'retry': remove log entry, clear any active reservation, schedule fresh send action
+    - 'retry': remove log entry, clear any active reservation, reactivate queue action
     """
     def _reconcile() -> dict[str, Any]:
         with transaction.atomic():
@@ -1057,13 +1059,20 @@ def reconcile_group_delivery_manual(
 
             logs = list(broadcast.delivery_logs or [])
             entry = next((e for e in logs if e.get("group_jid") == group_jid), None)
+            if not entry:
+                return {"success": False, "error": "group_not_found_in_logs"}
+
+            current_status = entry.get("status")
+            if current_status not in ("uncertain", "requires_reconciliation"):
+                return {"success": False, "error": f"group_not_uncertain (current status: {current_status})"}
+
             now = timezone.now()
 
             if resolution in ("confirm_sent", "ok"):
                 new_logs = [e for e in logs if e.get("group_jid") != group_jid]
                 new_logs.append({
                     "group_jid": group_jid,
-                    "group_name": entry.get("group_name", group_jid) if entry else group_jid,
+                    "group_name": entry.get("group_name", group_jid) or group_jid,
                     "status": "ok",
                     "error": "Confirmado manualmente pelo operador",
                     "sent_at": now.isoformat(),
@@ -1074,7 +1083,7 @@ def reconcile_group_delivery_manual(
                 new_logs = [e for e in logs if e.get("group_jid") != group_jid]
                 new_logs.append({
                     "group_jid": group_jid,
-                    "group_name": entry.get("group_name", group_jid) if entry else group_jid,
+                    "group_name": entry.get("group_name", group_jid) or group_jid,
                     "status": "error",
                     "error": "Falha confirmada manualmente pelo operador",
                     "sent_at": now.isoformat(),
@@ -1087,16 +1096,30 @@ def reconcile_group_delivery_manual(
                 broadcast.delivery_logs = new_logs
                 broadcast.status = BroadcastStatus.SENDING
                 broadcast.updated_at = now
-                broadcast.save()
+                broadcast.save(update_fields=["delivery_logs", "status", "updated_at"])
 
                 action_key = f"group_broadcast:{broadcast.id}:{group_jid}"
-                schedule(
-                    "group_broadcast_send",
-                    run_at=now,
-                    payload={"broadcast_id": str(broadcast.id), "group_jid": group_jid},
-                    workspace=broadcast.workspace,
-                    idempotency_key=action_key,
+                existing_action = (
+                    ScheduledAction.objects.unscoped()
+                    .filter(type="group_broadcast_send", idempotency_key=action_key)
+                    .first()
                 )
+                if existing_action:
+                    existing_action.status = ActionStatus.PENDING
+                    existing_action.attempts = 0
+                    existing_action.run_at = now
+                    existing_action.last_error = ""
+                    existing_action.save(
+                        update_fields=["status", "attempts", "run_at", "last_error", "updated_at"]
+                    )
+                else:
+                    schedule(
+                        "group_broadcast_send",
+                        run_at=now,
+                        payload={"broadcast_id": str(broadcast.id), "group_jid": group_jid},
+                        workspace=broadcast.workspace,
+                        idempotency_key=action_key,
+                    )
                 return {"success": True, "status": "retrying"}
             else:
                 return {"success": False, "error": "invalid_resolution"}
