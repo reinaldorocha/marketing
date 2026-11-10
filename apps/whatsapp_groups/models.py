@@ -182,6 +182,12 @@ class GroupBroadcast(WorkspaceScopedModel):
         choices=BroadcastStatus.choices,
         default=BroadcastStatus.DRAFT,
     )
+    claim_token = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text="Token identifying the worker/process currently executing or resuming this broadcast.",
+    )
     scheduled_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
 

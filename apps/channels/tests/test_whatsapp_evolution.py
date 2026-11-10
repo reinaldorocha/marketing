@@ -5,6 +5,7 @@ and that requests to loopback, link-local / metadata addresses are blocked.
 """
 
 from datetime import datetime, timezone as dt_timezone
+import json
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -89,7 +90,10 @@ class TestEvolutionTimestampNormalization:
             },
         }
 
-        events = adapter.parse_webhook_events(conn, raw_payload)
+        mock_request = MagicMock()
+        mock_request.body = json.dumps(raw_payload).encode("utf-8")
+
+        events = adapter.parse_events(mock_request, conn)
         assert len(events) == 1
         event = events[0]
         assert event.type == EventType.MESSAGE

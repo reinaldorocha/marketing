@@ -348,6 +348,8 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                     norm_phone,
                 )
 
+    initial_contact = contact
+
     try:
         with transaction.atomic():
             if contact is None:
@@ -475,16 +477,38 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
     except EngineError as exc:
         logger.warning("Lead webhook flow failed to start: %s", exc)
         cache.delete(lock_key)
+        persisted_contact = None
+        if initial_contact and getattr(initial_contact, "pk", None):
+            try:
+                persisted_contact = Contact.objects.filter(pk=initial_contact.pk).first()
+            except Exception:
+                persisted_contact = None
+
         log.status = "error"
-        log.contact = contact
+        log.contact = persisted_contact
         log.error_message = str(exc)
-        log.save(update_fields=["status", "contact", "error_message"])
+        try:
+            log.save(update_fields=["status", "contact", "error_message"])
+        except Exception:
+            log.contact = None
+            log.save(update_fields=["status", "contact", "error_message"])
         return JsonResponse({"error": f"flow_error: {exc}"}, status=422)
     except Exception as exc:
         logger.exception("Lead webhook processing failed: %s", exc)
         cache.delete(lock_key)
+        persisted_contact = None
+        if initial_contact and getattr(initial_contact, "pk", None):
+            try:
+                persisted_contact = Contact.objects.filter(pk=initial_contact.pk).first()
+            except Exception:
+                persisted_contact = None
+
         log.status = "error"
-        log.contact = contact
+        log.contact = persisted_contact
         log.error_message = str(exc)
-        log.save(update_fields=["status", "contact", "error_message"])
+        try:
+            log.save(update_fields=["status", "contact", "error_message"])
+        except Exception:
+            log.contact = None
+            log.save(update_fields=["status", "contact", "error_message"])
         return JsonResponse({"error": "internal_error", "detail": str(exc)}, status=500)

@@ -1,5 +1,7 @@
 import logging
+import threading
 import time
+import uuid
 from typing import Any
 from django.db import transaction
 from django.utils import timezone
@@ -184,12 +186,9 @@ def refresh_group_invite_link(group: WhatsAppGroup, revoke: bool = False) -> str
     return group.invite_link
 
 
-def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
-    """Execute a group broadcast campaign across target groups."""
+def resolve_target_groups(broadcast: GroupBroadcast) -> list[WhatsAppGroup]:
+    """Resolve and return the target WhatsAppGroup records for this broadcast."""
     connection = broadcast.connection
-    client = get_evolution_client(connection)
-
-    # Resolve target groups
     target_groups_qs = WhatsAppGroup.objects.none()
     if broadcast.target_mode == BroadcastTargetMode.SELECTED:
         target_groups_qs = broadcast.target_groups.filter(
@@ -206,8 +205,134 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
         target_groups_qs = WhatsAppGroup.objects.for_workspace(broadcast.workspace).filter(
             connection=connection
         )
+    return list(target_groups_qs)
 
-    target_groups = list(target_groups_qs)
+
+def send_message_to_group(
+    broadcast: GroupBroadcast,
+    group: WhatsAppGroup | None,
+    group_jid: str,
+    client: EvolutionClient | None = None,
+) -> None:
+    """Send configured broadcast message payload to a specific group."""
+    if client is None:
+        client = get_evolution_client(broadcast.connection)
+
+    mentions: list[str] = []
+    if broadcast.mention_all and group and group.participants_cache:
+        for p in group.participants_cache:
+            p_jid = ""
+            if isinstance(p, dict):
+                p_jid = str(p.get("JID") or p.get("jid") or "")
+            elif isinstance(p, str):
+                p_jid = p
+            if p_jid:
+                mentions.append(p_jid)
+
+    mtype = broadcast.message_type
+    if mtype == BroadcastMessageType.TEXT:
+        client.send_text(
+            number=group_jid,
+            text=broadcast.text,
+            mentions=mentions if broadcast.mention_all else None,
+        )
+    elif mtype == BroadcastMessageType.MEDIA:
+        client.send_media(
+            number=group_jid,
+            media_type=broadcast.media_type or "image",
+            url=broadcast.media_url,
+            caption=broadcast.media_caption,
+            mentions=mentions if broadcast.mention_all else None,
+        )
+    elif mtype == BroadcastMessageType.POLL:
+        client.send_poll(
+            number=group_jid,
+            question=broadcast.poll_question,
+            options=broadcast.poll_options or ["Sim", "Não"],
+            max_answers=broadcast.poll_max_answers or 1,
+        )
+    elif mtype == BroadcastMessageType.STICKER:
+        client.send_sticker(
+            number=group_jid,
+            url=broadcast.sticker_url,
+        )
+    elif mtype == BroadcastMessageType.LOCATION:
+        client.send_location(
+            number=group_jid,
+            latitude=broadcast.location_latitude or 0.0,
+            longitude=broadcast.location_longitude or 0.0,
+            name=broadcast.location_name,
+            address=broadcast.location_address,
+        )
+    elif mtype == BroadcastMessageType.CONTACT:
+        client.send_contact(
+            number=group_jid,
+            full_name=broadcast.contact_name,
+            phone=broadcast.contact_phone,
+            organization=broadcast.contact_organization,
+        )
+
+
+def _save_durable_checkpoint(
+    broadcast_id: Any,
+    delivery_logs: list[dict[str, Any]],
+    sent_count: int,
+    error_count: int,
+) -> None:
+    """Save broadcast delivery progress in a separate committed connection.
+
+    Ensures that checkpoints survive even if the caller is wrapped inside
+    a database transaction (such as a queue worker) that later rolls back.
+    """
+    def _run() -> None:
+        from django.db import connection as db_connection
+        try:
+            now = timezone.now()
+            (
+                GroupBroadcast.objects.unscoped()
+                .filter(pk=broadcast_id)
+                .update(
+                    delivery_logs=delivery_logs,
+                    sent_count=sent_count,
+                    error_count=error_count,
+                    updated_at=now,
+                )
+            )
+        finally:
+            db_connection.close()
+
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join()
+
+
+def mark_broadcast_failed_committed(broadcast_id: Any) -> None:
+    """Mark a broadcast as FAILED in a separate committed transaction."""
+    def _run() -> None:
+        from django.db import connection as db_connection
+        try:
+            (
+                GroupBroadcast.objects.unscoped()
+                .filter(pk=broadcast_id)
+                .update(
+                    status=BroadcastStatus.FAILED,
+                    updated_at=timezone.now(),
+                )
+            )
+        finally:
+            db_connection.close()
+
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join()
+
+
+def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
+    """Execute a group broadcast campaign across target groups."""
+    connection = broadcast.connection
+    client = get_evolution_client(connection)
+
+    target_groups = resolve_target_groups(broadcast)
     total_groups = len(target_groups)
 
     logs: list[dict[str, Any]] = list(broadcast.delivery_logs or [])
@@ -228,62 +353,11 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
         if group.jid in already_sent_jids:
             logger.info("Group %s already received broadcast %s; skipping", group.jid, broadcast.id)
             continue
-        mentions: list[str] = []
-        if broadcast.mention_all and group.participants_cache:
-            for p in group.participants_cache:
-                p_jid = ""
-                if isinstance(p, dict):
-                    p_jid = str(p.get("JID") or p.get("jid") or "")
-                elif isinstance(p, str):
-                    p_jid = p
-                if p_jid:
-                    mentions.append(p_jid)
 
         success = False
         error_msg = ""
         try:
-            mtype = broadcast.message_type
-            if mtype == BroadcastMessageType.TEXT:
-                client.send_text(
-                    number=group.jid,
-                    text=broadcast.text,
-                    mentions=mentions if broadcast.mention_all else None,
-                )
-            elif mtype == BroadcastMessageType.MEDIA:
-                client.send_media(
-                    number=group.jid,
-                    media_type=broadcast.media_type or "image",
-                    url=broadcast.media_url,
-                    caption=broadcast.media_caption,
-                    mentions=mentions if broadcast.mention_all else None,
-                )
-            elif mtype == BroadcastMessageType.POLL:
-                client.send_poll(
-                    number=group.jid,
-                    question=broadcast.poll_question,
-                    options=broadcast.poll_options or ["Sim", "Não"],
-                    max_answers=broadcast.poll_max_answers or 1,
-                )
-            elif mtype == BroadcastMessageType.STICKER:
-                client.send_sticker(
-                    number=group.jid,
-                    url=broadcast.sticker_url,
-                )
-            elif mtype == BroadcastMessageType.LOCATION:
-                client.send_location(
-                    number=group.jid,
-                    latitude=broadcast.location_latitude or 0.0,
-                    longitude=broadcast.location_longitude or 0.0,
-                    name=broadcast.location_name,
-                    address=broadcast.location_address,
-                )
-            elif mtype == BroadcastMessageType.CONTACT:
-                client.send_contact(
-                    number=group.jid,
-                    full_name=broadcast.contact_name,
-                    phone=broadcast.contact_phone,
-                    organization=broadcast.contact_organization,
-                )
+            send_message_to_group(broadcast, group, group.jid, client=client)
             success = True
             sent_count += 1
         except Exception as exc:
@@ -303,6 +377,8 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
         broadcast.error_count = error_count
         broadcast.updated_at = timezone.now()
         broadcast.save(update_fields=["delivery_logs", "sent_count", "error_count", "updated_at"])
+        # Commit checkpoint durably so it survives even if outer caller rolls back
+        _save_durable_checkpoint(broadcast.id, logs, sent_count, error_count)
 
         # Throttle between groups to prevent burst bans
         if idx < total_groups - 1 and broadcast.delay_seconds > 0:
@@ -325,13 +401,81 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
     }
 
 
-def claim_group_broadcast_for_sending(broadcast_id: Any, allow_resume: bool = False) -> GroupBroadcast | None:
+def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) -> None:
+    """Deliver a group broadcast to one specific WhatsApp group."""
+    broadcast = GroupBroadcast.objects.unscoped().filter(pk=broadcast_id).first()
+    if not broadcast or broadcast.status == BroadcastStatus.CANCELLED:
+        return
+
+    logs = list(broadcast.delivery_logs or [])
+    already_sent = {e.get("group_jid") for e in logs if e.get("status") == "ok"}
+    if group_jid in already_sent:
+        logger.info("Group %s already received broadcast %s; skipping", group_jid, broadcast.id)
+        return
+
+    group = WhatsAppGroup.objects.unscoped().filter(connection=broadcast.connection, jid=group_jid).first()
+    group_name = group.name if group else group_jid
+    success = False
+    error_msg = ""
+    try:
+        send_message_to_group(broadcast, group, group_jid)
+        success = True
+    except Exception as exc:
+        error_msg = str(exc)
+        logger.error("Failed broadcast %s to group %s: %s", broadcast.id, group_jid, exc)
+
+    # If delivery failed and queue action has retries remaining, re-raise so worker retries ONLY this group
+    if not success and hasattr(action, "attempts") and hasattr(action, "max_attempts") and action.attempts < action.max_attempts:
+        raise RuntimeError(f"Delivery to group {group_jid} failed: {error_msg}")
+
+    # Finalize delivery log for this group (durable checkpoint)
+    with transaction.atomic():
+        broadcast = (
+            GroupBroadcast.objects.unscoped()
+            .select_for_update()
+            .filter(pk=broadcast_id)
+            .first()
+        )
+        if not broadcast:
+            return
+
+        logs = list(broadcast.delivery_logs or [])
+        logs.append({
+            "group_jid": group_jid,
+            "group_name": group_name,
+            "status": "ok" if success else "error",
+            "error": error_msg,
+            "sent_at": timezone.now().isoformat(),
+        })
+        broadcast.delivery_logs = logs
+        if success:
+            broadcast.sent_count += 1
+        else:
+            broadcast.error_count += 1
+
+        total = broadcast.total_groups_count
+        if total > 0 and len(logs) >= total:
+            if broadcast.sent_count > 0:
+                broadcast.status = BroadcastStatus.COMPLETED
+            else:
+                broadcast.status = BroadcastStatus.FAILED
+            broadcast.sent_at = timezone.now()
+
+        broadcast.updated_at = timezone.now()
+        broadcast.save()
+
+
+def claim_group_broadcast_for_sending(
+    broadcast_id: Any,
+    claim_owner: str = "",
+    allow_resume: bool = False,
+) -> GroupBroadcast | None:
     """Atomically transition a scheduled group broadcast to sending status.
 
     Guarantees that between concurrent queue workers and hourly housekeeping,
     only one caller can claim and execute the broadcast.
     If allow_resume is True (e.g. queue retry), also allows resuming a broadcast
-    currently in SENDING status that is owned by this execution.
+    currently in SENDING status that is owned by this execution (matching claim_owner).
     Also reclaims stale SENDING broadcasts (> 5 minutes without update).
     """
     with transaction.atomic():
@@ -351,18 +495,25 @@ def claim_group_broadcast_for_sending(broadcast_id: Any, allow_resume: bool = Fa
             and (now - broadcast.updated_at).total_seconds() > 300
         )
 
-        can_claim = (
-            broadcast.status == BroadcastStatus.SCHEDULED
-            or (allow_resume and broadcast.status == BroadcastStatus.SENDING)
-            or is_stale
-        )
+        can_claim = False
+        if broadcast.status == BroadcastStatus.SCHEDULED:
+            can_claim = True
+        elif is_stale:
+            can_claim = True
+        elif allow_resume and broadcast.status == BroadcastStatus.SENDING:
+            if claim_owner and broadcast.claim_token == claim_owner:
+                can_claim = True
+            elif not broadcast.claim_token and claim_owner:
+                can_claim = True
 
         if not can_claim:
             return None
 
         broadcast.status = BroadcastStatus.SENDING
+        if claim_owner:
+            broadcast.claim_token = claim_owner
         broadcast.updated_at = now
-        broadcast.save(update_fields=["status", "updated_at"])
+        broadcast.save(update_fields=["status", "claim_token", "updated_at"])
         return broadcast
 
 
@@ -378,7 +529,8 @@ def process_scheduled_broadcasts() -> int:
     )
     processed = 0
     for broadcast_id in pending_ids:
-        broadcast = claim_group_broadcast_for_sending(broadcast_id)
+        claim_owner = f"housekeeping:{uuid.uuid4().hex[:12]}"
+        broadcast = claim_group_broadcast_for_sending(broadcast_id, claim_owner=claim_owner)
         if not broadcast:
             continue
         try:

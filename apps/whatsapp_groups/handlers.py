@@ -1,35 +1,86 @@
 import logging
+from datetime import timedelta
+from typing import Any
 
-from apps.broadcasts.models import BroadcastStatus
-from apps.queueing.registry import register_handler
-from apps.whatsapp_groups.models import GroupBroadcast
-from apps.whatsapp_groups.services import claim_group_broadcast_for_sending, dispatch_group_broadcast
+from django.db import transaction
+from django.utils import timezone
+
+from apps.queueing.registry import register_handler, schedule
+from apps.whatsapp_groups.models import BroadcastStatus, GroupBroadcast
+from apps.whatsapp_groups.services import (
+    claim_group_broadcast_for_sending,
+    deliver_single_group,
+    mark_broadcast_failed_committed,
+    resolve_target_groups,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @register_handler("group_broadcast_send")
-def handle_group_broadcast_send(payload: dict, action) -> None:
-    """Execute a scheduled WhatsApp group broadcast when its run_at time arrives."""
+def handle_group_broadcast_send(payload: dict, action: Any) -> None:
+    """Execute a WhatsApp group broadcast.
+
+    Supports two execution modes:
+    1. Fanout mode (payload without 'group_jid'):
+       Atomically claims the broadcast with execution ownership, expands the
+       target groups, sets total_groups_count, and schedules separate delivery
+       tasks per recipient group. This guarantees isolation between recipients.
+    2. Single-recipient mode (payload with 'group_jid'):
+       Delivers to one recipient group with durable checkpointing. If sending fails,
+       only this specific group retries, while already delivered groups remain committed.
+    """
     broadcast_id = payload.get("broadcast_id")
     if not broadcast_id:
         return
 
-    broadcast = claim_group_broadcast_for_sending(broadcast_id, allow_resume=True)
+    group_jid = payload.get("group_jid")
+
+    # Mode 2: Per-recipient delivery task
+    if group_jid:
+        deliver_single_group(broadcast_id, group_jid, action)
+        return
+
+    # Mode 1: Campaign fanout
+    claim_owner = f"worker:{action.pk}" if hasattr(action, "pk") and action.pk else ""
+    broadcast = claim_group_broadcast_for_sending(broadcast_id, claim_owner=claim_owner, allow_resume=True)
     if not broadcast:
-        # Already claimed or no longer scheduled
+        # Already claimed by another process or no longer scheduled
+        return
+
+    if broadcast.status == BroadcastStatus.CANCELLED:
         return
 
     try:
-        dispatch_group_broadcast(broadcast)
+        target_groups = resolve_target_groups(broadcast)
+        total_groups = len(target_groups)
+        broadcast.total_groups_count = total_groups
+
+        if total_groups == 0:
+            broadcast.status = BroadcastStatus.COMPLETED
+            broadcast.sent_at = timezone.now()
+            broadcast.save(update_fields=["status", "total_groups_count", "sent_at", "updated_at"])
+            return
+
+        broadcast.save(update_fields=["total_groups_count", "updated_at"])
+
+        delay = min(max(broadcast.delay_seconds, 0), 15)
+        now = timezone.now()
+
+        for idx, group in enumerate(target_groups):
+            schedule(
+                "group_broadcast_send",
+                run_at=now + timedelta(seconds=idx * delay),
+                payload={"broadcast_id": str(broadcast.id), "group_jid": group.jid},
+                workspace=broadcast.workspace,
+                idempotency_key=f"group_broadcast:{broadcast.id}:{group.jid}",
+            )
     except Exception as exc:
-        logger.error("Error executing scheduled group broadcast %s: %s", broadcast.id, exc)
-        # If this action reached its max attempts, mark as FAILED so it doesn't get stuck in SENDING
+        logger.error("Error executing group broadcast fanout %s: %s", broadcast.id, exc)
+        # If this action reached its max attempts, mark as FAILED in a way that survives rollback
         if hasattr(action, "attempts") and hasattr(action, "max_attempts") and action.attempts >= action.max_attempts:
             try:
-                broadcast.refresh_from_db()
-                broadcast.status = BroadcastStatus.FAILED
-                broadcast.save(update_fields=["status", "updated_at"])
-            except Exception:
-                pass
+                mark_broadcast_failed_committed(broadcast.id)
+            except Exception as e:
+                logger.error("Failed to commit final FAILED status for broadcast %s: %s", broadcast.id, e)
         raise
