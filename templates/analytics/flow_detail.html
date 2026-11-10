@@ -27,7 +27,7 @@ this issue), so nothing here reaches a CDN.
     </div>
     <div class="flex items-center gap-2">
         {% include "analytics/_range.html" %}
-        <a class="btn-outline btn-inline" href="{% url 'analytics:overview' workspace_id=request.workspace.id %}?days={{ days }}">All analytics</a>
+        <a class="btn-outline btn-inline" href="{% url 'analytics:overview' workspace_id=request.workspace.id %}?days={{ days }}">Todas as análises</a>
         <a class="btn-outline btn-inline" href="{% url 'flows:edit' workspace_id=request.workspace.id flow_id=flow.id %}">Open in builder</a>
     </div>
 </div>
@@ -57,7 +57,7 @@ this issue), so nothing here reaches a CDN.
                     <th scope="col">Step</th>
                     <th scope="col" class="an-num">Sent</th>
                     <th scope="col" class="an-num">Delivered</th>
-                    <th scope="col" class="an-num">Failed</th>
+                    <th scope="col" class="an-num">Falharam</th>
                     <th scope="col" class="an-num">Clicked</th>
                     {# Clicks per send, not a click-through rate — it can exceed 100%. #}
                     <th scope="col" class="an-num">Clicks/send</th>
@@ -81,7 +81,7 @@ this issue), so nothing here reaches a CDN.
         </table>
     </div>
     {% else %}
-    <p class="an-hint">This flow has not sent anything in this range.</p>
+    <p class="an-hint">Este fluxo não enviou mensagens neste período.</p>
     {% endif %}
 </div>
 

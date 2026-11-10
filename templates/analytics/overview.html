@@ -35,13 +35,13 @@ running", and a page of zeroes answers neither.
 <div class="summary-cards mb-5">
     <div class="summary-card"><span class="dot dot-neutral" aria-hidden="true"></span><span class="summary-card-value">{{ totals.sent }}</span><span class="summary-card-label">sent</span></div>
     <div class="summary-card"><span class="dot dot-success" aria-hidden="true"></span><span class="summary-card-value">{{ totals.delivered }}</span><span class="summary-card-label">delivered</span></div>
-    <div class="summary-card"><span class="dot {% if totals.failed %}dot-error{% else %}dot-neutral{% endif %}" aria-hidden="true"></span><span class="summary-card-value">{{ totals.failed }}</span><span class="summary-card-label">failed</span></div>
+    <div class="summary-card"><span class="dot {% if totals.failed %}dot-error{% else %}dot-neutral{% endif %}" aria-hidden="true"></span><span class="summary-card-value">{{ totals.failed }}</span><span class="summary-card-label">falharam</span></div>
     <div class="summary-card"><span class="dot dot-info" aria-hidden="true"></span><span class="summary-card-value">{{ totals.clicked }}</span><span class="summary-card-label">clicked{% if click_rate is not None %} · {{ click_rate|floatformat:1 }}% of sends{% endif %}</span></div>
 </div>
 
 <div class="an-panel" style="margin-top: 0;">
     <div class="an-panel-head">
-        <span class="an-panel-title">Flows</span>
+        <span class="an-panel-title">Fluxos</span>
         <span class="an-hint">Counted when the message actually leaves, not when the step runs.</span>
     </div>
     {% if flow_rows %}
@@ -49,10 +49,10 @@ running", and a page of zeroes answers neither.
         <table class="an-table">
             <thead>
                 <tr>
-                    <th scope="col">Flow</th>
+                    <th scope="col">Fluxo</th>
                     <th scope="col" class="an-num">Sent</th>
                     <th scope="col" class="an-num">Delivered</th>
-                    <th scope="col" class="an-num">Failed</th>
+                    <th scope="col" class="an-num">Falharam</th>
                     <th scope="col" class="an-num">Clicked</th>
                 </tr>
             </thead>
@@ -73,7 +73,7 @@ running", and a page of zeroes answers neither.
         </table>
     </div>
     {% else %}
-    <p class="an-hint">No flow has sent anything in this range.</p>
+    <p class="an-hint">Nenhum fluxo enviou mensagens neste período.</p>
     {% endif %}
 </div>
 
@@ -88,10 +88,10 @@ running", and a page of zeroes answers neither.
             <thead>
                 <tr>
                     <th scope="col">Connection</th>
-                    <th scope="col" class="an-num">Messages</th>
+                    <th scope="col" class="an-num">Mensagens</th>
                     <th scope="col" class="an-num">Sent</th>
                     <th scope="col" class="an-num">Delivered</th>
-                    <th scope="col" class="an-num">Failed</th>
+                    <th scope="col" class="an-num">Falharam</th>
                     <th scope="col" class="an-num">Delivery rate</th>
                 </tr>
             </thead>
@@ -120,7 +120,7 @@ running", and a page of zeroes answers neither.
         </table>
     </div>
     {% else %}
-    <p class="an-hint">Nothing has been sent from this workspace in this range.</p>
+    <p class="an-hint">Nenhuma mensagem foi enviada por este espaço no período.</p>
     {% endif %}
 </div>
 </div>

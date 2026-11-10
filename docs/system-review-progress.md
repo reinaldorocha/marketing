@@ -40,6 +40,8 @@ O documento HTML agora declara `pt-BR`. Foram removidos textos em inglês das te
 
 Os retornos de conexão, configuração e validação de WhatsApp, Telegram, SMS, Instagram, e-mail e canais também passaram para português. Mensagens técnicas de provedores continuam preservadas quando descrevem a falha original.
 
+Nesta nova varredura foram corrigidas listas e filtros de contatos, fluxos e sequências, componentes comuns, canais e painéis de análises, endpoints e notificações. Permanecem em revisão as telas de detalhe, os formulários extensos e os e-mails transacionais, que serão tratados em lotes para preservar a revisão de cada texto.
+
 ## Critério de encerramento
 
 Esta revisão só será marcada como concluída depois de: migrações limpas; verificações do Django e testes relevantes aprovados; ausência de texto em inglês nas telas próprias; e confirmação de funcionamento da implantação em produção.
