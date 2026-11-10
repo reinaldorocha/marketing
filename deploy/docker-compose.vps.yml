@@ -1,0 +1,78 @@
+# Existing PostgreSQL + Nginx Proxy Manager. Managed by scripts/install.sh/update.sh.
+# No published application/database ports and no second PostgreSQL or TLS proxy.
+name: marketing
+
+x-app: &app
+  image: marketing:${IMAGE_TAG:?run scripts/install.sh first}
+  build:
+    context: ..
+  env_file:
+    - ${MARKETING_ENV_FILE:-/etc/marketing/marketing.env}
+  environment:
+    DJANGO_SETTINGS_MODULE: config.settings.production
+    DJANGO_ENV_FILE: /nonexistent
+    SECRET_KEY: ${SECRET_KEY:?missing SECRET_KEY}
+    ENCRYPTION_KEY_SALT: ${ENCRYPTION_KEY_SALT:?missing ENCRYPTION_KEY_SALT}
+    DATABASE_URL: ${DATABASE_URL:?missing DATABASE_URL}
+    ALLOWED_HOSTS: ${APP_DOMAIN:?missing APP_DOMAIN}
+    APP_URL: https://${APP_DOMAIN:?missing APP_DOMAIN}
+    TRUSTED_PROXIES: ${TRUSTED_PROXIES:?missing TRUSTED_PROXIES}
+  volumes:
+    - media_data:/app/media
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+  stop_grace_period: 90s
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+  networks:
+    - infrastructure
+
+services:
+  app:
+    <<: *app
+    command:
+      - gunicorn
+      - config.wsgi:application
+      - --bind
+      - 0.0.0.0:8000
+      - --workers
+      - ${WEB_WORKERS:-2}
+      - --threads
+      - ${WEB_THREADS:-2}
+      - --timeout
+      - "120"
+    networks:
+      infrastructure:
+        aliases:
+          - marketing-web
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/healthz', headers={'Host': os.environ['ALLOWED_HOSTS']}); urllib.request.urlopen(r, timeout=4)"
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+  worker:
+    <<: *app
+    command: [python, manage.py, process_tasks]
+
+volumes:
+  media_data:
+    name: marketing_media
+
+networks:
+  infrastructure:
+    external: true
+    name: ${EXTERNAL_DOCKER_NETWORK:-stack_default}
