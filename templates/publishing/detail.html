@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes da Publicação · BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[950px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>Publicação no Instagram</span>
+            {% include "publishing/_status_badge.html" with post=post only %}
+        </h1>
+        <p class="page-lede">
+            Conta: <strong>{{ post.connection.display_name }}</strong> · Formato: <strong>{{ post.get_publish_type_display }}</strong>
+        </p>
+    </div>
+    <div class="page-header-actions flex items-center gap-2">
+        {% if post.permalink %}
+        <a href="{{ post.permalink }}" target="_blank" rel="noopener" class="btn-pill-primary inline-flex items-center gap-1.5 text-xs">
+            Ver no Instagram ↗
+        </a>
+        {% endif %}
+        <a href="{% url 'publishing:calendar' workspace_id=request.workspace.id %}" class="btn-pill-secondary text-xs">
+            Ver no Calendário
+        </a>
+        <a href="{% url 'publishing:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary text-xs">
+            Lista
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[950px] space-y-6">
+
+    {% if post.status == "scheduled" %}
+    <div class="p-4 bg-blue-50 border border-blue-200 dark:bg-blue-950/40 dark:border-blue-900 rounded-xl flex items-center justify-between gap-3 text-blue-900 dark:text-blue-200">
+        <div class="flex items-center gap-2.5">
+            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div>
+                <p class="text-sm font-semibold">Publicação Agendada no Calendário</p>
+                <p class="text-xs text-blue-700 dark:text-blue-300">
+                    O envio automático para o Instagram ocorrerá em <strong>{{ post.scheduled_at|date:"d/m/Y às H:i" }}</strong>.
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'publishing:edit' workspace_id=request.workspace.id post_id=post.id %}" class="btn-pill-secondary text-xs py-1 px-2.5">
+                Editar / Reagendar
+            </a>
+            <form method="post" action="{% url 'publishing:cancel_schedule' workspace_id=request.workspace.id post_id=post.id %}" onsubmit="return confirm('Deseja cancelar o agendamento e voltar o post para rascunho?');">
+                {% csrf_token %}
+                <button type="submit" class="text-xs text-rose-600 hover:text-rose-800 font-medium py-1 px-2">
+                    Cancelar Agendamento
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if post.last_error and post.status == 'failed' %}
+    <div class="p-4 bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-900 rounded-xl">
+        <div class="flex items-start justify-between">
+            <div>
+                <h3 class="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wide">Mensagem de Erro da Meta</h3>
+                <p class="text-xs text-rose-700 dark:text-rose-200 mt-1 font-mono whitespace-pre-wrap">{{ post.last_error }}</p>
+            </div>
+            <form method="post" action="{% url 'publishing:retry' workspace_id=request.workspace.id post_id=post.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-primary text-xs flex items-center gap-1.5 py-1 px-3">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Tentar Novamente
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Auto-polling for publishing posts -->
+    {% if post.status == "publishing" %}
+    <div hx-post="{% url 'publishing:refresh' workspace_id=request.workspace.id post_id=post.id %}"
+         hx-trigger="every 5s"
+         hx-target="#post-status-badge-{{ post.id }}"
+         hx-swap="outerHTML"
+         class="p-4 bg-amber-50 border border-amber-200 dark:bg-amber-950/40 dark:border-amber-900 rounded-xl flex items-center justify-between gap-3 text-amber-900 dark:text-amber-200">
+        <div class="flex items-center gap-2.5">
+            <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+            <div>
+                <p class="text-sm font-semibold">Mídia em Processamento na Meta</p>
+                <p class="text-xs text-amber-700 dark:text-amber-300">
+                    O Instagram está processando o vídeo ou carrossel. Esta tela atualiza automaticamente assim que estiver publicado.
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if "claim:" in post.container_id %}
+            <form method="post" action="{% url 'publishing:retry' workspace_id=request.workspace.id post_id=post.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-primary text-xs py-1 px-2.5">
+                    Destravar e Tentar Novamente
+                </button>
+            </form>
+            {% endif %}
+            <form method="post" action="{% url 'publishing:refresh' workspace_id=request.workspace.id post_id=post.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-secondary text-xs py-1 px-2.5">
+                    Atualizar Agora
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- Left Column: Media Preview -->
+        <div class="card p-4 space-y-3">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase">Mídia</h3>
+            <div class="rounded-lg overflow-hidden bg-black/5 dark:bg-black/40 border border-gray-200 dark:border-gray-800 aspect-square flex items-center justify-center">
+                {% if post.publish_type == "carousel" %}
+                    <div class="p-4 text-center">
+                        <span class="text-4xl">📚</span>
+                        <p class="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-2">Carrossel com {{ post.media_items|length }} itens</p>
+                    </div>
+                {% elif "video" in post.publish_type or post.publish_type == "reel_video" %}
+                    <video src="{{ post.media_url }}" controls poster="{{ post.cover_url|default:'' }}" class="w-full h-full object-contain"></video>
+                {% elif post.media_url %}
+                    <img src="{{ post.media_url }}" alt="Preview" class="w-full h-full object-contain">
+                {% else %}
+                    <span class="text-gray-400 text-xs">Sem mídia</span>
+                {% endif %}
+            </div>
+
+            {% if post.publish_type == "carousel" and post.media_items %}
+            <div class="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <p class="text-[11px] font-semibold text-gray-500">Itens do Carrossel:</p>
+                {% for item in post.media_items %}
+                <div class="text-[11px] text-gray-600 dark:text-gray-400 flex items-center justify-between">
+                    <span>#{{ forloop.counter }} · {{ item.type }}</span>
+                    <a href="{{ item.url }}" target="_blank" rel="noopener" class="text-primary hover:underline truncate max-w-[150px]">Abrir URL ↗</a>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Metadata & Details -->
+        <div class="md:col-span-2 card p-6 space-y-5">
+            <div>
+                <h3 class="text-xs font-semibold text-gray-500 uppercase">Legenda</h3>
+                <div class="mt-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-800 text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                    {{ post.caption|default:"(Nenhuma legenda informada)" }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 pt-2">
+                <div>
+                    <span class="text-xs text-gray-400 block">Criado em:</span>
+                    <span class="text-xs font-medium text-gray-900 dark:text-white">{{ post.created_at|date:"d/m/Y H:i:s" }}</span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block">Horário Agendado:</span>
+                    <span class="text-xs font-medium text-gray-900 dark:text-white">
+                        {% if post.scheduled_at %}{{ post.scheduled_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                    </span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block">Publicado em:</span>
+                    <span class="text-xs font-medium text-gray-900 dark:text-white">
+                        {% if post.published_at %}{{ post.published_at|date:"d/m/Y H:i:s" }}{% else %}—{% endif %}
+                    </span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block">Container ID (Meta):</span>
+                    <span class="text-xs font-mono text-gray-700 dark:text-gray-300">{{ post.container_id|default:"—" }}</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+                <form method="post" action="{% url 'publishing:delete' workspace_id=request.workspace.id post_id=post.id %}"
+                      onsubmit="return confirm('Tem certeza que deseja excluir o registro desta publicação?');">
+                    {% csrf_token %}
+                    <button type="submit" class="text-xs text-rose-600 hover:text-rose-700 font-medium">
+                        Excluir Registro
+                    </button>
+                </form>
+
+                <div class="flex items-center gap-2">
+                    {% if post.status != "published" and post.status != "publishing" %}
+                    <a href="{% url 'publishing:edit' workspace_id=request.workspace.id post_id=post.id %}" class="btn-pill-secondary text-xs">
+                        Editar Publicação
+                    </a>
+                    {% endif %}
+
+                    {% if post.status == "failed" or post.status == "publishing" and "claim:" in post.container_id %}
+                    <form method="post" action="{% url 'publishing:retry' workspace_id=request.workspace.id post_id=post.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-pill-primary text-xs">
+                            {% if post.status == "publishing" %}Destravar e Reenviar{% else %}Repetir Tentativa{% endif %}
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

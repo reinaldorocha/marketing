@@ -1,3 +1,4 @@
+from django.utils import timezone
 """Instagram's guided connect flow and the comment trigger's post picker (issue #17).
 
 Separate from :mod:`apps.channels.views` because the frame and the flow are
@@ -39,11 +40,12 @@ from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from apps.channels import instagram_oauth as oauth
 from apps.channels.forms import DUPLICATE_ACCOUNT_ERROR
-from apps.channels.models import ChannelConnection, ConnectionStatus
+from apps.channels.models import ChannelConnection, ConnectionStatus, InstagramProfileSettings
+from apps.flows.models import Flow, FlowStatus
 from apps.channels.plan import plan_refusal
 from apps.channels.providers import instagram
 from apps.channels.providers.exceptions import APIError
@@ -54,7 +56,15 @@ from apps.members.requests import WorkspaceRequest
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["instagram_callback", "instagram_connect", "instagram_posts"]
+__all__ = [
+    "instagram_callback",
+    "instagram_connect",
+    "instagram_diagnostics",
+    "instagram_follower_settings",
+    "instagram_ice_breakers",
+    "instagram_persistent_menu",
+    "instagram_posts",
+]
 
 #: Shown when this deployment has no Meta app credentials to start an OAuth flow
 #: with. Names where they go and never a value.
@@ -329,3 +339,292 @@ def instagram_posts(request: WorkspaceRequest, workspace_id: str) -> HttpRespons
     if not context["posts"] and not context["reason"]:
         context["reason"] = "This account has no posts yet."
     return render(request, "channels/_instagram_posts.html", context)
+
+
+
+def _get_or_create_instagram_settings(connection: ChannelConnection) -> InstagramProfileSettings:
+    settings, _ = InstagramProfileSettings.objects.get_or_create(connection=connection)
+    return settings
+
+
+@login_required
+@require_permission("manage_channels")
+@require_http_methods(["GET", "POST"])
+def instagram_diagnostics(request: WorkspaceRequest, workspace_id: str, connection_id: str) -> HttpResponse:
+    """Run real-time diagnostics on an Instagram connection and return partial template or JSON."""
+    connection = (
+        ChannelConnection.objects.for_workspace(request.workspace)
+        .filter(pk=connection_id, platform=Platform.INSTAGRAM.value)
+        .first()
+    )
+    if connection is None:
+        raise Http404("Instagram connection not found.")
+
+    settings = _get_or_create_instagram_settings(connection)
+
+    diag_data = instagram.run_instagram_diagnostics(connection)
+    settings.last_diagnostics = diag_data
+    settings.last_diagnostics_at = timezone.now()
+    settings.save(update_fields=["last_diagnostics", "last_diagnostics_at", "updated_at"])
+
+    context = {
+        "connection": connection,
+        "diagnostics": diag_data,
+        "settings": settings,
+    }
+    return render(request, "channels/_instagram_diagnostics.html", context)
+
+
+@login_required
+@require_permission("manage_channels")
+@require_http_methods(["GET", "POST"])
+def instagram_ice_breakers(request: WorkspaceRequest, workspace_id: str, connection_id: str) -> HttpResponse:
+    """Manage and sync Ice Breakers (up to 4 quick starter questions) with Meta."""
+    connection = (
+        ChannelConnection.objects.for_workspace(request.workspace)
+        .filter(pk=connection_id, platform=Platform.INSTAGRAM.value)
+        .first()
+    )
+    if connection is None:
+        raise Http404("Instagram connection not found.")
+
+    settings = _get_or_create_instagram_settings(connection)
+    token = oauth.access_token(connection)
+    error_msg = ""
+    success_msg = ""
+
+    if request.method == "POST":
+        action = request.POST.get("action", "save_sync")
+
+        if action == "delete":
+            try:
+                instagram.delete_ice_breakers(connection.external_id, token)
+                settings.ice_breakers = []
+                settings.ice_breakers_synced_at = None
+                settings.save(update_fields=["ice_breakers", "ice_breakers_synced_at", "updated_at"])
+                success_msg = "Iniciadores de conversa excluídos da Meta com sucesso."
+            except Exception as exc:
+                error_msg = f"Erro ao excluir iniciadores da Meta: {exc}"
+        elif action == "fetch":
+            try:
+                res = instagram.get_messenger_profile(connection.external_id, token, "ice_breakers")
+                data = res.get("data") or []
+                if data and isinstance(data, list) and data[0].get("ice_breakers"):
+                    raw_items = data[0]["ice_breakers"]
+                    items = [
+                        {"question": item.get("question", ""), "payload": item.get("payload", "")}
+                        for item in raw_items
+                    ]
+                    settings.ice_breakers = items
+                    settings.ice_breakers_synced_at = timezone.now()
+                    settings.save(update_fields=["ice_breakers", "ice_breakers_synced_at", "updated_at"])
+                    success_msg = f"{len(items)} iniciador(es) carregado(s) da Meta."
+                else:
+                    success_msg = "A Meta respondeu, mas não há iniciadores publicados ativos."
+            except Exception as exc:
+                error_msg = f"Erro ao carregar iniciadores da Meta: {exc}"
+        else:  # save_sync
+            # Extract up to 4 items from form
+            items = []
+            for i in range(1, 5):
+                q = request.POST.get(f"question_{i}", "").strip()
+                flow_id = request.POST.get(f"flow_id_{i}", "").strip()
+                p = request.POST.get(f"payload_{i}", "").strip()
+                if q:
+                    if flow_id:
+                        final_payload = f"flow:{flow_id}"
+                    else:
+                        final_payload = p or q
+                    items.append({"question": q[:80], "payload": final_payload[:1000]})
+
+            try:
+                if items:
+                    instagram.set_ice_breakers(connection.external_id, token, items)
+                    settings.ice_breakers = items
+                    settings.ice_breakers_synced_at = timezone.now()
+                    settings.save(update_fields=["ice_breakers", "ice_breakers_synced_at", "updated_at"])
+                    success_msg = f"{len(items)} iniciador(es) salvos e sincronizados na Meta com sucesso!"
+                else:
+                    instagram.delete_ice_breakers(connection.external_id, token)
+                    settings.ice_breakers = []
+                    settings.ice_breakers_synced_at = None
+                    settings.save(update_fields=["ice_breakers", "ice_breakers_synced_at", "updated_at"])
+                    success_msg = "Iniciadores limpos."
+            except Exception as exc:
+                error_msg = f"Falha ao sincronizar com a Meta: {exc}"
+
+    raw_flows = (
+        Flow.objects.for_workspace(request.workspace)
+        .filter(status=FlowStatus.ACTIVE, versions__published=True)
+        .distinct()
+        .order_by("name")
+    )
+    available_flows = []
+    for fl in raw_flows:
+        fl.flow_payload = f"flow:{fl.id}"
+        available_flows.append(fl)
+    context = {
+        "connection": connection,
+        "settings": settings,
+        "ice_breakers": settings.ice_breakers,
+        "available_flows": available_flows,
+        "error_msg": error_msg,
+        "success_msg": success_msg,
+    }
+    return render(request, "channels/_instagram_ice_breakers.html", context)
+
+
+@login_required
+@require_permission("manage_channels")
+@require_http_methods(["GET", "POST"])
+def instagram_persistent_menu(request: WorkspaceRequest, workspace_id: str, connection_id: str) -> HttpResponse:
+    """Manage and sync Instagram Direct persistent menu items with Meta."""
+    connection = (
+        ChannelConnection.objects.for_workspace(request.workspace)
+        .filter(pk=connection_id, platform=Platform.INSTAGRAM.value)
+        .first()
+    )
+    if connection is None:
+        raise Http404("Instagram connection not found.")
+
+    settings = _get_or_create_instagram_settings(connection)
+    token = oauth.access_token(connection)
+    error_msg = ""
+    success_msg = ""
+
+    if request.method == "POST":
+        action = request.POST.get("action", "save_sync")
+
+        if action == "delete":
+            try:
+                instagram.delete_persistent_menu(connection.external_id, token)
+                settings.persistent_menu = []
+                settings.persistent_menu_synced_at = None
+                settings.save(update_fields=["persistent_menu", "persistent_menu_synced_at", "updated_at"])
+                success_msg = "Menu persistente excluído da Meta com sucesso."
+            except Exception as exc:
+                error_msg = f"Erro ao excluir menu da Meta: {exc}"
+        elif action == "fetch":
+            try:
+                res = instagram.get_messenger_profile(connection.external_id, token, "persistent_menu")
+                data = res.get("data") or []
+                if data and isinstance(data, list) and data[0].get("persistent_menu"):
+                    raw_menu = data[0]["persistent_menu"]
+                    actions = raw_menu[0].get("call_to_actions", []) if raw_menu else []
+                    items = [
+                        {
+                            "type": item.get("type", "postback"),
+                            "title": item.get("title", ""),
+                            "url": item.get("url", ""),
+                            "payload": item.get("payload", ""),
+                        }
+                        for item in actions
+                    ]
+                    settings.persistent_menu = items
+                    settings.persistent_menu_synced_at = timezone.now()
+                    settings.save(update_fields=["persistent_menu", "persistent_menu_synced_at", "updated_at"])
+                    success_msg = f"{len(items)} item(ns) de menu carregado(s) da Meta."
+                else:
+                    success_msg = "A Meta respondeu, mas não há menu persistente publicado."
+            except Exception as exc:
+                error_msg = f"Erro ao consultar menu da Meta: {exc}"
+        else:  # save_sync
+            items = []
+            titles = request.POST.getlist("menu_title")
+            types = request.POST.getlist("menu_type")
+            values = request.POST.getlist("menu_value")
+            flow_ids = request.POST.getlist("menu_flow_id")
+
+            for idx, (t, kind) in enumerate(zip(titles, types)):
+                t = t.strip()
+                val = values[idx].strip() if idx < len(values) else ""
+                flow_id = flow_ids[idx].strip() if idx < len(flow_ids) else ""
+                if not t:
+                    continue
+                if kind == "web_url":
+                    items.append({"type": "web_url", "title": t[:30], "url": val})
+                elif kind == "flow" and flow_id:
+                    items.append({"type": "postback", "title": t[:30], "payload": f"flow:{flow_id}"})
+                else:
+                    items.append({"type": "postback", "title": t[:30], "payload": (val or t)[:1000]})
+
+            try:
+                if items:
+                    instagram.set_persistent_menu(connection.external_id, token, items)
+                    settings.persistent_menu = items
+                    settings.persistent_menu_synced_at = timezone.now()
+                    settings.save(update_fields=["persistent_menu", "persistent_menu_synced_at", "updated_at"])
+                    success_msg = f"Menu salvo e sincronizado na Meta com {len(items)} item(ns)!"
+                else:
+                    instagram.delete_persistent_menu(connection.external_id, token)
+                    settings.persistent_menu = []
+                    settings.persistent_menu_synced_at = None
+                    settings.save(update_fields=["persistent_menu", "persistent_menu_synced_at", "updated_at"])
+                    success_msg = "Menu limpo e removido da Meta."
+            except Exception as exc:
+                error_msg = f"Falha ao sincronizar menu na Meta: {exc}"
+
+    raw_flows = (
+        Flow.objects.for_workspace(request.workspace)
+        .filter(status=FlowStatus.ACTIVE, versions__published=True)
+        .distinct()
+        .order_by("name")
+    )
+    available_flows = []
+    for fl in raw_flows:
+        fl.flow_payload = f"flow:{fl.id}"
+        available_flows.append(fl)
+    context = {
+        "connection": connection,
+        "settings": settings,
+        "menu_items": settings.persistent_menu,
+        "available_flows": available_flows,
+        "error_msg": error_msg,
+        "success_msg": success_msg,
+    }
+    return render(request, "channels/_instagram_menu.html", context)
+
+
+@login_required
+@require_permission("manage_channels")
+@require_http_methods(["GET", "POST"])
+def instagram_follower_settings(request: WorkspaceRequest, workspace_id: str, connection_id: str) -> HttpResponse:
+    """Manage Follower Gate ('Exigir Seguidor') settings for Instagram."""
+    connection = (
+        ChannelConnection.objects.for_workspace(request.workspace)
+        .filter(pk=connection_id, platform=Platform.INSTAGRAM.value)
+        .first()
+    )
+    if connection is None:
+        raise Http404("Instagram connection not found.")
+
+    settings = _get_or_create_instagram_settings(connection)
+    success_msg = ""
+
+    if request.method == "POST":
+        settings.require_follower = request.POST.get("require_follower") == "on"
+        msg = request.POST.get("non_follower_message", "").strip()
+        if msg:
+            settings.non_follower_message = msg
+        btn_follow = request.POST.get("follow_button_label", "").strip()
+        if btn_follow:
+            settings.follow_button_label = btn_follow[:50]
+        btn_confirm = request.POST.get("confirm_button_label", "").strip()
+        if btn_confirm:
+            settings.confirm_button_label = btn_confirm[:50]
+
+        settings.save(update_fields=[
+            "require_follower",
+            "non_follower_message",
+            "follow_button_label",
+            "confirm_button_label",
+            "updated_at",
+        ])
+        success_msg = "Configurações da Trava de Seguidor salvas com sucesso!"
+
+    context = {
+        "connection": connection,
+        "settings": settings,
+        "success_msg": success_msg,
+    }
+    return render(request, "channels/_instagram_follower_gate.html", context)

@@ -271,7 +271,8 @@ def describe(trigger: Trigger) -> str:
         if not words:
             return "No keywords yet"
         shown = ", ".join(words[:3])
-        return shown if len(words) <= 3 else f"{shown} and {len(words) - 3} more"
+        acc_text = " (ignoring accents)" if config.get("ignore_accents") else ""
+        return (shown if len(words) <= 3 else f"{shown} and {len(words) - 3} more") + acc_text
     if trigger.type == TriggerType.REF_URL:
         return f"Reference “{config.get('ref') or 'None'}”"
     if trigger.type == TriggerType.COMMENT:
@@ -291,10 +292,13 @@ def _describe_comment(config: dict[str, Any]) -> str:
     """
     scope = "specific posts" if config.get("post_scope") == "specific" else "any post"
     keywords = [str(word) for word in config.get("include_keywords") or () if str(word).strip()]
+    match_mode = config.get("keyword_match_mode", "contains")
+    verb = "matching exactly" if match_mode == "exact" else "containing"
+    acc_text = " (ignoring accents)" if config.get("ignore_accents") else ""
     if keywords:
         shown = ", ".join(keywords[:2])
         more = f" and {len(keywords) - 2} more" if len(keywords) > 2 else ""
-        parts = [f"Comments on {scope} containing {shown}{more}"]
+        parts = [f"Comments on {scope} {verb} {shown}{more}{acc_text}"]
     else:
         parts = [f"Comments on {scope}"]
 

@@ -174,6 +174,14 @@ export interface BuilderState extends GraphState {
   setSave: (patch: Partial<SaveSlice>) => void;
   setStats: (stats: StatsPayload | null) => void;
   setStatsFailed: (failed: boolean) => void;
+
+  // ── simulator ─────────────────────────────────────────────────────────────
+  simulatorOpen: boolean;
+  simulatedActiveNodeId: string | null;
+  simulatedVisitedNodeIds: string[];
+  setSimulatorOpen: (open: boolean) => void;
+  setSimulatedTrace: (activeNodeId: string | null, visitedNodeIds: string[]) => void;
+  clearSimulatedTrace: () => void;
 }
 
 export const EMPTY_PICKLISTS: Picklists = {
@@ -277,6 +285,14 @@ export function createBuilderStore(env: BuilderEnv) {
         statsFailed: false,
         statsVisible: false,
         loaded: false,
+        simulatorOpen: false,
+        simulatedActiveNodeId: null,
+        simulatedVisitedNodeIds: [],
+        setSimulatorOpen: (simulatorOpen) => set({ simulatorOpen }),
+        setSimulatedTrace: (simulatedActiveNodeId, simulatedVisitedNodeIds) =>
+          set({ simulatedActiveNodeId, simulatedVisitedNodeIds }),
+        clearSimulatedTrace: () =>
+          set({ simulatedActiveNodeId: null, simulatedVisitedNodeIds: [] }),
 
         load: (detail) =>
           set((state) => ({

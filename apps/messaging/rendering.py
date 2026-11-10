@@ -24,10 +24,15 @@ from apps.channels.events import (
     Button,
     Card,
     CardBlock,
+    ContactBlock,
     GalleryBlock,
+    ListBlock,
+    LocationBlock,
     MediaBlock,
     OutboundMessage,
+    PollBlock,
     QuickReply,
+    StickerBlock,
     TextBlock,
 )
 
@@ -57,6 +62,7 @@ def outbound_from_body(body: Any) -> OutboundMessage:
         subject=_text(body.get("subject")),
         from_override=_text(body.get("from_override")),
         html_body=_text(body.get("html_body")),
+        recipient_override=_text(body.get("recipient_override")),
     )
 
 
@@ -99,6 +105,28 @@ def _block(item: dict[str, Any]) -> Any:
     if kind == "gallery":
         cards = tuple(_card(card) for card in _list(item.get("cards")))
         return GalleryBlock(cards=cards) if cards else None
+    if kind == "location":
+        try:
+            lat = float(item.get("latitude") or 0.0)
+            lon = float(item.get("longitude") or 0.0)
+        except (ValueError, TypeError):
+            lat, lon = 0.0, 0.0
+        return LocationBlock(latitude=lat, longitude=lon, name=_text(item.get("name")), address=_text(item.get("address")))
+    if kind == "contact":
+        return ContactBlock(full_name=_text(item.get("full_name")), phone=_text(item.get("phone")), organization=_text(item.get("organization")))
+    if kind == "poll":
+        options = tuple(str(opt) for opt in item.get("options") or [] if str(opt).strip())
+        try:
+            max_ans = int(item.get("max_answers") or 1)
+        except (ValueError, TypeError):
+            max_ans = 1
+        return PollBlock(question=_text(item.get("question")), options=options, max_answers=max_ans)
+    if kind == "list":
+        sections = tuple(item.get("sections") or [])
+        return ListBlock(title=_text(item.get("title")), description=_text(item.get("description")), button_text=_text(item.get("button_text")), footer_text=_text(item.get("footer_text")), sections=sections)
+    if kind == "sticker":
+        url = _text(item.get("url"))
+        return StickerBlock(url=url) if url else None
     return None
 
 
@@ -117,7 +145,20 @@ def _button(item: dict[str, Any]) -> Button | None:
     label = _text(item.get("label"))
     # A button with no id cannot be matched when it comes back as a postback, so
     # it would be a control the flow engine can never resume from.
-    return Button(id=identifier, label=label, url=_text(item.get("url"))) if identifier else None
+    if not identifier:
+        return None
+    return Button(
+        id=identifier,
+        label=label,
+        url=_text(item.get("url")),
+        action=_text(item.get("action")),
+        copy_code=_text(item.get("copy_code")),
+        phone_number=_text(item.get("phone_number")),
+        pix_key=_text(item.get("pix_key")),
+        pix_key_type=_text(item.get("pix_key_type")),
+        pix_name=_text(item.get("pix_name")),
+        currency=_text(item.get("currency")) or "BRL",
+    )
 
 
 def _quick_reply(item: dict[str, Any]) -> QuickReply | None:

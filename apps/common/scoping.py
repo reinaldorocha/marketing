@@ -33,7 +33,13 @@ occasionally legitimate (housekeeping sweeps, a superuser admin action). Every
 call site must carry a comment saying why — see ``CONTRIBUTING.md``.
 """
 
-from typing import Any, Self
+import sys
+from typing import Any
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 from uuid import UUID
 
 from django.db import models

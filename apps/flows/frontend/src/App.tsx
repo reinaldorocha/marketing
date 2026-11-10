@@ -21,6 +21,7 @@ import { useStats } from "./stats/useStats";
 import { BuilderStoreProvider, useBuilder, useBuilderStore } from "./store/context";
 import { createBuilderStore } from "./store/store";
 import { Toolbar } from "./Toolbar";
+import { SimulatorDrawer } from "./simulator/SimulatorDrawer";
 
 export function App({ env }: { env: BuilderEnv }) {
   const store = useMemo(() => createBuilderStore(env), [env]);
@@ -177,6 +178,7 @@ function Shell() {
           <StepEditor />
         </aside>
       </div>
+      <SimulatorDrawer />
     </>
   );
 }

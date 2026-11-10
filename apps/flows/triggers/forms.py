@@ -35,7 +35,10 @@ def config_from_post(trigger_type: str, post: Any) -> dict[str, Any]:
     if spec is None:
         return {}
     if trigger_type in {TriggerType.KEYWORD, TriggerType.STORY_REPLY}:
-        return {"keywords": _keywords(post)}
+        return {
+            "keywords": _keywords(post),
+            "ignore_accents": _flag(post, "ignore_accents"),
+        }
     if trigger_type == TriggerType.REF_URL:
         return {
             "ref": (post.get("ref") or "").strip(),
@@ -117,11 +120,16 @@ def _keywords(post: Any) -> list[dict[str, str]]:
 
 def _comment(post: Any) -> dict[str, Any]:
     mode = (post.get("public_reply_mode") or "none").strip()
+    match_mode = (post.get("keyword_match_mode") or "contains").strip()
+    if match_mode not in {"contains", "exact"}:
+        match_mode = "contains"
     return {
         "post_scope": (post.get("post_scope") or "all").strip(),
         "post_ids": _lines(post.get("post_ids")),
         "include_keywords": _lines(post.get("include_keywords")),
         "exclude_keywords": _lines(post.get("exclude_keywords")),
+        "ignore_accents": _flag(post, "ignore_accents"),
+        "keyword_match_mode": match_mode,
         "top_level_only": _flag(post, "top_level_only"),
         "public_reply": {
             "mode": mode,

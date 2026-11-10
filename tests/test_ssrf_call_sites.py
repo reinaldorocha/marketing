@@ -232,6 +232,7 @@ GUARD_PROOFS = {
     "api/delivery.py": "apps/api/tests/test_delivery.py",
     "channels/media.py": "apps/channels/tests/test_media.py",
     "channels/providers/email_signatures.py": "apps/channels/tests/test_email_signature_fetch.py",
+    "channels/providers/whatsapp_evolution.py": "apps/channels/tests/test_whatsapp_evolution.py",
     "flows/engine/nodes/external_request.py": "apps/flows/tests/test_node_external_request.py",
 }
 

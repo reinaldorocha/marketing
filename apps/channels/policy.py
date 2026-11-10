@@ -146,6 +146,13 @@ POLICIES: dict[str, PlatformPolicy] = {
         broadcast_allowed=True,
         rate_default=10.0,
     ),
+    Platform.WHATSAPP_EVOLUTION: PlatformPolicy(
+        window_hours=None,
+        outside_window="blocked",
+        human_agent_days=None,
+        broadcast_allowed=True,
+        rate_default=5.0,
+    ),
 }
 
 

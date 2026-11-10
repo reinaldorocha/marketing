@@ -140,6 +140,7 @@ urlpatterns = [
     # Outbound webhooks are workspace-scoped (SPEC §5), unlike the API keys
     # above: their url, secret and subscriptions belong to one workspace's data.
     path("w/<uuid:workspace_id>/settings/webhooks/", include("apps.api.urls_webhooks")),
+    path("w/<uuid:workspace_id>/settings/lead-webhooks/", include("apps.api.urls_lead_webhooks")),
     path("w/<uuid:workspace_id>/media/", include("apps.media_library.urls")),
     # The inbox (issue #14) replaces the placeholder that used to sit in
     # _WORKSPACE_STUBS above. A deep prefix, so it joins this group rather than
@@ -154,6 +155,9 @@ urlpatterns = [
     # permission the placeholder used — so the nav entry's target moves from a
     # stub view to a real one and nothing else about the route changes.
     path("w/<uuid:workspace_id>/broadcasts/", include("apps.broadcasts.urls")),
+    path("w/<uuid:workspace_id>/groups/", include("apps.whatsapp_groups.urls")),
+    path("w/<uuid:workspace_id>/publishing/", include("apps.publishing.urls")),
+    path("w/<uuid:workspace_id>/operations/", include("apps.operations.urls")),
     # The analytics pages (issue #26). A deep prefix like the ones above it, and
     # separate from the /c/ and /o/ routes at the site root: those are public
     # token routes with no workspace in the URL at all. Guarded for the reason

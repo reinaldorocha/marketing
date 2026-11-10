@@ -85,6 +85,7 @@ CONNECT_HINTS: dict[str, str] = {
     Platform.TELEGRAM: "Paste a BotFather token and we do the rest.",
     Platform.INSTAGRAM: "Sign in with the Instagram account and grant the messaging permissions.",
     Platform.WHATSAPP: "Paste your Cloud API ids and system user token; we verify them with Meta first.",
+    Platform.WHATSAPP_EVOLUTION: "Conecte seu WhatsApp não oficial via QR Code usando a Evolution GO.",
     Platform.MESSENGER: "Sign in with Facebook and pick the page to connect.",
     Platform.SMS: "Paste your Twilio account SID, auth token and number.",
     Platform.EMAIL: "Pick SMTP, Resend or SES; we check the credentials before saving them.",
@@ -137,6 +138,8 @@ def _webhook_url(request: WorkspaceRequest, connection: ChannelConnection) -> st
             "webhook_email",
             kwargs={"provider": _email_provider(connection), "connection_id": connection.pk},
         )
+    elif connection.platform == Platform.WHATSAPP_EVOLUTION:
+        path = reverse("webhook_whatsapp_evolution", kwargs={"connection_id": connection.pk})
     else:
         path = reverse("webhook_platform", kwargs={"platform": connection.platform})
     return request.build_absolute_uri(path)
@@ -171,6 +174,11 @@ def _connection_context(
     so the page is complete for a platform whose adapter has not shipped —
     which, in this layer, is all of them (ROADMAP contract 4).
     """
+    if connection.platform == Platform.INSTAGRAM.value:
+        from apps.channels.models import InstagramProfileSettings
+        settings, _ = InstagramProfileSettings.objects.get_or_create(connection=connection)
+        connection.instagram_settings = settings
+
     return {
         "connection": connection,
         "label": PLATFORM_LABELS.get(connection.platform, connection.platform),
@@ -372,6 +380,16 @@ def connection_detail(request: WorkspaceRequest, workspace_id: str, connection_i
     """
     connection = get_scoped_object_or_404(ChannelConnection, request.workspace, pk=connection_id)
     context = _connection_context(request, connection)
+    if connection.platform == Platform.INSTAGRAM.value:
+        from apps.flows.models import Flow, FlowStatus
+        from apps.flows.services import published_version
+        flows = list(Flow.objects.for_workspace(request.workspace).filter(status=FlowStatus.ACTIVE).order_by("name"))
+        available_flows = []
+        for fl in flows:
+            if published_version(fl):
+                fl.flow_payload = f"flow:{fl.id}"
+                available_flows.append(fl)
+        context["available_flows"] = available_flows
     # The same sentence the card on the list page shows. This page used to print
     # the status word and "last event received" as two separate rows — exactly
     # the split _health exists to close, and the one a reader had to join up

@@ -41,6 +41,10 @@ truncated list — see apps/flows/triggers/forms.py.
     </template>
 
     <button type="button" class="btn-link text-xs" @click="add()">+ Add keyword</button>
+    <label class="flex items-center gap-2 text-xs mt-3 mb-1" style="color: var(--text-primary);">
+        <input type="checkbox" name="ignore_accents" {% if config.ignore_accents %}checked{% endif %}>
+        Ignorar acentos (ex: “olá” casa com “ola”)
+    </label>
     <p class="text-xs mt-1" style="color: var(--text-tertiary);">
         Matching ignores case and surrounding spaces. “Contains” matches inside a word,
         “whole word” does not.

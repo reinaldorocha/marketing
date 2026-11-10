@@ -50,7 +50,7 @@ seconds does not put an UPDATE on a GET.
 
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.db import transaction
@@ -73,6 +73,7 @@ from apps.contacts import conditions
 from apps.flows import services as flow_services
 from apps.flows.models import Flow, FlowStatus, FlowVersion
 from apps.flows.schema import validate_graph
+from apps.messaging import buckets
 from apps.messaging.codes import Denial
 from apps.messaging.models import MessageStatus
 from apps.queueing.models import ActionStatus, ActionType, ScheduledAction
@@ -87,6 +88,8 @@ __all__ = [
     "Counters",
     "WINDOW_DENIALS",
     "cancel_broadcast",
+    "pause_broadcast",
+    "resume_broadcast",
     "content_graph",
     "counters",
     "fanout_outstanding",
@@ -603,6 +606,87 @@ def _require_draft(broadcast: Broadcast) -> None:
 # ---------------------------------------------------------------------------
 
 
+
+def pause_broadcast(broadcast: Broadcast) -> Broadcast:
+    """Pause an active or scheduled broadcast."""
+    with transaction.atomic():
+        locked = Broadcast.objects.for_workspace(broadcast.workspace_id).select_for_update().get(pk=broadcast.pk)
+        if locked.status not in (BroadcastStatus.SCHEDULED, BroadcastStatus.SENDING):
+            raise BroadcastError("Only scheduled or sending broadcasts can be paused.")
+        locked.status = BroadcastStatus.PAUSED
+        locked.save(update_fields=["status", "updated_at"])
+        ScheduledAction.objects.for_workspace(locked.workspace_id).filter(
+            type__in=[ActionType.BROADCAST_SEND, ActionType.BROADCAST_FANOUT],
+            status=ActionStatus.PENDING,
+            payload__broadcast_id=str(locked.pk),
+        ).update(status=ActionStatus.CANCELLED, updated_at=timezone.now())
+        _cancel_deferred_sends(locked, mark_recipient_cancelled=False)
+        release_stats(locked)
+    broadcast.refresh_from_db()
+    return broadcast
+
+
+def resume_broadcast(broadcast: Broadcast) -> Broadcast:
+    """Resume a paused broadcast.
+
+    Preserves future scheduled execution: if scheduled_at is still in the future,
+    returns status to SCHEDULED and schedules the fanout action for scheduled_at
+    rather than sending immediately.
+    """
+    with transaction.atomic():
+        locked = Broadcast.objects.for_workspace(broadcast.workspace_id).select_for_update().get(pk=broadcast.pk)
+        if locked.status != BroadcastStatus.PAUSED:
+            raise BroadcastError("Only paused broadcasts can be resumed.")
+
+        now = timezone.now()
+        is_future = bool(locked.scheduled_at and locked.scheduled_at > now)
+
+        if is_future:
+            locked.status = BroadcastStatus.SCHEDULED
+            locked.save(update_fields=["status", "updated_at"])
+            schedule(
+                ActionType.BROADCAST_FANOUT,
+                locked.scheduled_at,
+                {"broadcast_id": str(locked.pk)},
+                workspace=locked.workspace,
+                idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(now.timestamp())}",
+            )
+        else:
+            locked.status = BroadcastStatus.SENDING
+            locked.save(update_fields=["status", "updated_at"])
+
+            rate = buckets.rate_for(locked.platform)
+            pending_recipients = list(
+                BroadcastRecipient.objects.for_workspace(locked.workspace_id).filter(
+                    broadcast=locked,
+                    status=RecipientStatus.PENDING,
+                )
+            )
+            for index, recipient in enumerate(pending_recipients):
+                schedule(
+                    ActionType.BROADCAST_SEND,
+                    now + timedelta(seconds=index / rate),
+                    {
+                        "broadcast_id": str(locked.pk),
+                        "recipient_id": str(recipient.pk),
+                        "contact_id": str(recipient.contact_id),
+                    },
+                    workspace=locked.workspace,
+                    contact=recipient.contact_id,
+                    idempotency_key=f"broadcast:{locked.pk}:contact:{recipient.contact_id}:resume:{int(now.timestamp())}",
+                )
+
+            schedule(
+                ActionType.BROADCAST_FANOUT,
+                now,
+                {"broadcast_id": str(locked.pk)},
+                workspace=locked.workspace,
+                idempotency_key=f"broadcast:{locked.pk}:fanout:resume:{int(now.timestamp())}",
+            )
+    broadcast.refresh_from_db()
+    return broadcast
+
+
 def cancel_broadcast(broadcast: Broadcast) -> Broadcast:
     """Stop a broadcast: no more scheduling, and no send that has not already run.
 
@@ -652,7 +736,7 @@ def cancel_broadcast(broadcast: Broadcast) -> Broadcast:
     return broadcast
 
 
-def _cancel_deferred_sends(broadcast: Broadcast) -> int:
+def _cancel_deferred_sends(broadcast: Broadcast, *, mark_recipient_cancelled: bool = True) -> int:
     """Stop the sends the facade accepted but the token bucket never released.
 
     The gap this closes is small and real. A ``broadcast_send`` that ran while
@@ -703,17 +787,15 @@ def _cancel_deferred_sends(broadcast: Broadcast) -> int:
         payload__message_id__in=sorted(stoppable),
     ).update(status=ActionStatus.CANCELLED, updated_at=timezone.now())
 
-    # **Only** the recipients whose retry this call actually stopped. A retry
-    # that was already ``running`` is out of reach — ``handle_send_retry`` knows
-    # nothing about broadcasts and will finish its provider call — so marking its
-    # recipient ``cancelled`` would record as stopped a message that is on its
-    # way to somebody's phone, and take a count out of ``sent`` for a send that
-    # happened. Those stay ``sent``, which is what they are.
+    # When cancelling permanently, mark recipients as cancelled.
+    # When pausing, reset them to PENDING so resume_broadcast can resend them.
+    new_status = RecipientStatus.CANCELLED if mark_recipient_cancelled else RecipientStatus.PENDING
     BroadcastRecipient.objects.for_workspace(broadcast.workspace_id).filter(
         pk__in=[stalled[message_id] for message_id in stoppable]
-    ).update(status=RecipientStatus.CANCELLED, updated_at=timezone.now())
+    ).update(status=new_status, updated_at=timezone.now())
 
-    logger.info("Broadcast %s: stopped %s deferred send(s) on cancellation", broadcast.pk, len(stoppable))
+    action_label = "cancellation" if mark_recipient_cancelled else "pause"
+    logger.info("Broadcast %s: stopped %s deferred send(s) on %s", broadcast.pk, len(stoppable), action_label)
     return len(stoppable)
 
 

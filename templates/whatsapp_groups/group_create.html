@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load common_extras %}
+
+{% block title %}Criar Grupo WhatsApp — BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[800px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>Criar Grupo no WhatsApp</span>
+        </h1>
+        <p class="page-lede">
+            Crie um grupo imediatamente na sua instância Evolution GO e convide participantes.
+        </p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{% url 'whatsapp_groups:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+            Voltar para Grupos
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[800px] space-y-6">
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Conexão Evolution GO <span class="text-rose-500">*</span>
+                </label>
+                <select name="connection_id" required class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500">
+                    {% for conn in connections %}
+                    <option value="{{ conn.id }}">{{ conn.name }} ({{ conn.external_id|default:conn.platform }})</option>
+                    {% empty %}
+                    <option disabled>Nenhuma conexão WhatsApp Evolution GO ativa</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-gray-500 mt-1">O bot desta conexão será o criador e administrador inicial do grupo.</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Nome do Grupo (Assunto) <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="name" required maxlength="100" placeholder="Ex: Comunidade VIP de Alunos" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Participantes Iniciais (Opcional)
+                </label>
+                <textarea name="participants" rows="4" placeholder="5511999999999&#10;5521988888888" class="w-full text-sm font-mono rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Digite os números com DDI + DDD (ex: 5511999999999), um por linha ou separados por vírgula.</p>
+            </div>
+
+            <div class="pt-4 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-end gap-3">
+                <a href="{% url 'whatsapp_groups:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+                    Cancelar
+                </a>
+                <button type="submit" class="btn-pill-primary">
+                    Criar Grupo no WhatsApp
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

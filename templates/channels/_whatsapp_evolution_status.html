@@ -1,0 +1,47 @@
+<section id="evolution-status" class="space-y-3" hx-get="{{ status_url }}" hx-trigger="every 3s" hx-swap="outerHTML">
+  <div class="health {% if status_data.is_connected or status_data.state == 'open' or status_data.state == 'connected' %}health-ok{% elif status_data.state == 'close' or status_data.state == 'disconnected' %}health-bad{% elif status_data.state == 'connecting' or status_data.state == 'qrcode' %}health-warn{% else %}health-off{% endif %}">
+    <span class="health-dot"></span>
+    Status: 
+    {% if status_data.state == 'open' or status_data.state == 'connected' %}
+      Conectado
+    {% elif status_data.state == 'connecting' %}
+      Conectando...
+    {% elif status_data.state == 'qrcode' %}
+      Aguardando leitura do QR Code
+    {% elif status_data.state == 'close' or status_data.state == 'disconnected' %}
+      Desconectado
+    {% else %}
+      {{ status_data.state|default:"Desconhecido"|capfirst }}
+    {% endif %}
+  </div>
+
+  <div class="card-row flex flex-wrap items-baseline justify-between gap-4 pt-2">
+    <span class="text-[13px] font-semibold" style="color: var(--text-secondary);">Canal no BrightBean</span>
+    <span class="text-sm" style="color: var(--text-primary);">{{ status_data.connection_status|capfirst }}</span>
+  </div>
+
+  {% if status_data.phone_number %}
+  <div class="card-row flex flex-wrap items-baseline justify-between gap-4 py-2">
+    <span class="text-[13px] font-semibold" style="color: var(--text-secondary);">Número Conectado</span>
+    <span class="text-sm font-medium" style="color: var(--text-primary);">{{ status_data.phone_number }}</span>
+  </div>
+  {% endif %}
+
+  {% if status_data.profile_name %}
+  <div class="card-row flex flex-wrap items-baseline justify-between gap-4 py-2">
+    <span class="text-[13px] font-semibold" style="color: var(--text-secondary);">Nome do Perfil</span>
+    <span class="text-sm" style="color: var(--text-primary);">{{ status_data.profile_name }}</span>
+  </div>
+  {% endif %}
+
+  {% if status_data.last_connected_at %}
+  <div class="card-row flex flex-wrap items-baseline justify-between gap-4 py-2">
+    <span class="text-[13px] font-semibold" style="color: var(--text-secondary);">Última conexão</span>
+    <time class="text-sm" style="color: var(--text-primary);" datetime="{{ status_data.last_connected_at }}">{{ status_data.last_connected_at }}</time>
+  </div>
+  {% endif %}
+
+  {% if status_data.last_error %}
+  <p class="text-sm mt-2" style="color: var(--error-700);" role="status">Último erro: {{ status_data.last_error }}</p>
+  {% endif %}
+</section>

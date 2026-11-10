@@ -1,0 +1,124 @@
+{% extends "layouts/workspace_settings.html" %}
+{% load common_extras %}
+{% block title %}Webhooks de Entrada (Leads) · BrightBean{% endblock %}
+{% block content_wrap %}{% endblock %}
+
+{% block content %}
+<div class="max-w-[1060px] w-full">
+    <div class="page-header mb-6">
+        <div class="page-header-text">
+            <h1 class="page-title">Webhooks de Entrada de Leads</h1>
+            <p class="page-lede">
+                Receba leads de formulários, landing pages, CRM ou plataformas externas, cadastre ou atualize o contato e inicie automaticamente um fluxo no WhatsApp.
+            </p>
+        </div>
+        <button type="button" class="btn-pill-primary flex-shrink-0" @click="$modal('add-lead-webhook')">
+            + Novo Webhook de Leads
+        </button>
+    </div>
+
+    {% modal "add-lead-webhook" title="Criar Webhook de Entrada de Leads" size="lg" %}
+    <form method="post" action="{% url 'lead_webhooks:create' workspace_id=request.workspace.id %}">
+        {% csrf_token %}
+        <div class="bb-modal-body space-y-4">
+            <div class="field">
+                <label class="field-label" for="webhook-name">Nome da Integração</label>
+                <input class="form-input-styled" id="webhook-name" type="text" name="name" required placeholder="Ex: Leads Landing Page Black Friday" value="Entrada de Leads">
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="target-flow">Fluxo a Iniciar</label>
+                <select class="form-input-styled" id="target-flow" name="target_flow" required>
+                    <option value="">Selecione um fluxo publicado...</option>
+                    {% for flow in flows %}
+                    <option value="{{ flow.id }}">{{ flow.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="field-hint mt-1">O fluxo que será disparado imediatamente para o lead recebido.</p>
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="channel-connection">Canal de Envio (WhatsApp)</label>
+                <select class="form-input-styled" id="channel-connection" name="channel_connection">
+                    <option value="">Nenhum canal pré-definido</option>
+                    {% for conn in connections %}
+                    <option value="{{ conn.id }}">{{ conn.display_name }} ({{ conn.get_platform_display }})</option>
+                    {% endfor %}
+                </select>
+                <p class="field-hint mt-1">Selecione o número de WhatsApp (Evolution GO) para vincular a identidade e enviar a mensagem.</p>
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="default-tags">Tags automáticas (separadas por vírgula)</label>
+                <input class="form-input-styled" id="default-tags" type="text" name="default_tags" placeholder="lead, landing-page, facebook">
+            </div>
+
+            <h3 class="text-sm font-semibold pt-2" style="color: var(--text-primary);">Mapeamento de Campos do JSON Recebido</h3>
+            <p class="text-xs" style="color: var(--text-tertiary);">Informe os nomes das chaves no payload JSON recebido:</p>
+
+            <div class="grid sm:grid-cols-2 gap-3">
+                <div class="field">
+                    <label class="field-label" for="map-name">Chave do Nome</label>
+                    <input class="form-input-styled" id="map-name" type="text" name="name_field" value="name" placeholder="name ou nome">
+                </div>
+                <div class="field">
+                    <label class="field-label" for="map-phone">Chave do Telefone</label>
+                    <input class="form-input-styled" id="map-phone" type="text" name="phone_field" value="phone" placeholder="phone, telefone ou whatsapp">
+                </div>
+                <div class="field">
+                    <label class="field-label" for="map-email">Chave do E-mail</label>
+                    <input class="form-input-styled" id="map-email" type="text" name="email_field" value="email" placeholder="email">
+                </div>
+                <div class="field">
+                    <label class="field-label" for="map-optin">Chave de Consentimento (Opt-in)</label>
+                    <input class="form-input-styled" id="map-optin" type="text" name="opt_in_field" value="opt_in" placeholder="opt_in, consentimento ou aceita_contato">
+                </div>
+            </div>
+        </div>
+        <div class="bb-modal-actions mt-5">
+            <button type="button" class="btn-pill-secondary" @click="close()">Cancelar</button>
+            <button type="submit" class="btn-pill-primary">Criar Webhook</button>
+        </div>
+    </form>
+    {% endmodal %}
+
+    <h2 class="section-title mb-3">Endpoints Ativos</h2>
+    {% if webhooks %}
+    <div class="card overflow-hidden">
+        {% for wh in webhooks %}
+        <div class="list-row flex items-center justify-between p-4 border-b last:border-b-0">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                    <a href="{% url 'lead_webhooks:detail' workspace_id=request.workspace.id webhook_id=wh.id %}" class="list-row-title font-semibold text-base hover:underline">
+                        {{ wh.name }}
+                    </a>
+                    {% if wh.is_active %}
+                        <span class="status-pill status-pill-active">Ativo</span>
+                    {% else %}
+                        <span class="status-pill status-pill-disabled">Inativo</span>
+                    {% endif %}
+                </div>
+                <div class="text-xs mt-1" style="color: var(--text-secondary);">
+                    Fluxo: <strong>{{ wh.target_flow.name }}</strong>
+                    {% if wh.channel_connection %}
+                    &bull; Canal: <strong>{{ wh.channel_connection.display_name }}</strong>
+                    {% endif %}
+                </div>
+            </div>
+            <a class="btn-pill-secondary text-xs" href="{% url 'lead_webhooks:detail' workspace_id=request.workspace.id webhook_id=wh.id %}">
+                Ver Detalhes e URL &rarr;
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card p-8 text-center">
+        <h3 class="text-base font-semibold mb-1" style="color: var(--text-primary);">Nenhum webhook de leads criado</h3>
+        <p class="text-sm mb-4" style="color: var(--text-secondary);">Crie um endpoint para conectar suas fontes de leads e iniciar automações instantaneamente no WhatsApp.</p>
+        <button type="button" class="btn-pill-primary" @click="$modal('add-lead-webhook')">
+            + Criar primeiro webhook
+        </button>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

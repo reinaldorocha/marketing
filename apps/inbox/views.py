@@ -28,7 +28,9 @@ from dataclasses import replace
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpResponse, HttpResponseNotModified
+from django.http import Http404, HttpResponse, HttpResponseNotModified, JsonResponse
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.shortcuts import render
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
@@ -58,7 +60,11 @@ from apps.inbox.models import (
     InboxReminder,
     InboxRule,
     ScheduledReply,
+    QuickReply,
 )
+from apps.media_library.models import MediaAsset
+from apps.media_library.mimes import MediaKind
+from apps.media_library.delivery import delivery_url
 from apps.inbox.rendering import (
     day_label,
     failed_scheduled_reply,
@@ -110,6 +116,12 @@ __all__ = [
     "tags",
     "thread",
     "note",
+    "quick_replies_json",
+    "send_voice_note",
+    "quick_reply_settings",
+    "quick_reply_rows",
+    "quick_reply_save",
+    "quick_reply_delete",
 ]
 
 #: The longest reply the compose box accepts. Well under
@@ -582,10 +594,10 @@ def _sidebar_context(request: WorkspaceRequest, conversation: Conversation) -> d
 #: Channel and label stay as selects beside them, because those genuinely are
 #: long lists.
 INBOX_VIEWS: tuple[tuple[str, str, str, str], ...] = (
-    ("all", "All", "", ""),
-    ("unassigned", "Unassigned", "", selectors.ASSIGNEE_UNASSIGNED),
-    ("mine", "Mine", "", selectors.ASSIGNEE_ME),
-    ("done", "Done", ConversationState.DONE, ""),
+    ("all", "Todos", "", ""),
+    ("unassigned", "Não atribuídos", "", selectors.ASSIGNEE_UNASSIGNED),
+    ("mine", "Meus", "", selectors.ASSIGNEE_ME),
+    ("done", "Concluídos", ConversationState.DONE, ""),
 )
 
 
@@ -1494,14 +1506,81 @@ def _attachments(request: WorkspaceRequest, conversation: Conversation, dropped:
     ``dropped``, so the caller can say so — a silent drop leaves an agent
     referring in the text to a document that was never sent.
     """
+    import mimetypes
+    from urllib.parse import urlsplit
+    from apps.media_library.delivery import read_token
+    from apps.media_library.models import MediaAsset
+
     ids = [value for value in request.POST.getlist("media")[:MAX_ATTACHMENTS] if value]
-    if not ids:
+    urls = [value for value in request.POST.getlist("media_url")[:MAX_ATTACHMENTS] if value]
+    raw_types = request.POST.getlist("media_type")
+    raw_items = ids + [u for u in urls if u not in ids]
+    if not raw_items:
         return []
     capabilities = _capabilities_for(conversation)
     blocks: list[Any] = []
-    for media_id in ids:
+    for idx, item in enumerate(raw_items[:MAX_ATTACHMENTS]):
+        item_str = str(item).strip()
+        if not item_str:
+            continue
+        if item_str.startswith("http://") or item_str.startswith("https://") or item_str.startswith("/"):
+            split_url = urlsplit(item_str)
+            raw_path = split_url.path
+            parsed_path = raw_path.lower()
+            lower = item_str.lower()
+
+            # 1. Check if internal signed delivery URL (/m/<token>/)
+            # Token signature is case-sensitive, so extract directly from raw_path
+            kind = ""
+            if "/m/" in raw_path:
+                token = raw_path.split("/m/")[1].strip("/").split("/")[0]
+                if token:
+                    try:
+                        asset_pk, _ = read_token(token)
+                        asset = MediaAsset.objects.for_workspace(request.workspace).filter(pk=asset_pk).first()
+                        if asset:
+                            kind = str(asset.kind)
+                    except Exception:
+                        pass
+
+            # 2. Check explicit metadata from composer form
+            if not kind and idx < len(raw_types) and raw_types[idx] in ("image", "audio", "video", "file"):
+                kind = raw_types[idx]
+
+            # 3. Detect from path extension without query parameters
+            if not kind:
+                audio_exts = (".ogg", ".opus", ".mp3", ".wav", ".m4a", ".aac")
+                image_exts = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg")
+                video_exts = (".mp4", ".mov", ".avi", ".webm", ".mkv", ".3gp")
+                if "ptt=1" in lower or "voice" in lower or parsed_path.endswith(audio_exts):
+                    kind = "audio"
+                elif parsed_path.endswith(image_exts):
+                    kind = "image"
+                elif parsed_path.endswith(video_exts):
+                    kind = "video"
+                else:
+                    guessed_mime, _ = mimetypes.guess_type(parsed_path)
+                    if guessed_mime:
+                        if guessed_mime.startswith("image/"):
+                            kind = "image"
+                        elif guessed_mime.startswith("audio/"):
+                            kind = "audio"
+                        elif guessed_mime.startswith("video/"):
+                            kind = "video"
+                        else:
+                            kind = "file"
+                    else:
+                        kind = "file"
+
+            if capabilities is not None and not capabilities.supports_block(kind):
+                dropped.add(kind)
+                continue
+            caption = "Mensagem de Voz (PTT)" if ("ptt=1" in lower or "voice" in lower) else ""
+            blocks.append(MediaBlock(kind=kind, url=item_str, caption=caption))
+            continue
+
         try:
-            asset = resolve(media_id, workspace=request.workspace)
+            asset = resolve(item_str, workspace=request.workspace)
         except MediaNotFoundError:
             raise _ComposeError("One of those attachments is no longer in the library.") from None
         kind = str(asset["kind"])
@@ -1935,3 +2014,230 @@ def _plan_refusal(request: WorkspaceRequest) -> str | None:
     except PlanLimitError as exc:
         return str(exc)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Quick Replies (Respostas Rápidas) & PTT Voice Notes (Áudios Gravados na Hora)
+# ---------------------------------------------------------------------------
+
+DEFAULT_QUICK_REPLIES = [
+    {
+        "shortcut": "ola",
+        "title": "Saudação Inicial",
+        "body": "Olá! Seja muito bem-vindo(a). Como podemos ajudar você hoje?",
+    },
+    {
+        "shortcut": "pix",
+        "title": "Chave PIX e Pagamento",
+        "body": "Para efetuar o pagamento via PIX, utilize nossa chave:\nCNPJ: 12.345.678/0001-90\nFavorecido: BrightBean Soluções\nBanco: Inter\n\nPor gentileza, nos envie o comprovante assim que concluir!",
+    },
+    {
+        "shortcut": "horario",
+        "title": "Horário de Atendimento",
+        "body": "Nosso horário de funcionamento é de segunda a sexta-feira, das 09:00 às 18:00, e aos sábados das 09:00 às 13:00.",
+    },
+    {
+        "shortcut": "catalogo",
+        "title": "Catálogo de Produtos",
+        "body": "Confira nossos produtos e promoções especiais no catálogo digital pelo link: https://brightbean.com.br/catalogo",
+    },
+    {
+        "shortcut": "suporte",
+        "title": "Suporte e Atendimento",
+        "body": "Para agilizarmos seu atendimento, por favor descreva detalhadamente sua dúvida ou problema. Já estamos analisando sua solicitação!",
+    },
+]
+
+
+@login_required
+@require_permission("use_inbox")
+@require_GET
+def quick_replies_json(request: WorkspaceRequest, workspace_id: str) -> JsonResponse:
+    """Return all quick replies for this workspace as JSON for the composer slash autocomplete."""
+    existing = list(QuickReply.objects.for_workspace(request.workspace).order_by("shortcut"))
+    if not existing:
+        for item in DEFAULT_QUICK_REPLIES:
+            QuickReply.objects.create(
+                workspace=request.workspace,
+                shortcut=item["shortcut"],
+                title=item["title"],
+                body=item["body"],
+            )
+        existing = list(QuickReply.objects.for_workspace(request.workspace).order_by("shortcut"))
+
+    data = [
+        {
+            "id": str(r.id),
+            "shortcut": r.shortcut,
+            "title": r.title,
+            "body": r.body,
+            "media_url": r.media_url,
+            "media_type": r.media_type,
+            "is_ptt": r.is_ptt,
+        }
+        for r in existing
+    ]
+    return JsonResponse({"replies": data})
+
+
+@login_required
+@require_permission("reply_in_inbox")
+@require_POST
+def send_voice_note(request: WorkspaceRequest, workspace_id: str, conversation_id: str) -> HttpResponse:
+    """Handle live voice note recording (PTT - Push To Talk) uploaded from the browser."""
+    conversation = _conversation(request, conversation_id)
+    audio_file = request.FILES.get("audio") or request.FILES.get("file")
+    if not audio_file:
+        return toast_response(tone="error", title="Nenhum áudio", body="Nenhum arquivo de áudio foi recebido.")
+
+    if audio_file.size > 16 * 1024 * 1024:
+        return toast_response(tone="error", title="Áudio muito grande", body="O áudio não pode exceder 16 MB.")
+
+    content = audio_file.read()
+    if not content:
+        return toast_response(tone="error", title="Áudio vazio", body="O áudio gravado não contém dados.")
+
+    content_type = (getattr(audio_file, "content_type", "") or "").lower()
+    if "ogg" in content_type:
+        ext = "ogg"
+        mime = "audio/ogg"
+    elif "mp4" in content_type or "m4a" in content_type:
+        ext = "m4a"
+        mime = "audio/mp4"
+    elif "wav" in content_type:
+        ext = "wav"
+        mime = "audio/wav"
+    else:
+        ext = "webm"
+        mime = "audio/webm"
+
+    file_id = uuid.uuid4().hex
+    storage_name = f"voice/{request.workspace.id}/{file_id}_ptt.{ext}"
+    stored_path = default_storage.save(storage_name, ContentFile(content))
+
+    asset = MediaAsset.objects.create(
+        workspace=request.workspace,
+        file=stored_path,
+        filename=f"voice_note_ptt.{ext}",
+        kind=MediaKind.AUDIO,
+        mime=mime,
+        size=len(content),
+        title="Áudio Gravado na Hora (PTT)",
+        uploaded_by=request.user,
+    )
+    url = delivery_url(asset)
+    ptt_url = f"{url}?ptt=1" if "?" not in url else f"{url}&ptt=1"
+
+    blocks = [
+        MediaBlock(
+            kind="audio",
+            url=ptt_url,
+            caption="Mensagem de Voz (PTT)",
+        )
+    ]
+    outbound = OutboundMessage(blocks=tuple(blocks))
+
+    message = messaging.send_as_agent(
+        workspace=request.workspace,
+        contact=conversation.contact,
+        connection=conversation.channel_connection,
+        outbound=outbound,
+        idempotency_key=_idempotency_key(request, prefix="voice"),
+    )
+    events = _refresh(inboxSent=True)
+    if message.status == MessageStatus.FAILED:
+        return toast_response(tone="error", title="Não enviado", body=describe(message.error), events=events)
+    return toast_response(
+        tone="success",
+        title="Áudio PTT enviado",
+        body="Mensagem de voz gravada entregue com sucesso.",
+        events=events,
+    )
+
+
+@login_required
+@require_permission("reply_in_inbox")
+@require_GET
+def quick_reply_settings(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
+    """Settings page for managing quick replies."""
+    replies = QuickReply.objects.for_workspace(request.workspace).order_by("shortcut")
+    return render(
+        request,
+        "inbox/quick_replies_settings.html",
+        {
+            "replies": replies,
+            "count": replies.count(),
+        },
+    )
+
+
+@login_required
+@require_permission("reply_in_inbox")
+@require_GET
+def quick_reply_rows(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
+    """Table rows partial for quick replies list."""
+    replies = QuickReply.objects.for_workspace(request.workspace).order_by("shortcut")
+    return render(
+        request,
+        "inbox/_quick_reply_rows.html",
+        {
+            "replies": replies,
+        },
+    )
+
+
+@login_required
+@require_permission("reply_in_inbox")
+@require_POST
+def quick_reply_save(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
+    """Create or update a quick reply."""
+    reply_id = (request.POST.get("id") or "").strip()
+    shortcut = (request.POST.get("shortcut") or "").strip().lstrip("/").lower()
+    title = (request.POST.get("title") or "").strip()
+    body = (request.POST.get("body") or "").strip()
+    media_url = (request.POST.get("media_url") or "").strip()
+    is_ptt = request.POST.get("is_ptt") in ("true", "1", "on", True)
+
+    if not shortcut:
+        return toast_response(tone="error", title="Atalho obrigatório", body="Digite um atalho sem espaços (ex: pix).")
+    if not title:
+        return toast_response(tone="error", title="Título obrigatório", body="Digite um título para a resposta rápida.")
+    if not body and not media_url:
+        return toast_response(tone="error", title="Conteúdo obrigatório", body="Informe um texto ou URL de mídia.")
+
+    if reply_id:
+        qr = get_scoped_object_or_404(QuickReply, request.workspace, pk=reply_id)
+        qr.shortcut = shortcut
+        qr.title = title
+        qr.body = body
+        qr.media_url = media_url
+        qr.is_ptt = is_ptt
+        qr.save()
+        msg = f"Resposta rápida /{shortcut} atualizada."
+    else:
+        if QuickReply.objects.for_workspace(request.workspace).filter(shortcut=shortcut).exists():
+            return toast_response(tone="error", title="Atalho já existe", body=f"Já existe uma resposta com o atalho /{shortcut}.")
+        qr = QuickReply.objects.create(
+            workspace=request.workspace,
+            shortcut=shortcut,
+            title=title,
+            body=body,
+            media_url=media_url,
+            is_ptt=is_ptt,
+        )
+        msg = f"Resposta rápida /{shortcut} criada com sucesso."
+
+    events = {"quickRepliesChanged": True}
+    return toast_response(tone="success", title="Salvo", body=msg, events=events)
+
+
+@login_required
+@require_permission("reply_in_inbox")
+@require_POST
+def quick_reply_delete(request: WorkspaceRequest, workspace_id: str, reply_id: str) -> HttpResponse:
+    """Delete a quick reply."""
+    qr = get_scoped_object_or_404(QuickReply, request.workspace, pk=reply_id)
+    shortcut = qr.shortcut
+    qr.delete()
+    events = {"quickRepliesChanged": True}
+    return toast_response(tone="success", title="Excluído", body=f"Resposta /{shortcut} removida.", events=events)

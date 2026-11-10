@@ -1,0 +1,61 @@
+{% extends "layouts/workspace_settings.html" %}
+{% load common_extras %}
+{% block title %}Respostas Rápidas · BrightBean Chat{% endblock %}
+{% block content_wrap %}{% endblock %}
+
+{% block content %}
+<div class="max-w-[1060px] w-full">
+    <div class="page-header">
+        <div class="page-header-text">
+            <h1 class="page-title">Respostas Rápidas</h1>
+            <p class="page-lede">Crie modelos de resposta acionados digitando <span class="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">/</span> no compositor e configure áudios PTT gravados na hora.</p>
+        </div>
+        <button type="button" class="btn-pill-primary flex-shrink-0 inline-flex items-center gap-1.5" @click="$modal('new-quick-reply')">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Nova resposta rápida
+        </button>
+    </div>
+
+    {% modal "new-quick-reply" title="Nova Resposta Rápida" close_on="quickRepliesChanged" %}
+    <form hx-post="{% url 'inbox:quick_reply_save' workspace_id=request.workspace.id %}">
+        {% csrf_token %}
+        <div class="bb-modal-body space-y-4">
+            <div class="field">
+                <label class="field-label" for="new-reply-shortcut">Atalho (digite / para usar no chat)</label>
+                <div class="flex items-center">
+                    <span class="inline-flex items-center px-3 py-2 text-sm bg-surface-raised dark:bg-zinc-800 text-muted border border-r-0 border-border rounded-l-md font-mono">/</span>
+                    <input class="form-input-styled rounded-l-none font-mono" id="new-reply-shortcut" type="text" name="shortcut" maxlength="64" required autofocus placeholder="pix, ola, catalogo">
+                </div>
+                <p class="text-[11px] text-muted mt-1">Exemplo: digitando <code class="text-emerald-600 dark:text-emerald-400">/pix</code> no chat o atendente insere esta mensagem instantaneamente.</p>
+            </div>
+            <div class="field">
+                <label class="field-label" for="new-reply-title">Título descritivo</label>
+                <input class="form-input-styled" id="new-reply-title" type="text" name="title" maxlength="128" required placeholder="Chave PIX e Dados Bancários">
+            </div>
+            <div class="field">
+                <label class="field-label" for="new-reply-body">Conteúdo da mensagem</label>
+                <textarea class="form-input-styled" id="new-reply-body" name="body" rows="4" placeholder="Escreva o texto completo do modelo que será inserido na resposta…"></textarea>
+            </div>
+            <div class="field">
+                <label class="field-label" for="new-reply-media">URL de Mídia / Áudio Opcional</label>
+                <input class="form-input-styled font-mono text-xs" id="new-reply-media" type="url" name="media_url" placeholder="https://exemplo.com/audio.ogg ou link de arquivo">
+            </div>
+            <div class="flex items-center gap-2 pt-2 border-t border-border">
+                <input type="checkbox" id="new-reply-ptt" name="is_ptt" value="true" class="rounded border-border text-emerald-600 focus:ring-emerald-500">
+                <label for="new-reply-ptt" class="text-xs font-medium cursor-pointer text-ink">
+                    🎙️ Enviar áudio como WhatsApp Voice Note (PTT / gravado na hora)
+                </label>
+            </div>
+        </div>
+        <div class="bb-modal-actions">
+            <button type="button" class="btn-pill-secondary" @click="close()">Cancelar</button>
+            <button type="submit" class="btn-pill-primary">Salvar modelo</button>
+        </div>
+    </form>
+    {% endmodal %}
+
+    {% include "inbox/_quick_reply_rows.html" %}
+</div>
+{% endblock %}
+
+{% block alpine_components %}{{ block.super }}{% include "partials/_list_behaviours.html" %}{% endblock %}

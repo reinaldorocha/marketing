@@ -101,10 +101,10 @@ class NodeSpec:
 #: the order and the labels are exported, so the frontend reads one file rather
 #: than one file plus a hard-coded table.
 GROUPS: tuple[tuple[str, str], ...] = (
-    ("content", "Content"),
-    ("logic", "Logic"),
-    ("actions", "Actions"),
-    ("other", "Other"),
+    ("content", "Conteúdo"),
+    ("logic", "Lógica"),
+    ("actions", "Ações"),
+    ("other", "Outros"),
 )
 
 NODE_TYPES: dict[str, NodeSpec] = {}
@@ -190,6 +190,13 @@ def handles_for_node(spec: NodeSpec, config: Any) -> set[str]:
         for item in config.get(config_key) or []:
             if isinstance(item, dict) and isinstance(item.get("id"), str):
                 available.add(f"{prefix}:{item['id']}")
+    for block in config.get("blocks") or []:
+        if isinstance(block, dict) and block.get("type") == "list":
+            for section in block.get("sections") or []:
+                if isinstance(section, dict):
+                    for row in section.get("rows") or []:
+                        if isinstance(row, dict) and isinstance(row.get("id"), str):
+                            available.add(f"btn:{row['id']}")
     return available
 
 
@@ -236,6 +243,71 @@ register_defs(
         {"type": f.const("gallery"), "cards": f.array(f.ref("gallery_card"), min_items=1, max_items=10)},
         required=["type", "cards"],
     ),
+    block_sticker={
+        **f.obj(
+            {
+                "type": f.const("sticker"),
+                "media_id": f.string(min_length=1, max_length=64, description="Media library asset id."),
+                "url": f.string(min_length=1, max_length=2000),
+            },
+            required=["type"],
+        ),
+        "anyOf": [{"required": ["media_id"]}, {"required": ["url"]}],
+    },
+    block_location=f.obj(
+        {
+            "type": f.const("location"),
+            "latitude": f.number(),
+            "longitude": f.number(),
+            "name": f.string(max_length=200),
+            "address": f.string(max_length=400),
+        },
+        required=["type", "latitude", "longitude"],
+    ),
+    block_contact=f.obj(
+        {
+            "type": f.const("contact"),
+            "full_name": f.string(min_length=1, max_length=200),
+            "phone": f.string(min_length=1, max_length=50),
+            "organization": f.string(max_length=200),
+        },
+        required=["type", "full_name", "phone"],
+    ),
+    block_poll=f.obj(
+        {
+            "type": f.const("poll"),
+            "question": f.string(min_length=1, max_length=255),
+            "options": f.array(f.string(min_length=1, max_length=100), min_items=2, max_items=12),
+            "max_answers": f.integer(minimum=1, maximum=12),
+        },
+        required=["type", "question", "options"],
+    ),
+    list_row=f.obj(
+        {
+            "id": f.string(min_length=1, max_length=64, description="Row ID / btn:<id> handle."),
+            "title": f.string(min_length=1, max_length=100),
+            "description": f.string(max_length=255),
+        },
+        required=["id", "title"],
+    ),
+    list_section=f.obj(
+        {
+            "title": f.string(min_length=1, max_length=100),
+            "rows": f.array(f.ref("list_row"), min_items=1, max_items=10),
+        },
+        required=["title", "rows"],
+    ),
+    block_list=f.obj(
+        {
+            "type": f.const("list"),
+            "title": f.string(min_length=1, max_length=100),
+            "description": f.string(min_length=1, max_length=1024),
+            "button_text": f.string(max_length=50),
+            "footer_text": f.string(max_length=100),
+            "sections": f.array(f.ref("list_section"), min_items=1, max_items=10),
+        },
+        required=["type", "description", "sections"],
+    ),
     message_block=f.tagged_union(
         "type",
         {
@@ -246,6 +318,11 @@ register_defs(
             "file": "block_media",
             "card": "block_card",
             "gallery": "block_gallery",
+            "sticker": "block_sticker",
+            "location": "block_location",
+            "contact": "block_contact",
+            "poll": "block_poll",
+            "list": "block_list",
         },
     ),
     message_button_url=f.obj(
@@ -265,7 +342,46 @@ register_defs(
         },
         required=["id", "label", "action"],
     ),
-    message_button=f.tagged_union("action", {"url": "message_button_url", "postback": "message_button_postback"}),
+    message_button_call=f.obj(
+        {
+            "id": f.string(min_length=1, max_length=64, description="The id in this button's btn:<id> handle."),
+            "label": f.string(min_length=1, max_length=80),
+            "action": f.const("call"),
+            "phone_number": f.string(min_length=1, max_length=30),
+        },
+        required=["id", "label", "action", "phone_number"],
+    ),
+    message_button_copy=f.obj(
+        {
+            "id": f.string(min_length=1, max_length=64, description="The id in this button's btn:<id> handle."),
+            "label": f.string(min_length=1, max_length=80),
+            "action": f.const("copy"),
+            "copy_code": f.string(min_length=1, max_length=1024),
+        },
+        required=["id", "label", "action", "copy_code"],
+    ),
+    message_button_pix=f.obj(
+        {
+            "id": f.string(min_length=1, max_length=64, description="The id in this button's btn:<id> handle."),
+            "label": f.string(min_length=1, max_length=80),
+            "action": f.const("pix"),
+            "pix_key": f.string(min_length=1, max_length=255),
+            "pix_key_type": f.enum("phone", "email", "cpf", "cnpj", "random"),
+            "pix_name": f.string(max_length=120),
+            "currency": f.string(max_length=10),
+        },
+        required=["id", "label", "action", "pix_key", "pix_key_type"],
+    ),
+    message_button=f.tagged_union(
+        "action",
+        {
+            "url": "message_button_url",
+            "postback": "message_button_postback",
+            "call": "message_button_call",
+            "copy": "message_button_copy",
+            "pix": "message_button_pix",
+        },
+    ),
     quick_reply=f.obj(
         {
             "id": f.string(min_length=1, max_length=64, description="The id in this reply's qr:<id> handle."),
@@ -276,8 +392,11 @@ register_defs(
     followup=f.obj(
         {
             "enabled": f.boolean(),
-            "delay": f.integer(minimum=1, maximum=10_000),
-            "unit": f.enum("minutes", "hours", "days"),
+            "delay": f.integer(minimum=1, maximum=100_000),
+            "unit": f.enum("minutes", "hours", "days", "seconds"),
+            "delay_mode": f.enum("fixed", "random"),
+            "min_delay": f.integer(minimum=1, maximum=100_000),
+            "max_delay": f.integer(minimum=1, maximum=100_000),
         },
         required=["enabled"],
         description="Where the flow goes if nobody answers in time.",
@@ -342,7 +461,13 @@ register_defs(
         {
             "mode": f.const("duration"),
             "duration": f.obj(
-                {"value": f.integer(minimum=1, maximum=100_000), "unit": f.enum("minutes", "hours", "days")},
+                {
+                    "value": f.integer(minimum=1, maximum=100_000),
+                    "unit": f.enum("minutes", "hours", "days", "seconds"),
+                    "delay_mode": f.enum("fixed", "random"),
+                    "min_value": f.integer(minimum=1, maximum=100_000),
+                    "max_value": f.integer(minimum=1, maximum=100_000),
+                },
                 required=["value", "unit"],
             ),
             "continue_window": f.ref("continue_window"),
@@ -454,7 +579,7 @@ for _verb_name, _verb_schema in (
 register_node_type(
     NodeSpec(
         type="send_message",
-        label="Send a message",
+        label="Enviar Mensagem",
         description="Sends a message. If it offers buttons or quick replies, the flow waits for an answer.",
         group="content",
         config=f.obj(
@@ -470,6 +595,9 @@ register_node_type(
                 # compliance engine still decides whether it is *needed* — this
                 # only supplies it.
                 "whatsapp_template": f.ref("whatsapp_template"),
+                "recipient_type": f.enum("contact", "custom", "group"),
+                "custom_phone": f.string(max_length=100),
+                "group_id": f.string(max_length=128),
             },
             required=["blocks"],
         ),
@@ -481,7 +609,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="action",
-        label="Tag, save or assign",
+        label="Etiquetar, Salvar ou Atribuir",
         description="Tags a contact, saves a detail, assigns the conversation. Several at once, in order.",
         group="actions",
         # The verb union is built at export time from ACTION_VERBS, so a verb a
@@ -494,7 +622,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="start_flow",
-        label="Hand over to another flow",
+        label="Iniciar Outro Fluxo",
         description="Hands over to another flow. This one stops here.",
         group="logic",
         config=f.obj({"flow_id": f.string(min_length=1, max_length=64)}, required=["flow_id"]),
@@ -506,7 +634,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="condition",
-        label="Branch on a condition",
+        label="Condição (Se / Senão)",
         description="Splits the flow in two, on what you know about the contact.",
         group="logic",
         config=f.ref("condition_filter"),
@@ -517,8 +645,8 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="smart_delay",
-        label="Wait",
-        description="Waits, then carries on. Picks up at the next hour you allow sending.",
+        label="Aguardar (Delay)",
+        description="Aguarda um intervalo de tempo configurado antes de prosseguir.",
         group="logic",
         # Discriminated on `mode` rather than a flat object with everything
         # optional. With only `mode` required, {"mode": "duration"} published
@@ -534,7 +662,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="randomizer",
-        label="Split the traffic",
+        label="Divisão de Tráfego (Teste A/B)",
         description="Splits people down different paths, to compare two versions. Each person keeps the path they got.",
         group="logic",
         config=f.obj(
@@ -554,7 +682,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="external_request",
-        label="Call another system",
+        label="Chamar API Externa (Webhook)",
         description="Calls another system and can save what it sends back.",
         group="actions",
         config=f.obj(
@@ -577,7 +705,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="data_collection",
-        label="Ask a question",
+        label="Fazer uma Pergunta (Coletar Dados)",
         description="Asks a question and saves the answer on the contact. Checks emails and phone numbers look real.",
         group="content",
         config=f.obj(
@@ -598,8 +726,11 @@ register_node_type(
                 "timeout": f.obj(
                     {
                         "enabled": f.boolean(),
-                        "delay": f.integer(minimum=1, maximum=10_000),
-                        "unit": f.enum("minutes", "hours", "days"),
+                        "delay": f.integer(minimum=1, maximum=100_000),
+                        "unit": f.enum("minutes", "hours", "days", "seconds"),
+                        "delay_mode": f.enum("fixed", "random"),
+                        "min_delay": f.integer(minimum=1, maximum=100_000),
+                        "max_delay": f.integer(minimum=1, maximum=100_000),
                     },
                     required=["enabled"],
                 ),
@@ -613,7 +744,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="send_sms",
-        label="Send a text",
+        label="Enviar SMS",
         description="Sends a text message. Needs an SMS account connected and a phone number for the contact.",
         group="actions",
         config=f.obj(
@@ -630,7 +761,7 @@ register_node_type(
 register_node_type(
     NodeSpec(
         type="send_email",
-        label="Send an email",
+        label="Enviar E-mail",
         description="Sends an email. Needs an email account connected and an address for the contact.",
         group="actions",
         config=f.obj(

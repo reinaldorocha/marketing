@@ -342,6 +342,9 @@ def _persist_one(connection: Any, event: NormalizedEvent) -> None:
     if event.type == EventType.MESSAGE_DELETED:
         _apply_deletion(connection, event)
         return
+    if event.type == EventType.MESSAGE_REACTION:
+        _apply_reaction(connection, event)
+        return
     if event.type == EventType.COMMENT and not _claims_private_reply(event):
         # A comment nobody claimed. Public, not a DM, and no contact — see the
         # module docstring on the amplifier this refusal prevents.
@@ -363,6 +366,13 @@ def _persist_one(connection: Any, event: NormalizedEvent) -> None:
     identity = resolution.identity
     contact = resolution.contact
     _record_display_fields(identity, event)
+
+    if connection.platform == "instagram":
+        try:
+            from apps.channels.providers.instagram import enrich_instagram_contact
+            enrich_instagram_contact(connection, address)
+        except Exception as exc:
+            logger.debug("Instagram contact enrichment skipped in ingest: %s", exc)
 
     if event.type == EventType.OPT_OUT:
         apply_opt_out(identity, now)
@@ -449,7 +459,22 @@ def _persist_one(connection: Any, event: NormalizedEvent) -> None:
 #: and copying that onto the identity would make the column a log. Adding a
 #: platform's key here is a one-line, platform-agnostic change — the point is
 #: that no branch in this module ever asks which platform it is looking at.
-DISPLAY_FIELDS = ("username", "first_name", "last_name", "profile_name", "profile_pic_url", "language_code")
+DISPLAY_FIELDS = (
+    "username",
+    "name",
+    "first_name",
+    "last_name",
+    "profile_name",
+    "profile_pic",
+    "profile_pic_url",
+    "language_code",
+)
+ENRICHMENT_FIELDS = (
+    "follower_count",
+    "is_user_follow_business",
+    "is_business_follow_user",
+    "last_checked_at",
+)
 
 #: Longest display string kept. These are attacker-supplied (SECURITY-BASELINE
 #: §2) and land in a jsonb column, so they are bounded here as well as by the
@@ -473,13 +498,14 @@ def _record_display_fields(identity: ContactChannelIdentity, event: NormalizedEv
     nobody predicted.
     """
     extra = event.payload.extra if isinstance(event.payload.extra, dict) else {}
-    incoming: dict[str, str] = {}
+    incoming: dict[str, Any] = {}
     for key in DISPLAY_FIELDS:
-        # Cleaned once: called twice — as the test and as the value — it was two
-        # chances for the two to disagree about what "empty" means.
         value = _clean(extra.get(key), MAX_DISPLAY_CHARS)
         if value:
             incoming[key] = value
+    for key in ENRICHMENT_FIELDS:
+        if key in extra and extra[key] is not None:
+            incoming[key] = extra[key]
     if not incoming:
         return
 
@@ -893,6 +919,68 @@ def _apply_deletion(connection: Any, event: NormalizedEvent) -> None:
         logger.debug("message_deleted named no storable message on connection %s", connection.pk)
         return
     logger.info("Redacted %s message(s) on connection %s at the platform's request.", updated, connection.pk)
+
+
+def _apply_reaction(connection: Any, event: NormalizedEvent) -> None:
+    """Record a reaction received from Instagram Direct.
+
+    Scoped to workspace and channel connection.
+    Does not create a new message row, does not trigger flows, does not open/reset messaging window.
+    Deduplicates repeated events and ignores out-of-order deliveries.
+    """
+    extra = event.payload.extra if isinstance(event.payload.extra, dict) else {}
+    provider_id = _clean(extra.get("mid") or extra.get(PROVIDER_MESSAGE_ID_KEY), 200)
+    if not provider_id:
+        logger.debug("Unusable message_reaction payload on connection %s; ignored.", connection.pk)
+        return
+
+    sender_id = event.platform_user_id
+    action = str(extra.get("action") or "react").lower()
+    emoji = str(extra.get("emoji") or "")
+    reaction_ts = extra.get("reaction_timestamp")
+    try:
+        event_time_ms = int(reaction_ts) if reaction_ts is not None else int(event.timestamp.timestamp() * 1000)
+    except (TypeError, ValueError):
+        event_time_ms = int(event.timestamp.timestamp() * 1000)
+
+    with transaction.atomic():
+        message = (
+            Message.objects.for_workspace(connection.workspace_id)
+            .select_for_update()
+            .filter(channel_connection=connection, provider_message_id=provider_id)
+            .first()
+        )
+        if message is None:
+            logger.info("message_reaction named unknown message %s on connection %s; ignored gracefully.", provider_id, connection.pk)
+            return
+
+        body = dict(message.body or {})
+        reactions = dict(body.get("reactions") or {})
+        existing = reactions.get(sender_id)
+
+        if existing and isinstance(existing, dict):
+            prev_ts = existing.get("timestamp") or 0
+            if event_time_ms < prev_ts:
+                logger.info("Dropping out-of-order reaction for message %s (prev %s > current %s)", provider_id, prev_ts, event_time_ms)
+                return
+
+        if action in ("unreact", "remove"):
+            reactions[sender_id] = {
+                "emoji": "",
+                "action": "unreact",
+                "timestamp": event_time_ms,
+            }
+        else:
+            reactions[sender_id] = {
+                "emoji": emoji,
+                "action": action,
+                "timestamp": event_time_ms,
+            }
+
+        body["reactions"] = reactions
+        message.body = body
+        message.save(update_fields=["body", "updated_at"])
+        logger.info("Recorded reaction for message %s: sender=%s action=%s emoji=%s", provider_id, sender_id, action, emoji)
 
 
 def _next_status(current: str, incoming: str, error: str) -> tuple[str | None, str]:

@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Publicação · BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[900px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>Editar Publicação</span>
+            <span class="text-xs px-2.5 py-0.5 rounded font-semibold uppercase {% if post.status == 'scheduled' %}bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300{% elif post.status == 'failed' %}bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300{% else %}bg-gray-100 text-gray-800{% endif %}">
+                {{ post.get_status_display }}
+            </span>
+        </h1>
+        <p class="page-lede">
+            Modifique a legenda, mídias ou altere o horário de agendamento no calendário.
+        </p>
+    </div>
+    <div class="page-header-actions flex items-center gap-2">
+        <a href="{% url 'publishing:detail' workspace_id=request.workspace.id post_id=post.id %}" class="btn-pill-secondary text-xs">
+            Voltar para Detalhes
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[900px]">
+    <form method="post" class="card p-6 space-y-6">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="field">
+                <label class="field-label" for="connection_id">Conta do Instagram</label>
+                <select name="connection_id" id="connection_id" class="form-input-styled bb-select w-full" required>
+                    {% for conn in connections %}
+                    <option value="{{ conn.id }}" {% if conn.id == post.connection_id %}selected{% endif %}>
+                        {{ conn.display_name }} ({{ conn.external_id }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="publish_type">Formato da Publicação</label>
+                <select name="publish_type" id="publish_type" class="form-input-styled bb-select w-full" onchange="togglePublishType(this.value)" required>
+                    <option value="feed_image" {% if post.publish_type == 'feed_image' %}selected{% endif %}>Feed — Foto Única</option>
+                    <option value="reel_video" {% if post.publish_type == 'reel_video' %}selected{% endif %}>Reels — Vídeo com Feed</option>
+                    <option value="carousel" {% if post.publish_type == 'carousel' %}selected{% endif %}>Carrossel — De 2 a 10 Fotos/Vídeos</option>
+                    <option value="story_image" {% if post.publish_type == 'story_image' %}selected{% endif %}>Story — Foto (24h)</option>
+                    <option value="story_video" {% if post.publish_type == 'story_video' %}selected{% endif %}>Story — Vídeo (24h)</option>
+                    <option value="feed_video" {% if post.publish_type == 'feed_video' %}selected{% endif %}>Feed — Vídeo Tradicional</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Single Media Inputs -->
+        <div id="single-media-fields" class="space-y-4 {% if post.publish_type == 'carousel' %}hidden{% endif %}">
+            <div class="field">
+                <label class="field-label" for="media_url">URL Pública da Mídia (Imagem ou Vídeo)</label>
+                <input type="url" name="media_url" id="media_url" value="{{ post.media_url }}" placeholder="https://dominio.com/foto.jpg ou mp4" class="form-input-styled w-full">
+            </div>
+
+            <div class="field" id="cover-url-field">
+                <label class="field-label" for="cover_url">URL da Capa / Thumbnail (Opcional)</label>
+                <input type="url" name="cover_url" id="cover_url" value="{{ post.cover_url|default:'' }}" placeholder="https://dominio.com/capa.jpg" class="form-input-styled w-full">
+            </div>
+        </div>
+
+        <!-- Carousel Items Inputs -->
+        <div id="carousel-fields" class="space-y-3 {% if post.publish_type != 'carousel' %}hidden{% endif %}">
+            <div class="flex items-center justify-between">
+                <label class="field-label">Itens do Carrossel (Mínimo 2, Máximo 10)</label>
+                <button type="button" onclick="addCarouselItem()" class="text-xs text-primary font-semibold hover:underline">
+                    + Adicionar Slide
+                </button>
+            </div>
+
+            <div id="carousel-items-list" class="space-y-3">
+                {% if post.media_items %}
+                    {% for item in post.media_items %}
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800 flex gap-3 items-center">
+                        <span class="text-xs font-bold text-gray-400">#{{ forloop.counter }}</span>
+                        <select name="carousel_type" class="form-input-styled text-xs w-28">
+                            <option value="image" {% if item.type == 'image' %}selected{% endif %}>Imagem</option>
+                            <option value="video" {% if item.type == 'video' %}selected{% endif %}>Vídeo</option>
+                        </select>
+                        <input type="url" name="carousel_url" value="{{ item.url }}" placeholder="URL pública da imagem/vídeo" class="form-input-styled text-xs flex-1">
+                        <input type="url" name="carousel_cover" value="{{ item.cover_url|default:'' }}" placeholder="Capa (vídeo)" class="form-input-styled text-xs w-44">
+                        {% if forloop.counter > 2 %}
+                        <button type="button" onclick="this.parentElement.remove()" class="text-rose-500 hover:text-rose-700 text-xs px-1">✕</button>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800 flex gap-3 items-center">
+                        <span class="text-xs font-bold text-gray-400">#1</span>
+                        <select name="carousel_type" class="form-input-styled text-xs w-28">
+                            <option value="image">Imagem</option>
+                            <option value="video">Vídeo</option>
+                        </select>
+                        <input type="url" name="carousel_url" placeholder="URL pública da imagem/vídeo" class="form-input-styled text-xs flex-1">
+                        <input type="url" name="carousel_cover" placeholder="Capa (vídeo)" class="form-input-styled text-xs w-44">
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800 flex gap-3 items-center">
+                        <span class="text-xs font-bold text-gray-400">#2</span>
+                        <select name="carousel_type" class="form-input-styled text-xs w-28">
+                            <option value="image">Imagem</option>
+                            <option value="video">Vídeo</option>
+                        </select>
+                        <input type="url" name="carousel_url" placeholder="URL pública da imagem/vídeo" class="form-input-styled text-xs flex-1">
+                        <input type="url" name="carousel_cover" placeholder="Capa (vídeo)" class="form-input-styled text-xs w-44">
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Caption Field -->
+        <div class="field">
+            <label class="field-label" for="caption">Legenda da Publicação</label>
+            <textarea name="caption" id="caption" rows="5" placeholder="Escreva a legenda com hashtags e emojis..." class="form-input-styled w-full">{{ post.caption }}</textarea>
+        </div>
+
+        <!-- Scheduling & Action Mode -->
+        <div class="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3">
+            <label class="field-label text-sm font-semibold">Ação da Publicação</label>
+            <div class="grid sm:grid-cols-3 gap-3">
+                <label class="p-3 bg-white dark:bg-gray-900 border rounded-lg flex items-start gap-2.5 cursor-pointer hover:border-indigo-500 transition">
+                    <input type="radio" name="action" value="save" {% if post.status == 'draft' %}checked{% endif %} onchange="document.getElementById('schedule-picker').classList.add('hidden')" class="mt-0.5">
+                    <div>
+                        <span class="block text-xs font-semibold text-gray-900 dark:text-white">Salvar Rascunho</span>
+                        <span class="block text-[11px] text-gray-500">Mantém como rascunho</span>
+                    </div>
+                </label>
+                <label class="p-3 bg-white dark:bg-gray-900 border rounded-lg flex items-start gap-2.5 cursor-pointer hover:border-indigo-500 transition">
+                    <input type="radio" name="action" value="schedule" {% if post.status == 'scheduled' %}checked{% endif %} onchange="document.getElementById('schedule-picker').classList.remove('hidden')" class="mt-0.5">
+                    <div>
+                        <span class="block text-xs font-semibold text-gray-900 dark:text-white">Agendar</span>
+                        <span class="block text-[11px] text-gray-500">Programa publicação automática</span>
+                    </div>
+                </label>
+                <label class="p-3 bg-white dark:bg-gray-900 border rounded-lg flex items-start gap-2.5 cursor-pointer hover:border-indigo-500 transition">
+                    <input type="radio" name="action" value="publish" onchange="document.getElementById('schedule-picker').classList.add('hidden')" class="mt-0.5">
+                    <div>
+                        <span class="block text-xs font-semibold text-gray-900 dark:text-white">Publicar Agora</span>
+                        <span class="block text-[11px] text-gray-500">Dispara imediatamente na Meta</span>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Datetime picker for scheduled option -->
+            <div id="schedule-picker" class="{% if post.status != 'scheduled' %}hidden{% endif %} pt-2">
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1" for="scheduled_at">Data e Hora do Agendamento</label>
+                <input type="datetime-local" name="scheduled_at" id="scheduled_at" value="{{ formatted_scheduled_at }}" class="form-input-styled text-xs max-w-xs">
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+            <a href="{% url 'publishing:detail' workspace_id=request.workspace.id post_id=post.id %}" class="btn-pill-secondary text-xs">
+                Cancelar
+            </a>
+            <button type="submit" class="btn-pill-primary inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Salvar Alterações
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function togglePublishType(type) {
+    const singleFields = document.getElementById('single-media-fields');
+    const carouselFields = document.getElementById('carousel-fields');
+    if (type === 'carousel') {
+        singleFields.classList.add('hidden');
+        if (carouselFields) carouselFields.classList.remove('hidden');
+    } else {
+        singleFields.classList.remove('hidden');
+        if (carouselFields) carouselFields.classList.add('hidden');
+    }
+}
+
+function addCarouselItem() {
+    const list = document.getElementById('carousel-items-list');
+    const count = list.children.length + 1;
+    if (count > 10) {
+        alert('Carrosséis suportam no máximo 10 mídias.');
+        return;
+    }
+    const div = document.createElement('div');
+    div.className = 'p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200 dark:border-gray-800 flex gap-3 items-center';
+    div.innerHTML = `
+        <span class="text-xs font-bold text-gray-400">#${count}</span>
+        <select name="carousel_type" class="form-input-styled text-xs w-28">
+            <option value="image">Imagem</option>
+            <option value="video">Vídeo</option>
+        </select>
+        <input type="url" name="carousel_url" placeholder="URL pública da imagem/vídeo" class="form-input-styled text-xs flex-1" required>
+        <input type="url" name="carousel_cover" placeholder="Capa (vídeo)" class="form-input-styled text-xs w-44">
+        <button type="button" onclick="this.parentElement.remove()" class="text-rose-500 hover:text-rose-700 text-xs px-1">✕</button>
+    `;
+    list.appendChild(div);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,18 @@
+<section id="evolution-qr" class="mt-4 flex flex-col items-center rounded-xl border p-4 text-center" hx-get="{{ qr_url }}" hx-trigger="every 4s" hx-swap="outerHTML">
+  {% if qr %}
+    <img src="{{ qr }}" alt="QR Code WhatsApp Evolution GO" class="h-64 w-64 max-w-full rounded border p-2 bg-white" referrerpolicy="no-referrer">
+    <p class="section-note mt-3">Abra o WhatsApp no celular &rarr; <strong>Aparelhos conectados &rarr; Conectar um aparelho</strong>.</p>
+    <p class="section-note text-xs mt-1" style="color: var(--text-tertiary);">O QR Code atualiza automaticamente.</p>
+    {% if pairing_code %}
+      <p class="mt-2 text-sm font-semibold">Código de pareamento alternativo: <code class="bg-gray-100 p-1 rounded">{{ pairing_code }}</code></p>
+    {% endif %}
+  {% else %}
+    <div class="py-8 flex flex-col items-center">
+      <svg class="animate-spin h-8 w-8 text-gray-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+      </svg>
+      <p class="section-note" role="status">Carregando QR Code ou instância já conectada...</p>
+    </div>
+  {% endif %}
+</section>

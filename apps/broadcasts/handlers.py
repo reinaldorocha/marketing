@@ -273,6 +273,9 @@ def handle_broadcast_send(payload: dict[str, Any], action: ScheduledAction) -> N
         # reach it. A claimed action has to refuse itself.
         settle_recipient(recipient, RecipientStatus.CANCELLED, "")
         return
+    if broadcast.status == BroadcastStatus.PAUSED:
+        logger.info("Broadcast %s is paused; send skipped for recipient %s.", broadcast.pk, recipient.pk)
+        return
 
     contact = _scoped(Contact, action.workspace_id, payload.get("contact_id"))
     if contact is None:
@@ -374,7 +377,7 @@ def _send_template(broadcast: Broadcast, contact: Any, connection: Any, probe: O
         )
         return None
 
-    context = context_for(contact)
+    context = context_for(contact, connection=connection)
     values = {str(slot): render(str(value), context) for slot, value in (broadcast.template_variables or {}).items()}
     text = whatsapp_templates.rendered_text(template, values)
     outbound = OutboundMessage(

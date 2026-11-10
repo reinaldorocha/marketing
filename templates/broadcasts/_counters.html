@@ -16,14 +16,29 @@ no receipt path of its own.
             {# Polled, so it follows the broadcast through scheduled → sending → sent. #}
             <span class="status-pill status-pill-{{ broadcast.status }}">{{ broadcast.get_status_display }}</span>
         </span>
-        {% if broadcast.is_live %}
-        <form hx-post="{% url 'broadcasts:cancel' workspace_id=request.workspace.id broadcast_id=broadcast.id %}"
-              hx-swap="none"
-              hx-confirm="Cancel this broadcast? Messages already sent cannot be recalled.">
-            {% csrf_token %}
-            <button type="submit" class="btn-outline btn-inline btn-danger-soft">Cancel broadcast</button>
-        </form>
-        {% endif %}
+        <div class="flex items-center gap-2">
+            {% if broadcast.status == "sending" or broadcast.status == "scheduled" %}
+            <form hx-post="{% url 'broadcasts:pause' workspace_id=request.workspace.id broadcast_id=broadcast.id %}"
+                  hx-swap="none">
+                {% csrf_token %}
+                <button type="submit" class="btn-outline btn-inline">Pausar</button>
+            </form>
+            {% elif broadcast.status == "paused" %}
+            <form hx-post="{% url 'broadcasts:resume' workspace_id=request.workspace.id broadcast_id=broadcast.id %}"
+                  hx-swap="none">
+                {% csrf_token %}
+                <button type="submit" class="btn-outline btn-inline btn-primary-soft">Retomar</button>
+            </form>
+            {% endif %}
+            {% if broadcast.is_live %}
+            <form hx-post="{% url 'broadcasts:cancel' workspace_id=request.workspace.id broadcast_id=broadcast.id %}"
+                  hx-swap="none"
+                  hx-confirm="Cancelar esta campanha? As mensagens já enviadas não poderão ser desfeitas.">
+                {% csrf_token %}
+                <button type="submit" class="btn-outline btn-inline btn-danger-soft">Cancelar</button>
+            </form>
+            {% endif %}
+        </div>
     </div>
 
     {% comment %}

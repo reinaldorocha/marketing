@@ -29,9 +29,24 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+import re
+from apps.common.platforms import Platform
 from apps.channels.capabilities import capabilities_for
 from apps.channels.downgrade import downgrade
-from apps.channels.events import Button, Card, CardBlock, GalleryBlock, MediaBlock, OutboundMessage, QuickReply
+from apps.channels.events import (
+    Button,
+    Card,
+    CardBlock,
+    ContactBlock,
+    GalleryBlock,
+    ListBlock,
+    LocationBlock,
+    MediaBlock,
+    OutboundMessage,
+    PollBlock,
+    QuickReply,
+    StickerBlock,
+)
 from apps.channels.events import TextBlock as OutboundText
 from apps.flows.engine.context import NodeContext
 from apps.flows.engine.nodes.base import Node
@@ -51,6 +66,16 @@ _MEDIA_KINDS = ("image", "audio", "video", "file")
 
 class _UnresolvableMediaError(Exception):
     """A block names an asset this workspace cannot read. Stops the message."""
+
+
+def _clean_phone_number(raw: str) -> str:
+    """Validate and clean custom phone number. Strictly rejects group JIDs."""
+    if not raw or "@" in raw or "g.us" in raw:
+        return ""
+    digits = re.sub(r"\D", "", raw)
+    if not (7 <= len(digits) <= 16):
+        return ""
+    return digits
 
 
 @register_node
@@ -77,6 +102,88 @@ class SendMessageNode(Node):
             logger.warning("Execution %s: node %s has nothing to send.", ctx.execution.pk, ctx.node_id)
             return Continue("default")
 
+        recipient_type = str(ctx.config.get("recipient_type") or "contact").lower().strip()
+        recipient_override = ""
+        is_one_way = False
+
+        conn = getattr(ctx.execution, "channel_connection", None)
+        conn_platform = getattr(conn, "platform", "")
+        if hasattr(conn_platform, "value"):
+            conn_platform = conn_platform.value
+        conn_platform = str(conn_platform or "").lower()
+
+        # Recipient override is ONLY supported on WhatsApp Evolution.
+        # Channels like Telegram, Instagram, Messenger, SMS, and Email do not support
+        # recipient override; sending with override would leak internal messages to customer contacts.
+        if recipient_type in ("custom", "group"):
+            if conn and conn_platform and conn_platform != Platform.WHATSAPP_EVOLUTION.value:
+                logger.warning(
+                    "Execution %s node %s: recipient_type %r not supported on platform %r; skipping send to protect customer contact",
+                    ctx.execution.pk, ctx.node_id, recipient_type, conn_platform,
+                )
+                return Continue("default")
+
+        if recipient_type == "group":
+            group_val = str(ctx.config.get("group_id") or "").strip()
+            if not group_val:
+                logger.warning("Execution %s node %s group_id is empty; skipping send", ctx.execution.pk, ctx.node_id)
+                return Continue("default")
+
+            from apps.whatsapp_groups.models import WhatsAppGroup
+            group_obj = None
+            try:
+                from uuid import UUID
+                UUID(group_val)
+                group_obj = WhatsAppGroup.objects.for_workspace(ctx.workspace).filter(pk=group_val).first()
+            except (ValueError, TypeError):
+                pass
+            if not group_obj:
+                group_obj = WhatsAppGroup.objects.for_workspace(ctx.workspace).filter(jid=group_val).first()
+
+            if not group_obj:
+                logger.warning("Execution %s node %s names invalid or unshared group %r; skipping send", ctx.execution.pk, ctx.node_id, group_val)
+                return Continue("default")
+
+            is_sim = (
+                getattr(ctx.execution, "is_simulated", False)
+                or getattr(conn, "is_simulated", False)
+                or getattr(ctx.contact, "is_simulated", False)
+            )
+            if not is_sim and conn and getattr(conn, "pk", None) and group_obj.connection_id != conn.pk:
+                logger.warning(
+                    "Execution %s node %s group %s belongs to connection %s, not %s; skipping send",
+                    ctx.execution.pk, ctx.node_id, group_obj.jid, group_obj.connection_id, conn.pk
+                )
+                return Continue("default")
+
+            recipient_override = group_obj.jid
+            is_one_way = True
+            logger.info("Execution %s node %s targeting WhatsApp group %s", ctx.execution.pk, ctx.node_id, recipient_override)
+
+        elif recipient_type == "custom":
+            raw_custom = ctx.render(str(ctx.config.get("custom_phone") or "")).strip()
+            clean_phone = _clean_phone_number(raw_custom)
+            if not clean_phone:
+                logger.warning("Execution %s node %s custom_phone %r is invalid or contains group JID; skipping send", ctx.execution.pk, ctx.node_id, raw_custom)
+                return Continue("default")
+
+            recipient_override = clean_phone
+            is_one_way = True
+            logger.info("Execution %s node %s targeting custom recipient %s", ctx.execution.pk, ctx.node_id, clean_phone)
+
+        if recipient_override:
+            audit = ctx.variables.get("_audit_destinations")
+            if not isinstance(audit, dict):
+                audit = {}
+            from django.utils import timezone
+            ref_now = getattr(ctx, "current_now", None) or getattr(ctx, "now", None) or timezone.now()
+            audit[ctx.node_id] = {
+                "recipient_type": recipient_type,
+                "destination": recipient_override,
+                "timestamp": ref_now.isoformat(),
+            }
+            ctx.variables["_audit_destinations"] = audit
+
         template = _whatsapp_template(ctx)
         outbound = OutboundMessage(
             # A template send stores what the contact will actually read, not
@@ -86,6 +193,7 @@ class SendMessageNode(Node):
             quick_replies=tuple(quick_replies),
             template_ref=template.reference,
             template_variables=template.variables,
+            recipient_override=recipient_override,
         )
         try:
             outcome = deliver(ctx.execution, outbound, node_id=ctx.node_id)
@@ -97,13 +205,30 @@ class SendMessageNode(Node):
         if not outcome.sent:
             return Continue("default")
 
+        if is_one_way:
+            # Notifications to groups or third parties are one-way.
+            # Waits (replies, buttons, lists) are restricted to the main contact.
+            return Continue("default")
+
+        # Collect list rows if any
+        list_rows: list[dict[str, Any]] = []
+        for block in blocks:
+            if isinstance(block, ListBlock):
+                for sec in block.sections:
+                    if isinstance(sec, dict):
+                        for r in sec.get("rows") or []:
+                            if isinstance(r, dict) and r.get("id"):
+                                list_rows.append(r)
+
         wait = buttons_wait(
             ctx.node_id,
             buttons=ctx.config.get("buttons"),
             quick_replies=ctx.config.get("quick_replies"),
             followup=ctx.config.get("followup"),
             retry_unmatched=ctx.config.get("retry_unmatched"),
-            labels=_labels(buttons, quick_replies) | _numbered_options(ctx, outbound),
+            labels=_labels(buttons, quick_replies, list_rows) | _numbered_options(ctx, outbound),
+            list_rows=list_rows,
+            now=getattr(ctx, "current_now", None),
         )
         if wait["handles"] or wait.get("timeout"):
             return Wait(wait)
@@ -220,6 +345,73 @@ def _blocks(ctx: NodeContext) -> list[Any]:
             cards = [_card(ctx, card) for card in block.get("cards") or [] if isinstance(card, dict)]
             if cards:
                 rendered.append(GalleryBlock(cards=tuple(cards)))
+        elif kind == "sticker":
+            url = _media_url(ctx, block)
+            rendered.append(StickerBlock(url=url))
+        elif kind == "location":
+            try:
+                lat = float(ctx.render(str(block.get("latitude") or 0.0)))
+                lon = float(ctx.render(str(block.get("longitude") or 0.0)))
+            except (ValueError, TypeError):
+                lat, lon = 0.0, 0.0
+            rendered.append(
+                LocationBlock(
+                    latitude=lat,
+                    longitude=lon,
+                    name=ctx.render(str(block.get("name") or "")),
+                    address=ctx.render(str(block.get("address") or "")),
+                )
+            )
+        elif kind == "contact":
+            rendered.append(
+                ContactBlock(
+                    full_name=ctx.render(str(block.get("full_name") or "")),
+                    phone=ctx.render(str(block.get("phone") or "")),
+                    organization=ctx.render(str(block.get("organization") or "")),
+                )
+            )
+        elif kind == "poll":
+            opts = tuple(ctx.render(str(opt)) for opt in block.get("options") or [] if str(opt).strip())
+            try:
+                max_ans = int(block.get("max_answers") or 1)
+            except (ValueError, TypeError):
+                max_ans = 1
+            rendered.append(
+                PollBlock(
+                    question=ctx.render(str(block.get("question") or "")),
+                    options=opts,
+                    max_answers=max_ans,
+                )
+            )
+        elif kind == "list":
+            sec_rendered = []
+            for sec in block.get("sections") or []:
+                if isinstance(sec, dict):
+                    rows_rendered = []
+                    for r in sec.get("rows") or []:
+                        if isinstance(r, dict):
+                            rows_rendered.append(
+                                {
+                                    "id": str(r.get("id") or ""),
+                                    "title": ctx.render(str(r.get("title") or "")),
+                                    "description": ctx.render(str(r.get("description") or "")),
+                                }
+                            )
+                    sec_rendered.append(
+                        {
+                            "title": ctx.render(str(sec.get("title") or "")),
+                            "rows": rows_rendered,
+                        }
+                    )
+            rendered.append(
+                ListBlock(
+                    title=ctx.render(str(block.get("title") or "")),
+                    description=ctx.render(str(block.get("description") or "")),
+                    button_text=ctx.render(str(block.get("button_text") or "")),
+                    footer_text=ctx.render(str(block.get("footer_text") or "")),
+                    sections=tuple(sec_rendered),
+                )
+            )
     return rendered
 
 
@@ -309,11 +501,19 @@ def _buttons(ctx: NodeContext) -> list[Button]:
     for button in ctx.config.get("buttons") or []:
         if not isinstance(button, dict) or not isinstance(button.get("id"), str):
             continue
+        action = str(button.get("action") or "postback").lower()
         buttons.append(
             Button(
                 id=button["id"],
-                label=ctx.render(button.get("label")),
-                url=ctx.render(button.get("url")) if button.get("action") == "url" else "",
+                label=ctx.render(str(button.get("label") or "")),
+                url=ctx.render(str(button.get("url") or "")) if action == "url" else "",
+                action=action,
+                copy_code=ctx.render(str(button.get("copy_code") or button.get("copyCode") or "")) if action == "copy" else "",
+                phone_number=ctx.render(str(button.get("phone_number") or button.get("phone") or "")) if action == "call" else "",
+                pix_key=ctx.render(str(button.get("pix_key") or button.get("key") or "")) if action == "pix" else "",
+                pix_key_type=str(button.get("pix_key_type") or button.get("keyType") or "") if action == "pix" else "",
+                pix_name=ctx.render(str(button.get("pix_name") or button.get("name") or "")) if action == "pix" else "",
+                currency=str(button.get("currency") or "BRL"),
             )
         )
     return buttons
@@ -357,13 +557,26 @@ def _numbered_options(ctx: NodeContext, outbound: OutboundMessage) -> dict[str, 
     return downgrade(outbound, capabilities).numeric_replies
 
 
-def _labels(buttons: list[Button], quick_replies: list[QuickReply]) -> dict[str, str]:
+def _labels(
+    buttons: list[Button],
+    quick_replies: list[QuickReply],
+    list_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, str]:
     """Rendered label -> id, for platforms that reply with text (SPEC §6.2).
 
     Built from the *rendered* labels rather than the config, so a quick reply
     reading "Yes, {{first_name}}" matches what the contact was actually shown.
-    URL buttons are excluded: they open a link and never come back.
+    URL, call, copy, and pix buttons are excluded: they do not produce postbacks.
     """
     labels = {reply.label: reply.id for reply in quick_replies if reply.label}
-    labels.update({button.label: button.id for button in buttons if button.label and not button.is_url})
+    labels.update({
+        button.label: button.id
+        for button in buttons
+        if button.label and not button.is_url and button.action not in ("call", "copy", "pix")
+    })
+    for row in list_rows or []:
+        r_title = str(row.get("title") or "")
+        r_id = str(row.get("id") or "")
+        if r_title and r_id:
+            labels[r_title] = r_id
     return labels

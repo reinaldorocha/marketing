@@ -1,0 +1,126 @@
+<div id="instagram-ice-breakers-panel" class="space-y-4">
+    <div class="flex items-start justify-between gap-4">
+        <div>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <span>🧊 Perguntas Frequentes (Ice Breakers)</span>
+                {% if settings.ice_breakers_synced_at %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Sincronizado</span>
+                {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">Não publicado</span>
+                {% endif %}
+            </h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Cadastre até 4 botões de perguntas rápidas que aparecem para os clientes ao abrirem a conversa pela primeira vez no Instagram. Podem acionar um fluxo de automação ou texto livre.
+                {% if settings.ice_breakers_synced_at %}
+                    <span class="text-gray-400">· Última sincronização: {{ settings.ice_breakers_synced_at|date:"d/m/Y H:i:s" }}</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    {% if error_msg %}
+    <div class="p-3 bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 rounded-lg">
+        {{ error_msg }}
+    </div>
+    {% endif %}
+
+    {% if success_msg %}
+    <div class="p-3 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900 text-xs text-emerald-700 dark:text-emerald-300 rounded-lg">
+        {{ success_msg }}
+    </div>
+    {% endif %}
+
+    <form hx-post="{% url 'channels:instagram_ice_breakers' workspace_id=request.workspace.id connection_id=connection.id %}"
+          hx-target="#instagram-ice-breakers-panel"
+          hx-swap="outerHTML"
+          class="space-y-3">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800 space-y-2">
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Pergunta 1</label>
+                <input type="text" name="question_1" maxlength="80" placeholder="Ex: Como funciona a plataforma?"
+                       value="{{ ice_breakers.0.question|default:'' }}"
+                       class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 focus:ring-primary focus:border-primary">
+                <select name="flow_id_1" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    <option value="">Destino: Texto / Palavra-chave livre</option>
+                    {% for f in available_flows %}
+                    <option value="{{ f.id }}" {% if ice_breakers.0.payload == f.flow_payload %}selected{% endif %}>Iniciar Fluxo: {{ f.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" name="payload_1" maxlength="1000" placeholder="Payload / Palavra-chave (se não escolher fluxo)"
+                       value="{{ ice_breakers.0.payload|default:'' }}"
+                       class="w-full text-[11px] text-gray-500 rounded-md border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+            </div>
+
+            <div class="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800 space-y-2">
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Pergunta 2</label>
+                <input type="text" name="question_2" maxlength="80" placeholder="Ex: Quais são os planos e preços?"
+                       value="{{ ice_breakers.1.question|default:'' }}"
+                       class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 focus:ring-primary focus:border-primary">
+                <select name="flow_id_2" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    <option value="">Destino: Texto / Palavra-chave livre</option>
+                    {% for f in available_flows %}
+                    <option value="{{ f.id }}" {% if ice_breakers.1.payload == f.flow_payload %}selected{% endif %}>Iniciar Fluxo: {{ f.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" name="payload_2" maxlength="1000" placeholder="Payload / Palavra-chave (se não escolher fluxo)"
+                       value="{{ ice_breakers.1.payload|default:'' }}"
+                       class="w-full text-[11px] text-gray-500 rounded-md border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+            </div>
+
+            <div class="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800 space-y-2">
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Pergunta 3</label>
+                <input type="text" name="question_3" maxlength="80" placeholder="Ex: Quero falar com um atendente"
+                       value="{{ ice_breakers.2.question|default:'' }}"
+                       class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 focus:ring-primary focus:border-primary">
+                <select name="flow_id_3" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    <option value="">Destino: Texto / Palavra-chave livre</option>
+                    {% for f in available_flows %}
+                    <option value="{{ f.id }}" {% if ice_breakers.2.payload == f.flow_payload %}selected{% endif %}>Iniciar Fluxo: {{ f.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" name="payload_3" maxlength="1000" placeholder="Payload / Palavra-chave (se não escolher fluxo)"
+                       value="{{ ice_breakers.2.payload|default:'' }}"
+                       class="w-full text-[11px] text-gray-500 rounded-md border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+            </div>
+
+            <div class="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800 space-y-2">
+                <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300">Pergunta 4</label>
+                <input type="text" name="question_4" maxlength="80" placeholder="Ex: Agendar demonstração"
+                       value="{{ ice_breakers.3.question|default:'' }}"
+                       class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 focus:ring-primary focus:border-primary">
+                <select name="flow_id_4" class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800">
+                    <option value="">Destino: Texto / Palavra-chave livre</option>
+                    {% for f in available_flows %}
+                    <option value="{{ f.id }}" {% if ice_breakers.3.payload == f.flow_payload %}selected{% endif %}>Iniciar Fluxo: {{ f.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" name="payload_4" maxlength="1000" placeholder="Payload / Palavra-chave (se não escolher fluxo)"
+                       value="{{ ice_breakers.3.payload|default:'' }}"
+                       class="w-full text-[11px] text-gray-500 rounded-md border-gray-200 dark:border-gray-700 dark:bg-gray-800">
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <div class="flex gap-2">
+                <button type="submit" name="action" value="save_sync"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-white hover:bg-primary-hover shadow-sm transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    Salvar e Sincronizar na Meta
+                </button>
+                <button type="submit" name="action" value="fetch"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                    Carregar da Meta
+                </button>
+            </div>
+            {% if settings.ice_breakers_synced_at %}
+            <button type="submit" name="action" value="delete"
+                    onclick="return confirm('Tem certeza que deseja excluir os iniciadores de conversa da Meta?');"
+                    class="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400 font-medium">
+                Excluir da Meta
+            </button>
+            {% endif %}
+        </div>
+    </form>
+</div>

@@ -155,6 +155,10 @@ def deliver(
     sends inline; the retry paths pass their retry counter so a second prompt is
     a distinct message rather than a duplicate of the first.
     """
+    simulator_transport = getattr(execution, "_simulator_transport", None)
+    if simulator_transport is not None:
+        return simulator_transport.deliver(execution, outbound, node_id=node_id, attempt=attempt)
+
     if execution.channel_connection_id is None:
         # Nothing to send on. A run started by the API or a rule trigger has no
         # channel until something gives it one, and inventing one here — "the

@@ -244,7 +244,9 @@ def match(context: MatchContext) -> TriggerMatch | None:
 
 
 def _match_keyword(trigger: Trigger, context: MatchContext) -> bool:
-    return keyword_matching.matches_any(context.text, trigger.config_json.get("keywords") or ())
+    keywords = trigger.config_json.get("keywords") or ()
+    ignore_accents = bool(trigger.config_json.get("ignore_accents", False))
+    return keyword_matching.matches_any(context.text, keywords, ignore_accents=ignore_accents)
 
 
 def _match_ref_url(trigger: Trigger, context: MatchContext) -> bool:
@@ -278,12 +280,15 @@ def _match_comment(trigger: Trigger, context: MatchContext) -> bool:
     if config.get("top_level_only") and not context.is_top_level_comment:
         return False
 
-    exclude = _plain_keywords(config.get("exclude_keywords"))
-    if exclude and keyword_matching.matches_any(context.text, exclude):
+    ignore_accents = bool(config.get("ignore_accents", False))
+    match_mode = str(config.get("keyword_match_mode") or "contains")
+
+    exclude = _plain_keywords(config.get("exclude_keywords"), default_mode=match_mode)
+    if exclude and keyword_matching.matches_any(context.text, exclude, ignore_accents=ignore_accents):
         return False
-    include = _plain_keywords(config.get("include_keywords"))
+    include = _plain_keywords(config.get("include_keywords"), default_mode=match_mode)
     if include:
-        return keyword_matching.matches_any(context.text, include)
+        return keyword_matching.matches_any(context.text, include, ignore_accents=ignore_accents)
     return True
 
 
@@ -311,7 +316,8 @@ def _match_story_reply(trigger: Trigger, context: MatchContext) -> bool:
     ``refund`` behaves everywhere else in the product, modes and all.
     """
     keywords = trigger.config_json.get("keywords") or ()
-    return not keywords or keyword_matching.matches_any(context.text, keywords)
+    ignore_accents = bool(trigger.config_json.get("ignore_accents", False))
+    return not keywords or keyword_matching.matches_any(context.text, keywords, ignore_accents=ignore_accents)
 
 
 def _decline(trigger: Trigger, context: MatchContext) -> bool:
@@ -342,11 +348,19 @@ for _stub in sorted(STUB_TYPES):
 # ---------------------------------------------------------------------------
 
 
-def _plain_keywords(values: Any) -> tuple[dict[str, str], ...]:
-    """SPEC §10's comment keyword lists are bare strings; `contains` is the rule."""
+def _plain_keywords(values: Any, default_mode: str = "contains") -> tuple[dict[str, str], ...]:
+    """Turn comment keyword lists into a sequence of ``{"text", "mode"}`` dicts."""
     if not isinstance(values, list | tuple):
         return ()
-    return tuple({"text": value, "mode": "contains"} for value in values if isinstance(value, str))
+    result = []
+    for value in values:
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                result.append({"text": text, "mode": default_mode})
+        elif isinstance(value, dict) and value.get("text"):
+            result.append({"text": str(value["text"]), "mode": str(value.get("mode") or default_mode)})
+    return tuple(result)
 
 
 def _variables(trigger: Trigger, context: MatchContext) -> dict[str, Any]:

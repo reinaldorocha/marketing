@@ -16,13 +16,15 @@ thread above keeps its height.
 {% if can_reply %}
 <div class="ib-compose-wrap" x-data="{ sheet: '' }"
      @click.outside="sheet = ''" @keydown.escape="sheet = ''">
-  <form class="ib-composer"
+  <form class="ib-composer relative"
         x-data="inboxComposer({
           conversationId: '{{ conversation.id|escapejs }}',
           pickerUrl: '{{ media_picker_url|escapejs }}',
           platform: '{{ conversation.channel_connection.platform|escapejs }}',
           kinds: {{ media_kinds|json_attr }},
           max: {{ max_attachments }},
+          quickRepliesUrl: '{% url 'inbox:quick_replies_json' workspace_id=request.workspace.id %}',
+          voiceUrl: '{% url 'inbox:send_voice_note' workspace_id=request.workspace.id conversation_id=conversation.id %}',
         })"
         hx-post="{% url 'inbox:send' workspace_id=request.workspace.id conversation_id=conversation.id %}"
         hx-swap="none">
@@ -44,12 +46,87 @@ thread above keeps its height.
     <div class="ib-compose-head">
       <div class="ib-seg" role="tablist" aria-label="Message type">
         <button type="button" role="tab" class="ib-seg-btn" :aria-selected="mode === 'reply' ? 'true' : 'false'"
-                aria-controls="reply-{{ conversation.id }}" @click="mode = 'reply'">Reply</button>
+                aria-controls="reply-{{ conversation.id }}" @click="mode = 'reply'">Responder</button>
         <button type="button" role="tab" class="ib-seg-btn" :aria-selected="mode === 'note' ? 'true' : 'false'"
-                aria-controls="reply-{{ conversation.id }}" @click="mode = 'note'; sheet = ''">Internal note</button>
+                aria-controls="reply-{{ conversation.id }}" @click="mode = 'note'; sheet = ''">Nota interna</button>
       </div>
-      <span class="ib-compose-hint" x-show="mode === 'reply'">Sending pauses automation for {{ pause_minutes }} minutes.</span>
-      <span class="ib-compose-hint" x-show="mode === 'note'" x-cloak>Only your team sees notes.</span>
+      <span class="ib-compose-hint" x-show="mode === 'reply'">O envio pausa a automação por {{ pause_minutes }} minutos.</span>
+      <span class="ib-compose-hint" x-show="mode === 'note'" x-cloak>Apenas sua equipe vê notas internas.</span>
+    </div>
+
+        <!-- Live Voice Note Recording HUD -->
+    <div x-show="isRecording" x-cloak
+         class="flex items-center gap-3 p-3 bg-red-500/10 dark:bg-red-950/30 border border-red-500/20 rounded-xl mb-2">
+      <span class="inline-flex w-3.5 h-3.5 rounded-full bg-red-500 animate-pulse flex-shrink-0"></span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-red-600 dark:text-red-400">Gravando áudio PTT ao vivo</span>
+          <span class="text-xs font-mono font-bold text-red-700 dark:text-red-300 bg-red-500/20 px-2 py-0.5 rounded" x-text="formatTime(recordingSeconds)">00:00</span>
+        </div>
+        <p class="text-[11px] text-muted truncate">O áudio será enviado como mensagem de voz do WhatsApp gravada na hora.</p>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <button type="button" class="btn-pill-secondary btn-pill-sm inline-flex items-center gap-1 text-red-600 dark:text-red-400 hover:bg-red-500/10 border-red-500/30"
+                @click="cancelVoiceRecording()"
+                :disabled="isUploadingVoice"
+                title="Descartar gravação">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Descartar
+        </button>
+        <button type="button" class="btn-pill-primary btn-pill-sm bg-emerald-600 hover:bg-emerald-500 text-white inline-flex items-center gap-1.5"
+                @click="sendVoiceRecording()"
+                :disabled="isUploadingVoice">
+          <svg x-show="!isUploadingVoice" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          <span x-show="!isUploadingVoice">Enviar Áudio PTT</span>
+          <span x-show="isUploadingVoice">Enviando…</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Slash (/) Quick Replies Autocomplete Popover -->
+    <div class="ib-popover absolute bottom-full left-0 right-0 mb-2 z-50 bg-surface dark:bg-zinc-900 border border-border rounded-xl shadow-2xl max-h-72 flex flex-col overflow-hidden"
+         x-show="slashOpen"
+         x-cloak
+         @click.outside="slashOpen = false">
+      <div class="p-2 border-b border-border bg-surface-raised/50 dark:bg-zinc-800/50 flex items-center justify-between text-xs text-muted">
+        <span class="font-medium flex items-center gap-1.5">
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono font-bold">/</span>
+          Respostas Rápidas
+          <span class="text-[10px]" x-show="slashQuery">filtrando por "<span class="font-mono text-ink" x-text="slashQuery"></span>"</span>
+        </span>
+        <span class="text-[10px]">Use ↑↓ e Enter ou Tab para selecionar</span>
+      </div>
+      <ul class="overflow-y-auto divide-y divide-border/50 max-h-52">
+        <template x-for="(reply, idx) in filteredQuickReplies" :key="reply.id">
+          <li>
+            <button type="button"
+                    class="w-full text-left p-2.5 flex items-start gap-3 transition-colors hover:bg-surface-raised dark:hover:bg-zinc-800"
+                    :class="idx === slashIndex ? 'bg-surface-raised dark:bg-zinc-800 ring-1 ring-emerald-500/30' : ''"
+                    @click="applyQuickReply(reply)"
+                    @mouseenter="slashIndex = idx">
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                /<span x-text="reply.shortcut"></span>
+              </span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-ink truncate" x-text="reply.title"></span>
+                  <span x-show="reply.is_ptt" class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">🎙️ PTT</span>
+                </div>
+                <div class="text-[11px] text-muted line-clamp-1 mt-0.5" x-text="reply.body"></div>
+              </div>
+            </button>
+          </li>
+        </template>
+        <li x-show="!filteredQuickReplies.length" class="p-3 text-center text-xs text-muted">
+          Nenhuma resposta rápida encontrada para "/<span x-text="slashQuery"></span>".
+        </li>
+      </ul>
+      <div class="p-2 border-t border-border bg-surface-raised/30 dark:bg-zinc-800/30 flex items-center justify-between text-[11px]">
+        <a href="{% url 'inbox:quick_reply_settings' workspace_id=request.workspace.id %}" target="_blank" class="text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1 font-medium">
+          ⚙️ Gerenciar respostas rápidas
+        </a>
+        <span class="text-muted">Esc para fechar</span>
+      </div>
     </div>
 
     <div class="ib-compose-box" :class="mode === 'note' && 'is-note'">
@@ -64,8 +141,12 @@ thread above keeps its height.
                 maxlength="{{ max_chars }}"
                 data-shortcut="reply"
                 class="ib-compose-input"
-                :placeholder="mode === 'note' ? 'Write a note for your team…' : 'Write a reply… press r to focus'"
-                placeholder="Write a reply…"></textarea>
+                x-ref="textarea"
+                @input="onComposerInput($event)"
+                @keydown="onComposerKeydown($event)"
+                @click="onComposerClick($event)"
+                :placeholder="mode === 'note' ? 'Escreva uma nota para sua equipe…' : 'Escreva uma resposta… (digite / para respostas rápidas, tecla r para focar)'"
+                placeholder="Escreva uma resposta… (digite / para respostas rápidas)"></textarea>
       {% comment %}
         Attachments picked from the library (#16). Ids only — the picker's
         contract says "Store `id`. Never store `url` — it is minted per request" —
@@ -77,12 +158,25 @@ thread above keeps its height.
           <span class="ib-chip">
             <span x-text="item.name"></span>
             <input type="hidden" name="media" :value="item.id">
+            <template x-if="item.url">
+              <input type="hidden" name="media_url" :value="item.url">
+            </template>
+            <template x-if="item.media_type">
+              <input type="hidden" name="media_type" :value="item.media_type">
+            </template>
             <button type="button" class="btn-icon-hover" @click="drop(item.id)"
                     :aria-label="'Remove attachment ' + item.name">×</button>
           </span>
         </template>
       </div>
       <div class="ib-compose-actions">
+        <button type="button" class="ib-tool inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                x-show="mode === 'reply' && !isRecording"
+                @click="startVoiceRecording()"
+                title="Gravar áudio na hora (WhatsApp Voice Note / PTT)">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+          Gravar Áudio (PTT)
+        </button>
         {% comment %}
           The button is offered only where the platform can carry media, read
           from apps.channels.capabilities in the view. No platform branching in
@@ -91,27 +185,27 @@ thread above keeps its height.
         {% if media_kinds %}
           <button type="button" class="ib-tool" x-show="mode === 'reply'"
                   @click="sheet = ''; togglePicker()"
-                  :aria-expanded="picker.open ? 'true' : 'false'">Attach</button>
+                  :aria-expanded="picker.open ? 'true' : 'false'">Anexar</button>
         {% endif %}
         <button type="button" class="ib-tool" x-show="mode === 'reply'"
                 @click="closePicker(); sheet = sheet === 'later' ? '' : 'later'"
                 aria-haspopup="dialog" :aria-expanded="sheet === 'later' ? 'true' : 'false'"
-                aria-controls="inbox-schedule-{{ conversation.id }}">Send later</button>
+                aria-controls="inbox-schedule-{{ conversation.id }}">Agendar envio</button>
         <button type="button" class="ib-tool"
                 @click="closePicker(); sheet = sheet === 'remind' ? '' : 'remind'"
                 aria-haspopup="dialog" :aria-expanded="sheet === 'remind' ? 'true' : 'false'"
-                aria-controls="inbox-reminder-{{ conversation.id }}">Reminder</button>
+                aria-controls="inbox-reminder-{{ conversation.id }}">Lembrete</button>
         {% comment %}
           Send is the one orange control in the inbox (HANDOFF §3). In the note
           tab it gives way to "Add note", which posts the same fields to the
           note endpoint — hx-post on the button overrides the form's. Same
           token: whichever is pressed, pressing it twice is still one message.
         {% endcomment %}
-        <button type="submit" class="btn-pill-primary ib-send-btn ml-auto" x-show="mode === 'reply'">Send</button>
+        <button type="submit" class="btn-pill-primary ib-send-btn ml-auto" x-show="mode === 'reply'">Enviar</button>
         <button type="submit" class="btn-pill-secondary ib-send-btn ml-auto" x-show="mode === 'note'" x-cloak
                 hx-post="{% url 'inbox:note' workspace_id=request.workspace.id conversation_id=conversation.id %}"
                 hx-include="closest form"
-                hx-swap="none">Add note</button>
+                hx-swap="none">Adicionar nota</button>
       </div>
     </div>
 
@@ -126,7 +220,7 @@ thread above keeps its height.
       <div class="ib-picker-head">
         <label class="sr-only" :for="'media-search-' + conversationId">Search the library</label>
         <input type="search" :id="'media-search-' + conversationId" class="form-input-styled"
-               placeholder="Search the media library…"
+               placeholder="Buscar na biblioteca de mídia…"
                x-model="picker.term" @input.debounce.300ms="loadPicker()">
         <button type="button" class="btn-icon-hover" @click="closePicker()" aria-label="Close the picker">×</button>
       </div>

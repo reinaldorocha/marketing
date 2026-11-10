@@ -53,6 +53,7 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
   const save = useBuilder((state) => state.save);
   const canEdit = useBuilder((state) => state.env.canEdit);
   const statsVisible = useBuilder((state) => state.statsVisible);
+  const simulatorOpen = useBuilder((state) => state.simulatorOpen);
   const statsFailed = useBuilder((state) => state.statsFailed);
   const canUndo = useBuilder((state) => state.past.length > 0);
   const canRedo = useBuilder((state) => state.future.length > 0);
@@ -223,6 +224,20 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
           endpoint either way.
         */}
         {canEdit ? <TestOnChannel /> : null}
+
+        <button
+          type="button"
+          className={`btn-pill-secondary btn-pill-sm inline-flex items-center gap-1.5 ${
+            simulatorOpen
+              ? "ring-2 ring-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : ""
+          }`}
+          onClick={() => store.getState().setSimulatorOpen(!simulatorOpen)}
+          title="Simular conversa interativa deste fluxo"
+        >
+          <span className="text-xs">💬</span>
+          <span>Simulador</span>
+        </button>
 
         <ProblemsMenu errorCount={errorCount} warningCount={warningCount} />
 

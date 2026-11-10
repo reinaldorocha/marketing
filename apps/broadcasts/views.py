@@ -728,6 +728,40 @@ def recipients(request: WorkspaceRequest, workspace_id: str, broadcast_id: str) 
 @login_required
 @require_broadcasts
 @require_POST
+def broadcast_pause(request: WorkspaceRequest, workspace_id: str, broadcast_id: str) -> HttpResponse:
+    broadcast = _broadcast(request, broadcast_id)
+    try:
+        services.pause_broadcast(broadcast)
+    except services.BroadcastError as exc:
+        return toast_response(tone="error", title="Não foi possível pausar", body=str(exc))
+    return toast_response(
+        tone="success",
+        title="Campanha pausada",
+        body="Os envios pendentes foram pausados temporariamente.",
+        events={"broadcastChanged": True},
+    )
+
+
+@login_required
+@require_broadcasts
+@require_POST
+def broadcast_resume(request: WorkspaceRequest, workspace_id: str, broadcast_id: str) -> HttpResponse:
+    broadcast = _broadcast(request, broadcast_id)
+    try:
+        services.resume_broadcast(broadcast)
+    except services.BroadcastError as exc:
+        return toast_response(tone="error", title="Não foi possível retomar", body=str(exc))
+    return toast_response(
+        tone="success",
+        title="Campanha retomada",
+        body="Os envios foram retomados.",
+        events={"broadcastChanged": True},
+    )
+
+
+@login_required
+@require_broadcasts
+@require_POST
 def broadcast_cancel(request: WorkspaceRequest, workspace_id: str, broadcast_id: str) -> HttpResponse:
     broadcast = _broadcast(request, broadcast_id)
     try:

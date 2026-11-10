@@ -1,0 +1,74 @@
+{% extends "layouts/workspace_settings.html" %}
+{% load common_extras %}
+{% block title %}{{ connection.display_name }} · BrightBean{% endblock %}
+{% block content_wrap %}{% endblock %}
+
+{% block content %}
+{% with platform_key="whatsapp_evolution" %}
+<div class="cn-page">
+    <div class="flex items-start gap-4 mb-7">
+        <span class="pi-chip pi-chip-hero {{ platform_key|platform_class }}">{% include "partials/_platform_icon.html" with platform=platform_key size="lg" only %}</span>
+        <div class="min-w-0">
+            <h1 class="page-title truncate">{{ connection.display_name }}</h1>
+            <p class="page-lede mt-1.5">WhatsApp não oficial · Evolution GO (Instância: <code>{{ session.instance_id }}</code>)</p>
+        </div>
+    </div>
+
+    <div class="rounded-[14px] p-4 mb-5" style="background: var(--warning-50);" role="note">
+        <p class="text-sm font-semibold" style="color: var(--warning-700);">Aviso de Canal Não Oficial</p>
+        <p class="text-sm mt-1" style="color: var(--warning-700);">{{ risk_notice }}</p>
+    </div>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-4">Estado da Conexão</h2>
+        {% include "channels/_whatsapp_evolution_status.html" %}
+    </section>
+
+    <section class="card p-6 mb-5">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="section-title">Escanear QR Code</h2>
+            <form method="post" action="{{ reconnect_url }}">
+                {% csrf_token %}
+                <button type="submit" class="btn-pill-secondary text-xs">Forçar reconexão / Novo QR Code</button>
+            </form>
+        </div>
+        <p class="section-note mb-4">No seu WhatsApp, toque em <strong>Aparelhos conectados &rarr; Conectar um aparelho</strong> e aponte para o QR Code abaixo:</p>
+        
+        {% include "channels/_whatsapp_evolution_qr.html" %}
+    </section>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-2">Configuração de Webhook</h2>
+        <p class="section-note mb-3">A URL de webhook abaixo foi registrada na Evolution GO para receber mensagens e eventos:</p>
+        <div class="flex items-center gap-2">
+            <input class="form-input-styled font-mono text-xs bg-gray-50" readonly value="{{ webhook_url }}">
+        </div>
+    </section>
+
+    <section class="card p-6 mb-5">
+        <h2 class="section-title mb-2">Recursos suportados</h2>
+        <ul class="list-disc pl-5 text-sm space-y-1" style="color: var(--text-secondary);">
+            <li>Recebimento e envio de mensagens de texto no Inbox.</li>
+            <li>Recebimento e envio de imagens, áudios, vídeos e documentos.</li>
+            <li>Automação e fluxos visuais via gatilhos de palavra-chave ou fluxo padrão.</li>
+            <li>Campanhas e disparos em massa para leads cadastrados.</li>
+            <li>Recebimento de leads via Webhook externo com disparo automático de fluxo.</li>
+        </ul>
+    </section>
+
+    {% if connection.status == "active" %}
+    <form class="card p-6 mb-5" method="post" action="{{ disconnect_url }}">
+        {% csrf_token %}
+        <h2 class="section-title mb-2">Desconectar WhatsApp</h2>
+        <p class="section-note mb-4">Isso encerra a sessão na Evolution GO. As conversas e contatos existentes no BrightBean são preservados.</p>
+        <button type="submit" class="btn-pill-secondary" style="color: var(--error-700);">Desconectar Sessão</button>
+    </form>
+    {% endif %}
+
+    <a class="cn-back" href="{{ list_url }}">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Voltar para canais
+    </a>
+</div>
+{% endwith %}
+{% endblock %}

@@ -158,8 +158,22 @@ are until they are sniffed at fetch time.
             </a>
             {% if part.caption %}<div class="ib-bubble-meta">{{ part.caption }}</div>{% endif %}
           {% elif part.kind == "link" %}
-            <a href="{{ part.url }}" target="_blank" rel="noopener noreferrer">{{ part.caption|default:part.media_kind }}</a>
-            <span class="ib-chip">{{ part.media_kind }}</span>
+            {% if part.media_kind == "audio" or "ptt" in part.media_kind or "voice" in part.url or "ptt" in part.url %}
+              <div class="flex items-center gap-3 p-2.5 my-1 rounded-xl bg-surface-raised/70 dark:bg-zinc-800/80 border border-border shadow-sm min-w-[220px]">
+                <div class="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <a href="{{ part.url }}" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-ink hover:text-emerald-600 dark:hover:text-emerald-400 truncate block">
+                    {% if "ptt" in part.media_kind or "ptt" in part.url %}Mensagem de Voz (PTT){% else %}{{ part.caption|default:"Mensagem de Áudio" }}{% endif %}
+                  </a>
+                  <span class="text-[10px] text-muted">WhatsApp Voice Note • Ouvir</span>
+                </div>
+              </div>
+            {% else %}
+              <a href="{{ part.url }}" target="_blank" rel="noopener noreferrer">{{ part.caption|default:part.media_kind }}</a>
+              <span class="ib-chip">{{ part.media_kind }}</span>
+            {% endif %}
           {% elif part.kind == "card" %}
             {% include "inbox/_card.html" with card=part %}
           {% elif part.kind == "gallery" %}
@@ -181,6 +195,18 @@ are until they are sniffed at fetch time.
               {% endif %}
             {% endfor %}
             {% for reply in item.quick_replies %}<span class="ib-chip">{{ reply.label }}</span>{% endfor %}
+          </div>
+        {% endif %}
+
+        {% if item.message.body.reactions %}
+          <div class="ib-bubble-reactions flex items-center gap-1 mt-1.5 flex-wrap">
+            {% for uid, r in item.message.body.reactions.items %}
+              {% if r.emoji %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-black/5 dark:bg-white/10 border border-border shadow-xs cursor-default" title="Reação">
+                  {{ r.emoji }}
+                </span>
+              {% endif %}
+            {% endfor %}
           </div>
         {% endif %}
       </div>

@@ -48,6 +48,42 @@
                 localStorage.setItem('sidebarCollapsed', collapsed ? 'true' : 'false');
             } catch (e) { /* storage disabled: the choice lasts until the next page */ }
         };
+
+        // Dark Theme Anti-Flash & Switcher Engine
+        (function() {
+            try {
+                var storedTheme = localStorage.getItem('bb_theme');
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            } catch (e) {}
+        })();
+        window.__bbSetTheme = function(mode) {
+            try {
+                if (mode === 'system') {
+                    localStorage.removeItem('bb_theme');
+                    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    document.documentElement.classList.toggle('dark', prefersDark);
+                } else if (mode === 'dark') {
+                    localStorage.setItem('bb_theme', 'dark');
+                    document.documentElement.classList.add('dark');
+                } else {
+                    localStorage.setItem('bb_theme', 'light');
+                    document.documentElement.classList.remove('dark');
+                }
+                window.dispatchEvent(new CustomEvent('bb-theme-changed', { detail: { theme: mode } }));
+            } catch (e) {}
+        };
+        window.__bbGetTheme = function() {
+            try {
+                return localStorage.getItem('bb_theme') || 'system';
+            } catch (e) {
+                return 'system';
+            }
+        };
     </script>
     {% endif %}
     <style nonce="{{ request.csp_nonce }}">

@@ -17,6 +17,7 @@ from apps.channels import (
     views_sms,
     views_telegram,
     views_whatsapp,
+    views_whatsapp_evolution,
 )
 
 app_name = "channels"
@@ -72,6 +73,10 @@ urlpatterns = [
     # id and lives in ``urls_oauth.py`` at the deployment root instead.
     path("instagram/connect/", views_instagram.instagram_connect, name="instagram_connect"),
     path("instagram/posts/", views_instagram.instagram_posts, name="instagram_posts"),
+    path("<uuid:connection_id>/instagram/diagnostics/", views_instagram.instagram_diagnostics, name="instagram_diagnostics"),
+    path("<uuid:connection_id>/instagram/ice-breakers/", views_instagram.instagram_ice_breakers, name="instagram_ice_breakers"),
+    path("<uuid:connection_id>/instagram/menu/", views_instagram.instagram_persistent_menu, name="instagram_persistent_menu"),
+    path("<uuid:connection_id>/instagram/follower-gate/", views_instagram.instagram_follower_settings, name="instagram_follower_settings"),
     # Messenger's guided connect (issue #18), the page chooser, and the comment
     # trigger's post picker. Its OAuth callback is not here either, and for the
     # same reason.
@@ -82,6 +87,13 @@ urlpatterns = [
     # and the segment-count preview the send_sms panel and L6-B's composer
     # both call (issue #20). Declared before the ``<uuid:connection_id>``
     # routes for readability only — the converter would never match "sms".
+    path("whatsapp-evolution/connect/", views_whatsapp_evolution.whatsapp_evolution_connect, name="whatsapp_evolution_connect"),
+    path("<uuid:connection_id>/evolution/detail/", views_whatsapp_evolution.whatsapp_evolution_detail, name="whatsapp_evolution_detail"),
+    path("<uuid:connection_id>/evolution/qr/", views_whatsapp_evolution.whatsapp_evolution_qr, name="whatsapp_evolution_qr"),
+    path("<uuid:connection_id>/evolution/status/", views_whatsapp_evolution.whatsapp_evolution_status, name="whatsapp_evolution_status"),
+    path("<uuid:connection_id>/evolution/reconnect/", views_whatsapp_evolution.whatsapp_evolution_reconnect, name="whatsapp_evolution_reconnect"),
+    path("<uuid:connection_id>/evolution/disconnect/", views_whatsapp_evolution.whatsapp_evolution_disconnect, name="whatsapp_evolution_disconnect"),
+    path("<uuid:connection_id>/evolution/webhook/", views_whatsapp_evolution.whatsapp_evolution_webhook, name="whatsapp_evolution_webhook"),
     path("sms/connect/", views_sms.sms_connect, name="sms_connect"),
     path("sms/settings/", views_sms.sms_settings, name="sms_settings"),
     path("sms/settings/update/", views_sms.sms_settings_update, name="sms_settings_update"),

@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% load common_extras %}
+
+{% block title %}Novo Disparo em Grupos — BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[900px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>Novo Disparo em Grupos</span>
+        </h1>
+        <p class="page-lede">
+            Envie mensagens de texto, mídias, enquetes, figurinhas, contatos ou localização, com opção de marcar todos os participantes (@everyone).
+        </p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{% url 'whatsapp_groups:broadcast_list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+            Voltar para Disparos
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[900px] space-y-6">
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+        <form method="post" id="broadcastForm" class="space-y-6">
+            {% csrf_token %}
+
+            <!-- Title & Connection -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Título do Disparo <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="title" required placeholder="Ex: Aviso Geral de Manutenção" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Conexão Evolution GO <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="connection_id" required class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500">
+                        {% for conn in connections %}
+                        <option value="{{ conn.id }}">{{ conn.name }} ({{ conn.external_id|default:conn.platform }})</option>
+                        {% empty %}
+                        <option disabled>Nenhuma conexão ativa encontrada</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Target Selection Mode -->
+            <div class="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-700/60">
+                <label class="block text-sm font-semibold text-gray-900 dark:text-white">
+                    Destinatários (Grupos Alvo)
+                </label>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750">
+                        <input type="radio" name="target_mode" value="selected" checked onchange="updateTargetUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium text-gray-800 dark:text-gray-200">Selecionar Grupos</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750">
+                        <input type="radio" name="target_mode" value="by_tag" onchange="updateTargetUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium text-gray-800 dark:text-gray-200">Por Etiquetas / Tags</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750">
+                        <input type="radio" name="target_mode" value="all" onchange="updateTargetUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium text-gray-800 dark:text-gray-200">Todos os Grupos Conectados</span>
+                    </label>
+                </div>
+
+                <!-- Select Individual Groups -->
+                <div id="targetGroupsBox" class="space-y-2 mt-3">
+                    <span class="text-xs text-gray-500">Marque os grupos que devem receber este envio:</span>
+                    <div class="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
+                        {% for g in groups %}
+                        <label class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <input type="checkbox" name="target_groups" value="{{ g.id }}" class="rounded text-emerald-600 focus:ring-emerald-500">
+                            <span class="font-medium text-gray-900 dark:text-gray-100">{{ g.name }}</span>
+                            <span class="text-gray-400 font-mono text-[11px]">({{ g.participants_count }} membros)</span>
+                        </label>
+                        {% empty %}
+                        <div class="text-xs text-gray-400 py-2 text-center">Nenhum grupo sincronizado. Sincronize na aba Grupos primeiro.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Select By Tags -->
+                <div id="targetTagsBox" class="space-y-2 mt-3 hidden">
+                    <span class="text-xs text-gray-500">Envie para todos os grupos com as etiquetas selecionadas:</span>
+                    <div class="flex flex-wrap gap-2">
+                        {% for t in tags %}
+                        <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900">
+                            <input type="checkbox" name="target_tags" value="{{ t.id }}" class="rounded text-emerald-600 focus:ring-emerald-500">
+                            <span class="w-2.5 h-2.5 rounded-full" style="background-color: {{ t.color }};"></span>
+                            <span class="text-xs text-gray-800 dark:text-gray-200">{{ t.name }}</span>
+                        </label>
+                        {% empty %}
+                        <div class="text-xs text-gray-400">Nenhuma etiqueta cadastrada.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Type Selector (Item 3) -->
+            <div class="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-700/60">
+                <label class="block text-sm font-semibold text-gray-900 dark:text-white">
+                    Formato da Mensagem (Formatos Especiais Evolution GO)
+                </label>
+                <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center">
+                    <label class="p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 flex flex-col items-center gap-1">
+                        <input type="radio" name="message_type" value="text" checked onchange="updateTypeUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium">Texto</span>
+                    </label>
+                    <label class="p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 flex flex-col items-center gap-1">
+                        <input type="radio" name="message_type" value="media" onchange="updateTypeUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium">Mídia</span>
+                    </label>
+                    <label class="p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 flex flex-col items-center gap-1">
+                        <input type="radio" name="message_type" value="poll" onchange="updateTypeUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium">Enquete</span>
+                    </label>
+                    <label class="p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 flex flex-col items-center gap-1">
+                        <input type="radio" name="message_type" value="sticker" onchange="updateTypeUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium">Figurinha</span>
+                    </label>
+                    <label class="p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 flex flex-col items-center gap-1">
+                        <input type="radio" name="message_type" value="location" onchange="updateTypeUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium">Localização</span>
+                    </label>
+                    <label class="p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 flex flex-col items-center gap-1">
+                        <input type="radio" name="message_type" value="contact" onchange="updateTypeUI()" class="text-emerald-600 focus:ring-emerald-500">
+                        <span class="text-xs font-medium">vCard Contato</span>
+                    </label>
+                </div>
+
+                <!-- Type Fields: TEXT -->
+                <div id="typeBox_text" class="space-y-2 mt-3">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Mensagem de Texto</label>
+                    <textarea name="text" rows="5" placeholder="Escreva a mensagem a ser enviada aos grupos..." class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:ring-emerald-500 focus:border-emerald-500"></textarea>
+                </div>
+
+                <!-- Type Fields: MEDIA -->
+                <div id="typeBox_media" class="space-y-3 mt-3 hidden">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Mídia</label>
+                            <select name="media_type" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                <option value="image">Imagem</option>
+                                <option value="video">Vídeo</option>
+                                <option value="document">Documento / PDF</option>
+                                <option value="audio">Áudio</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">URL Pública do Arquivo</label>
+                            <input type="url" name="media_url" placeholder="https://exemplo.com/imagem.png" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Legenda da Mídia (Opcional)</label>
+                        <textarea name="media_caption" rows="2" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"></textarea>
+                    </div>
+                </div>
+
+                <!-- Type Fields: POLL -->
+                <div id="typeBox_poll" class="space-y-3 mt-3 hidden">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Pergunta da Enquete</label>
+                        <input type="text" name="poll_question" placeholder="Qual o melhor dia para nosso workshop?" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Opções da Enquete (uma por linha)</label>
+                        <textarea name="poll_options" rows="4" placeholder="Segunda-feira&#10;Quarta-feira&#10;Sábado de manhã" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Máximo de Respostas por Participante</label>
+                        <input type="number" name="poll_max_answers" value="1" min="1" max="10" class="w-24 text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+
+                <!-- Type Fields: STICKER -->
+                <div id="typeBox_sticker" class="space-y-2 mt-3 hidden">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">URL Pública da Figurinha / Sticker (formato WebP)</label>
+                    <input type="url" name="sticker_url" placeholder="https://exemplo.com/sticker.webp" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                </div>
+
+                <!-- Type Fields: LOCATION -->
+                <div id="typeBox_location" class="space-y-3 mt-3 hidden">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Latitude</label>
+                            <input type="number" step="any" name="location_latitude" placeholder="-23.55052" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Longitude</label>
+                            <input type="number" step="any" name="location_longitude" placeholder="-46.63330" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nome do Local</label>
+                            <input type="text" name="location_name" placeholder="Ex: Sede BrightBean" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Endereço Completo</label>
+                            <input type="text" name="location_address" placeholder="Av. Paulista, 1000 - SP" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Type Fields: CONTACT -->
+                <div id="typeBox_contact" class="space-y-3 mt-3 hidden">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nome Completo</label>
+                            <input type="text" name="contact_name" placeholder="Dr. Suporte BrightBean" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Telefone (com DDD)</label>
+                            <input type="text" name="contact_phone" placeholder="5511999999999" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Organização / Cargo</label>
+                            <input type="text" name="contact_organization" placeholder="BrightBean Team" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mentions & Anti-Ban Options -->
+            <div class="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700/60">
+                <div class="flex items-start gap-3 p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/60 rounded-xl">
+                    <input type="checkbox" id="mentionAllCheckbox" name="mention_all" class="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                    <div>
+                        <label for="mentionAllCheckbox" class="text-sm font-semibold text-gray-900 dark:text-white cursor-pointer">
+                            Marcar todos os participantes do grupo (@everyone)
+                        </label>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Adiciona a menção oculta/notificação direta para cada um dos membros do grupo no envio da Evolution GO.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Intervalo entre grupos (anti-banimento):
+                    </label>
+                    <input type="number" name="delay_seconds" value="3" min="1" max="60" class="w-20 text-xs rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                    <span class="text-xs text-gray-400">segundos</span>
+                </div>
+            </div>
+
+            <!-- Schedule Options -->
+            <div class="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-700/60">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="scheduleCheckbox" onchange="toggleScheduleBox()" class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                    <label for="scheduleCheckbox" class="text-sm font-medium text-gray-900 dark:text-white cursor-pointer">
+                        Agendar disparo para uma data/hora futura
+                    </label>
+                </div>
+                <div id="scheduleBox" class="hidden pl-6">
+                    <label class="block text-xs text-gray-500 mb-1">Data e hora do envio:</label>
+                    <input type="datetime-local" name="scheduled_at" class="text-sm rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <div class="pt-4 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-end gap-3">
+                <a href="{% url 'whatsapp_groups:broadcast_list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+                    Cancelar
+                </a>
+                <button type="submit" id="submitBtn" class="btn-pill-primary">
+                    Disparar Agora
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+
+<script>
+function updateTargetUI() {
+    const mode = document.querySelector('input[name="target_mode"]:checked').value;
+    document.getElementById('targetGroupsBox').classList.toggle('hidden', mode !== 'selected');
+    document.getElementById('targetTagsBox').classList.toggle('hidden', mode !== 'by_tag');
+}
+
+function updateTypeUI() {
+    const type = document.querySelector('input[name="message_type"]:checked').value;
+    ['text', 'media', 'poll', 'sticker', 'location', 'contact'].forEach(t => {
+        const el = document.getElementById('typeBox_' + t);
+        if (el) el.classList.toggle('hidden', t !== type);
+    });
+}
+
+function toggleScheduleBox() {
+    const isScheduled = document.getElementById('scheduleCheckbox').checked;
+    document.getElementById('scheduleBox').classList.toggle('hidden', !isScheduled);
+    document.getElementById('submitBtn').innerText = isScheduled ? 'Agendar Disparo' : 'Disparar Agora';
+}
+</script>
+{% endblock %}

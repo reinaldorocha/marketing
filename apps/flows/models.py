@@ -82,6 +82,36 @@ class Flow(WorkspaceScopedModel):
     # only "unfiled" there is.
     folder = models.CharField(max_length=200, blank=True, default="")
 
+    # Follower Gate Settings (can override or inherit connection settings)
+    require_follower = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Require Instagram follower before running flow. None inherits connection default.",
+    )
+    non_follower_message = models.TextField(
+        blank=True,
+        default="",
+        help_text="Custom message sent to non-followers. Empty falls back to connection default.",
+    )
+    follow_button_label = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Custom label for the Instagram follow button. Empty falls back to connection default.",
+    )
+    confirm_button_label = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Custom label for the follow confirmation button. Empty falls back to connection default.",
+    )
+    follower_confirmation_text = models.TextField(
+        blank=True,
+        default="",
+        help_text="Custom message sent once follower status is verified. Empty falls back to connection default.",
+    )
+
     class Meta:
         # Not Meta inheritance: WorkspaceScopedModel deliberately declares its
         # managers as class attributes so a subclass writing its own Meta cannot

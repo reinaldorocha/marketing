@@ -63,7 +63,7 @@ from apps.credentials.resolution import env_credentials
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["email_webhook", "platform_webhook", "sms_webhook"]
+__all__ = ["email_webhook", "platform_webhook", "sms_webhook", "whatsapp_evolution_webhook"]
 
 #: Cap on what goes into ``webhook_event_log.raw``. The body cap already bounds
 #: a delivery, but one delivery can carry many events and each writes a row, so
@@ -99,6 +99,13 @@ def platform_webhook(request: HttpRequest, platform: str) -> HttpResponse:
     if adapter is None:
         return _unavailable(platform)
     return _ingest(request, platform=platform, adapter=adapter, connection=None)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def whatsapp_evolution_webhook(request: HttpRequest, connection_id: UUID) -> HttpResponse:
+    """Evolution GO per-connection webhook callback."""
+    return _ingest_for_connection(request, connection_id, platform=Platform.WHATSAPP_EVOLUTION)
 
 
 @csrf_exempt

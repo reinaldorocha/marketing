@@ -13,50 +13,80 @@ strangers on the internet.
 """
 
 import re
+import unicodedata
 from collections.abc import Iterable
 from typing import Any
 
-__all__ = ["MAX_MATCH_CHARS", "matches_any", "normalise"]
+__all__ = ["MAX_MATCH_CHARS", "matches_any", "normalise", "strip_accents"]
 
 #: How much of a message is scanned.
-#:
-#: ``apps.messaging.ingest`` stores up to ``MAX_TEXT_CHARS`` (100k) because a
-#: bounded row is the point there. Scanning all of it against a hundred keywords
-#: once per inbound event is a different question, and SPEC §7.1 budgets the
-#: whole reply at 1.5 seconds. Nothing legitimate hides a keyword 8k characters
-#: into a chat message (SECURITY-BASELINE §7).
 MAX_MATCH_CHARS = 8192
 
 #: ``\w+`` under Unicode, so "café" and "naïve" are single words.
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
 
 
-def normalise(text: Any) -> str:
-    """Trimmed, casefolded and capped — the form both sides of a match are in."""
+def strip_accents(s: str) -> str:
+    """Decompose Unicode characters and remove combining accent marks (diacritics)."""
+    if not isinstance(s, str):
+        return ""
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
+
+def normalise(text: Any, *, ignore_accents: bool = False) -> str:
+    """Trimmed, casefolded and capped — optionally stripped of accents."""
     if not isinstance(text, str):
         return ""
-    return text.strip()[:MAX_MATCH_CHARS].casefold()
+    result = text.strip()[:MAX_MATCH_CHARS].casefold()
+    if ignore_accents:
+        result = strip_accents(result)
+    return result
 
 
-def matches_any(text: str, keywords: Iterable[Any]) -> bool:
+def matches_any(text: str, keywords: Iterable[Any], *, ignore_accents: bool = False) -> bool:
     """Whether ``text`` matches any of these ``{"text", "mode"}`` entries.
 
-    The word set is built lazily and at most once, however many ``any_word``
-    keywords there are — a hundred keywords over one message should tokenise the
-    message once, not a hundred times.
+    Supports configurable accent normalization via ``ignore_accents`` parameter
+    or per-keyword ``ignore_accents`` flag.
+    Preserves exact, contains, and any_word matching semantics.
     """
-    haystack = normalise(text)
-    if not haystack:
+    if not text:
         return False
 
-    words: set[str] | None = None
+    haystack_raw = normalise(text, ignore_accents=False)
+    if not haystack_raw:
+        return False
+
+    haystack_no_accents: str | None = None
+    words_raw: set[str] | None = None
+    words_no_accents: set[str] | None = None
+
     for keyword in keywords:
-        if not isinstance(keyword, dict):
+        if isinstance(keyword, str):
+            kw_text = keyword
+            mode = "contains"
+            kw_ignore = ignore_accents
+        elif isinstance(keyword, dict):
+            kw_text = keyword.get("text")
+            mode = keyword.get("mode") or "contains"
+            kw_ignore = bool(keyword.get("ignore_accents", ignore_accents))
+        else:
             continue
-        needle = normalise(keyword.get("text"))
+
+        if not kw_text or not isinstance(kw_text, str):
+            continue
+
+        needle = normalise(kw_text, ignore_accents=kw_ignore)
         if not needle:
             continue
-        mode = keyword.get("mode")
+
+        if kw_ignore:
+            if haystack_no_accents is None:
+                haystack_no_accents = strip_accents(haystack_raw)
+            haystack = haystack_no_accents
+        else:
+            haystack = haystack_raw
+
         if mode == "exact":
             if haystack == needle:
                 return True
@@ -64,8 +94,15 @@ def matches_any(text: str, keywords: Iterable[Any]) -> bool:
             if needle in haystack:
                 return True
         elif mode == "any_word":
-            if words is None:
-                words = set(_WORD_RE.findall(haystack))
+            if kw_ignore:
+                if words_no_accents is None:
+                    words_no_accents = set(_WORD_RE.findall(haystack))
+                words = words_no_accents
+            else:
+                if words_raw is None:
+                    words_raw = set(_WORD_RE.findall(haystack))
+                words = words_raw
             if needle in words:
                 return True
+
     return False

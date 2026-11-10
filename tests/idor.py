@@ -106,6 +106,10 @@ TENANT_KWARG_RESOLVERS: dict[str, Callable[[Tenancy], Any]] = {
     "rule_id": lambda t: _victim_inbox_rule(t).pk,
     "reminder_id": lambda t: _victim_reminder(t).pk,
     "scheduled_reply_id": lambda t: _victim_scheduled_reply(t).pk,
+    "reply_id": lambda t: _victim_quick_reply(t).pk,
+    "post_id": lambda t: _victim_post(t).pk,
+    "group_id": lambda t: _victim_group(t).pk,
+    "action_id": lambda t: _victim_action(t).pk,
 }
 
 #: Kwargs that need *a* value but do not identify a tenant. A route made only of
@@ -410,6 +414,21 @@ def _victim_scheduled_reply(tenancy: Tenancy) -> Any:
         )
         reply.save()
     return reply
+
+
+def _victim_quick_reply(tenancy: Tenancy) -> Any:
+    """A quick reply owned by the victim."""
+    from apps.inbox.models import QuickReply
+
+    qr = QuickReply.objects.for_workspace(tenancy.workspace).first()
+    if qr is None:
+        qr = QuickReply.objects.create(
+            workspace=tenancy.workspace,
+            shortcut="ola",
+            title="Olá",
+            body="Olá! Como podemos ajudar?",
+        )
+    return qr
 
 
 def _victim_message(tenancy: Tenancy) -> Any:
@@ -759,6 +778,56 @@ def _victim_notification(tenancy: Tenancy) -> Any:
             payload={"workspace_id": str(tenancy.workspace.pk)},
         )
     return notification
+
+
+def _victim_post(tenancy: Tenancy) -> Any:
+    """A ContentPost owned by the victim, created on demand."""
+    from apps.publishing.models import ContentPost, PublishType
+
+    post = ContentPost.objects.for_workspace(tenancy.workspace).first()
+    if post is None:
+        post = ContentPost(
+            workspace=tenancy.workspace,
+            connection=_victim_connection(tenancy),
+            publish_type=PublishType.FEED_IMAGE,
+            media_url="https://example.com/image.jpg",
+            caption="Victim post",
+        )
+        post.save()
+    return post
+
+
+def _victim_group(tenancy: Tenancy) -> Any:
+    """A WhatsAppGroup owned by the victim, created on demand."""
+    from apps.whatsapp_groups.models import WhatsAppGroup
+
+    group = WhatsAppGroup.objects.for_workspace(tenancy.workspace).first()
+    if group is None:
+        group = WhatsAppGroup(
+            workspace=tenancy.workspace,
+            connection=_victim_connection(tenancy),
+            jid=f"120363024849201948-{tenancy.slug}@g.us",
+            name=f"Victim Group {tenancy.slug}",
+        )
+        group.save()
+    return group
+
+
+def _victim_action(tenancy: Tenancy) -> Any:
+    """A ScheduledAction owned by the victim, created on demand."""
+    from django.utils import timezone
+    from apps.queueing.models import ScheduledAction
+
+    action = ScheduledAction.objects.for_workspace(tenancy.workspace).first()
+    if action is None:
+        action = ScheduledAction(
+            workspace=tenancy.workspace,
+            type="test_action",
+            payload={"test": True},
+            run_at=timezone.now(),
+        )
+        action.save()
+    return action
 
 
 # ---------------------------------------------------------------------------

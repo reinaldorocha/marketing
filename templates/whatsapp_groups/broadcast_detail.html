@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% load common_extras %}
+
+{% block title %}Relatório do Disparo — BrightBean{% endblock %}
+
+{% block page_header %}
+<div class="page-header max-w-[1100px]">
+    <div class="page-header-text">
+        <h1 class="page-title flex items-center gap-2">
+            <span>{{ broadcast.title }}</span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold
+                {% if broadcast.status == 'completed' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300
+                {% elif broadcast.status == 'scheduled' %}bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300
+                {% elif broadcast.status == 'sending' %}bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300
+                {% elif broadcast.status == 'failed' %}bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300
+                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                {{ broadcast.get_status_display }}
+            </span>
+        </h1>
+        <p class="page-lede">
+            Formato: <strong>{{ broadcast.get_message_type_display }}</strong> • Conexão: {{ broadcast.connection.name }}
+            {% if broadcast.mention_all %} • <span class="text-emerald-600 font-semibold">@everyone ativo</span>{% endif %}
+        </p>
+    </div>
+    <div class="page-header-actions flex items-center gap-2">
+        {% if broadcast.status == "scheduled" %}
+        <form method="post" action="{% url 'whatsapp_groups:broadcast_cancel' workspace_id=request.workspace.id broadcast_id=broadcast.id %}" onsubmit="return confirm('Tem certeza de que deseja cancelar este disparo agendado?');">
+            {% csrf_token %}
+            <button type="submit" class="btn-pill-secondary text-rose-600 hover:text-rose-700">
+                Cancelar Agendamento
+            </button>
+        </form>
+        {% endif %}
+        <a href="{% url 'whatsapp_groups:broadcast_list' workspace_id=request.workspace.id %}" class="btn-pill-secondary">
+            Voltar para Disparos
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-[1100px] space-y-6">
+
+    <!-- Metrics Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div class="text-xs font-medium text-gray-500 dark:text-gray-400">Total de Grupos Alvo</div>
+            <div class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ broadcast.total_groups_count }}</div>
+        </div>
+        <div class="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div class="text-xs font-medium text-emerald-600 dark:text-emerald-400">Enviados com Sucesso</div>
+            <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ broadcast.sent_count }}</div>
+        </div>
+        <div class="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div class="text-xs font-medium text-rose-600 dark:text-rose-400">Falhas / Erros</div>
+            <div class="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">{{ broadcast.error_count }}</div>
+        </div>
+    </div>
+
+    <!-- Message Content Summary -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 space-y-3">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Conteúdo Enviado</h3>
+        {% if broadcast.text %}
+        <div class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans">
+            {{ broadcast.text }}
+        </div>
+        {% endif %}
+        {% if broadcast.poll_question %}
+        <div class="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-900 text-sm space-y-2">
+            <div class="font-semibold text-emerald-900 dark:text-emerald-200">📊 Enquete: {{ broadcast.poll_question }}</div>
+            <ul class="list-disc list-inside text-xs text-emerald-800 dark:text-emerald-300">
+                {% for opt in broadcast.poll_options %}
+                <li>{{ opt }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if broadcast.media_url %}
+        <div class="text-xs text-gray-500">
+            Mídia ({{ broadcast.media_type }}): <a href="{{ broadcast.media_url }}" target="_blank" class="text-emerald-600 underline">{{ broadcast.media_url }}</a>
+        </div>
+        {% endif %}
+        {% if broadcast.sticker_url %}
+        <div class="text-xs text-gray-500">
+            Figurinha: <a href="{{ broadcast.sticker_url }}" target="_blank" class="text-emerald-600 underline">{{ broadcast.sticker_url }}</a>
+        </div>
+        {% endif %}
+        {% if broadcast.contact_name %}
+        <div class="text-xs text-gray-700 dark:text-gray-300">
+            Contato vCard: <strong>{{ broadcast.contact_name }}</strong> ({{ broadcast.contact_phone }}) - {{ broadcast.contact_organization }}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Delivery Logs Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                Log de Entrega por Grupo ({{ logs|length }})
+            </h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
+                <thead class="bg-gray-50 dark:bg-gray-900/50 text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                    <tr>
+                        <th class="px-6 py-3">Grupo</th>
+                        <th class="px-6 py-3">JID</th>
+                        <th class="px-6 py-3">Status</th>
+                        <th class="px-6 py-3">Detalhe / Erro</th>
+                        <th class="px-6 py-3">Horário</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60">
+                    {% for item in logs %}
+                    <tr class="hover:bg-gray-50/70 dark:hover:bg-gray-750">
+                        <td class="px-6 py-3 font-medium text-gray-900 dark:text-white">
+                            {{ item.group_name|default:"—" }}
+                        </td>
+                        <td class="px-6 py-3 font-mono text-xs text-gray-400">
+                            {{ item.group_jid }}
+                        </td>
+                        <td class="px-6 py-3">
+                            {% if item.status == "ok" %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                Sucesso
+                            </span>
+                            {% elif item.status == "in_flight" %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                Enviando...
+                            </span>
+                            {% elif item.status == "uncertain" %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300" title="Resultado incerto: requer reconciliação manual">
+                                Incerteza (Requer Reconciliação)
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                                Falha
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-3 text-xs text-gray-500 max-w-xs">
+                            <div>{{ item.error|default:"Envio confirmado pela API" }}</div>
+                            {% if item.status == "uncertain" %}
+                            <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                                <form method="post" action="{% url 'whatsapp_groups:broadcast_reconcile_group' workspace_id=request.workspace.id broadcast_id=broadcast.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="group_jid" value="{{ item.group_jid }}">
+                                    <input type="hidden" name="resolution" value="confirm_sent">
+                                    <button type="submit" class="px-2 py-0.5 text-[11px] font-medium rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                        Confirmar Envio
+                                    </button>
+                                </form>
+                                <form method="post" action="{% url 'whatsapp_groups:broadcast_reconcile_group' workspace_id=request.workspace.id broadcast_id=broadcast.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="group_jid" value="{{ item.group_jid }}">
+                                    <input type="hidden" name="resolution" value="confirm_failed">
+                                    <button type="submit" class="px-2 py-0.5 text-[11px] font-medium rounded bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                        Confirmar Falha
+                                    </button>
+                                </form>
+                                <form method="post" action="{% url 'whatsapp_groups:broadcast_reconcile_group' workspace_id=request.workspace.id broadcast_id=broadcast.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="group_jid" value="{{ item.group_jid }}">
+                                    <input type="hidden" name="resolution" value="retry">
+                                    <button type="submit" class="px-2 py-0.5 text-[11px] font-medium rounded bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                        Reenviar
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-3 text-xs text-gray-400">
+                            {{ item.sent_at|slice:":19" }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-xs text-gray-400">
+                            Nenhum log registrado para este disparo ainda.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -19,6 +19,7 @@ place to stash state between nodes; ``variables`` is.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from apps.flows.rendering import RenderContext, context_for, render, render_json
@@ -44,6 +45,18 @@ class NodeContext:
     variables: dict[str, Any]
 
     _render_context: RenderContext | None = field(default=None, repr=False, compare=False)
+    now: datetime | None = None
+
+    @property
+    def current_now(self) -> datetime:
+        """The reference time for this node execution (virtual or real)."""
+        if self.now is not None:
+            return self.now
+        exec_now = getattr(self.execution, "now", None)
+        if exec_now is not None:
+            return exec_now
+        from django.utils import timezone
+        return timezone.now()
 
     @property
     def contact(self) -> Any:
@@ -65,13 +78,22 @@ class NodeContext:
         touched a channel. A node that needs one — anything that sends — has to
         say so rather than assume.
         """
-        return self.execution.channel_connection
+        return getattr(self.execution, "channel_connection", None)
+
+    @property
+    def channel_connection(self) -> Any:
+        """Alias for :attr:`connection`."""
+        return self.connection
 
     @property
     def render_context(self) -> RenderContext:
         """The placeholder context, built once and cached for this node."""
         if self._render_context is None:
-            self._render_context = context_for(self.contact, self.variables)
+            self._render_context = context_for(
+                self.contact,
+                self.variables,
+                connection=self.connection,
+            )
         return self._render_context
 
     def render(self, template: Any, *, mode: str = "text", max_chars: int | None = None) -> str:

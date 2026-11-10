@@ -26,6 +26,11 @@ from django.urls import path
 from apps.channels import views_webhooks
 
 urlpatterns = [
+    path(
+        "whatsapp_evolution/<uuid:connection_id>/",
+        views_webhooks.whatsapp_evolution_webhook,
+        name="webhook_whatsapp_evolution",
+    ),
     path("sms/<uuid:connection_id>/", views_webhooks.sms_webhook, name="webhook_sms"),
     path(
         "email/<str:provider>/<uuid:connection_id>/",

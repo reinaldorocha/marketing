@@ -22,6 +22,7 @@ __all__ = [
     "boolean",
     "enum",
     "integer",
+    "number",
     "obj",
     "ref",
     "string",
@@ -55,6 +56,15 @@ def string(
 
 def integer(*, minimum: int | None = None, maximum: int | None = None, description: str = "") -> dict[str, Any]:
     schema: dict[str, Any] = {"type": "integer"}
+    if minimum is not None:
+        schema["minimum"] = minimum
+    if maximum is not None:
+        schema["maximum"] = maximum
+    return _described(schema, description)
+
+
+def number(*, minimum: float | None = None, maximum: float | None = None, description: str = "") -> dict[str, Any]:
+    schema: dict[str, Any] = {"type": "number"}
     if minimum is not None:
         schema["minimum"] = minimum
     if maximum is not None:

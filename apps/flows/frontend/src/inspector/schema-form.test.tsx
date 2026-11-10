@@ -85,11 +85,11 @@ describe("the generic renderer alone", () => {
 
     const chooser = screen.getByLabelText("Message blocks") as HTMLSelectElement;
     const values = within(chooser).getAllByRole("option").map((option) => (option as HTMLOptionElement).value);
-    for (const kind of ["text", "image", "audio", "video", "file", "card", "gallery"]) {
+    for (const kind of ["text", "image", "audio", "video", "file", "card", "gallery", "sticker", "location", "contact", "poll", "list"]) {
       expect(values).toContain(kind);
     }
-    // Seven tags, four underlying $defs branches.
-    expect(values.filter(Boolean)).toHaveLength(7);
+    // Twelve tags
+    expect(values.filter(Boolean)).toHaveLength(12);
   });
 });
 

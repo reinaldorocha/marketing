@@ -285,6 +285,35 @@
       ],
       "type": "object"
     },
+    "block_contact": {
+      "additionalProperties": false,
+      "properties": {
+        "full_name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "organization": {
+          "maxLength": 200,
+          "type": "string"
+        },
+        "phone": {
+          "maxLength": 50,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "contact",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "full_name",
+        "phone"
+      ],
+      "type": "object"
+    },
     "block_gallery": {
       "additionalProperties": false,
       "properties": {
@@ -304,6 +333,76 @@
       "required": [
         "type",
         "cards"
+      ],
+      "type": "object"
+    },
+    "block_list": {
+      "additionalProperties": false,
+      "properties": {
+        "button_text": {
+          "maxLength": 50,
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "footer_text": {
+          "maxLength": 100,
+          "type": "string"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/list_section"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "list",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "description",
+        "sections"
+      ],
+      "type": "object"
+    },
+    "block_location": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "maxLength": 400,
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "name": {
+          "maxLength": 200,
+          "type": "string"
+        },
+        "type": {
+          "const": "location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "latitude",
+        "longitude"
       ],
       "type": "object"
     },
@@ -339,6 +438,77 @@
             "video",
             "file"
           ],
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "block_poll": {
+      "additionalProperties": false,
+      "properties": {
+        "max_answers": {
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 2,
+          "type": "array"
+        },
+        "question": {
+          "maxLength": 255,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "poll",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "question",
+        "options"
+      ],
+      "type": "object"
+    },
+    "block_sticker": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "media_id"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        }
+      ],
+      "properties": {
+        "media_id": {
+          "description": "Media library asset id.",
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "sticker",
           "type": "string"
         },
         "url": {
@@ -712,7 +882,8 @@
                       "messenger",
                       "sms",
                       "telegram",
-                      "whatsapp"
+                      "whatsapp",
+                      "whatsapp_evolution"
                     ],
                     "type": "string"
                   },
@@ -996,15 +1167,33 @@
       "description": "Where the flow goes if nobody answers in time.",
       "properties": {
         "delay": {
-          "maximum": 10000,
+          "maximum": 100000,
           "minimum": 1,
           "type": "integer"
+        },
+        "delay_mode": {
+          "enum": [
+            "fixed",
+            "random"
+          ],
+          "type": "string"
         },
         "enabled": {
           "type": "boolean"
         },
+        "max_delay": {
+          "maximum": 100000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "min_delay": {
+          "maximum": 100000,
+          "minimum": 1,
+          "type": "integer"
+        },
         "unit": {
           "enum": [
+            "seconds",
             "minutes",
             "hours",
             "days"
@@ -1063,14 +1252,67 @@
       ],
       "type": "object"
     },
+    "list_row": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "id": {
+          "description": "Row ID / btn:<id> handle.",
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "list_section": {
+      "additionalProperties": false,
+      "properties": {
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/list_row"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "rows"
+      ],
+      "type": "object"
+    },
     "message_block": {
       "discriminator": {
         "mapping": {
           "audio": "#/$defs/block_media",
           "card": "#/$defs/block_card",
+          "contact": "#/$defs/block_contact",
           "file": "#/$defs/block_media",
           "gallery": "#/$defs/block_gallery",
           "image": "#/$defs/block_media",
+          "list": "#/$defs/block_list",
+          "location": "#/$defs/block_location",
+          "poll": "#/$defs/block_poll",
+          "sticker": "#/$defs/block_sticker",
           "text": "#/$defs/block_text",
           "video": "#/$defs/block_media"
         },
@@ -1088,6 +1330,21 @@
         },
         {
           "$ref": "#/$defs/block_gallery"
+        },
+        {
+          "$ref": "#/$defs/block_sticker"
+        },
+        {
+          "$ref": "#/$defs/block_location"
+        },
+        {
+          "$ref": "#/$defs/block_contact"
+        },
+        {
+          "$ref": "#/$defs/block_poll"
+        },
+        {
+          "$ref": "#/$defs/block_list"
         }
       ],
       "type": "object"
@@ -1095,6 +1352,9 @@
     "message_button": {
       "discriminator": {
         "mapping": {
+          "call": "#/$defs/message_button_call",
+          "copy": "#/$defs/message_button_copy",
+          "pix": "#/$defs/message_button_pix",
           "postback": "#/$defs/message_button_postback",
           "url": "#/$defs/message_button_url"
         },
@@ -1106,7 +1366,131 @@
         },
         {
           "$ref": "#/$defs/message_button_postback"
+        },
+        {
+          "$ref": "#/$defs/message_button_call"
+        },
+        {
+          "$ref": "#/$defs/message_button_copy"
+        },
+        {
+          "$ref": "#/$defs/message_button_pix"
         }
+      ],
+      "type": "object"
+    },
+    "message_button_call": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "call",
+          "type": "string"
+        },
+        "id": {
+          "description": "The id in this button's btn:<id> handle.",
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "phone_number": {
+          "maxLength": 30,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "action",
+        "phone_number"
+      ],
+      "type": "object"
+    },
+    "message_button_copy": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "copy",
+          "type": "string"
+        },
+        "copy_code": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "id": {
+          "description": "The id in this button's btn:<id> handle.",
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "action",
+        "copy_code"
+      ],
+      "type": "object"
+    },
+    "message_button_pix": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "pix",
+          "type": "string"
+        },
+        "currency": {
+          "maxLength": 10,
+          "type": "string"
+        },
+        "id": {
+          "description": "The id in this button's btn:<id> handle.",
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "pix_key": {
+          "maxLength": 255,
+          "minLength": 1,
+          "type": "string"
+        },
+        "pix_key_type": {
+          "enum": [
+            "phone",
+            "email",
+            "cpf",
+            "cnpj",
+            "random"
+          ],
+          "type": "string"
+        },
+        "pix_name": {
+          "maxLength": 120,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "action",
+        "pix_key",
+        "pix_key_type"
       ],
       "type": "object"
     },
@@ -1358,15 +1742,33 @@
               "additionalProperties": false,
               "properties": {
                 "delay": {
-                  "maximum": 10000,
+                  "maximum": 100000,
                   "minimum": 1,
                   "type": "integer"
+                },
+                "delay_mode": {
+                  "enum": [
+                    "fixed",
+                    "random"
+                  ],
+                  "type": "string"
                 },
                 "enabled": {
                   "type": "boolean"
                 },
+                "max_delay": {
+                  "maximum": 100000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "min_delay": {
+                  "maximum": 100000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
                 "unit": {
                   "enum": [
+                    "seconds",
                     "minutes",
                     "hours",
                     "days"
@@ -1643,8 +2045,16 @@
               "maxItems": 20,
               "type": "array"
             },
+            "custom_phone": {
+              "maxLength": 100,
+              "type": "string"
+            },
             "followup": {
               "$ref": "#/$defs/followup"
+            },
+            "group_id": {
+              "maxLength": 128,
+              "type": "string"
             },
             "quick_replies": {
               "items": {
@@ -1652,6 +2062,14 @@
               },
               "maxItems": 20,
               "type": "array"
+            },
+            "recipient_type": {
+              "enum": [
+                "contact",
+                "custom",
+                "group"
+              ],
+              "type": "string"
             },
             "retry_unmatched": {
               "$ref": "#/$defs/retry_unmatched"
@@ -1734,7 +2152,7 @@
     },
     "node_smart_delay": {
       "additionalProperties": false,
-      "description": "Waits, then carries on. Picks up at the next hour you allow sending.",
+      "description": "Aguarda um intervalo de tempo configurado antes de prosseguir.",
       "properties": {
         "config": {
           "discriminator": {
@@ -1981,11 +2399,29 @@
         "duration": {
           "additionalProperties": false,
           "properties": {
+            "delay_mode": {
+              "enum": [
+                "fixed",
+                "random"
+              ],
+              "type": "string"
+            },
+            "max_value": {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "min_value": {
+              "maximum": 100000,
+              "minimum": 1,
+              "type": "integer"
+            },
             "unit": {
               "enum": [
                 "minutes",
                 "hours",
-                "days"
+                "days",
+                "seconds"
               ],
               "type": "string"
             },
@@ -2117,19 +2553,19 @@
     "groups": [
       {
         "key": "content",
-        "label": "Content"
+        "label": "Conteúdo"
       },
       {
         "key": "logic",
-        "label": "Logic"
+        "label": "Lógica"
       },
       {
         "key": "actions",
-        "label": "Actions"
+        "label": "Ações"
       },
       {
         "key": "other",
-        "label": "Other"
+        "label": "Outros"
       }
     ],
     "limits": {
@@ -2158,7 +2594,7 @@
           "default",
           "timeout"
         ],
-        "label": "Send a message",
+        "label": "Enviar Mensagem",
         "terminal": false,
         "type": "send_message"
       },
@@ -2170,7 +2606,7 @@
         "handles": [
           "default"
         ],
-        "label": "Tag, save or assign",
+        "label": "Etiquetar, Salvar ou Atribuir",
         "terminal": false,
         "type": "action"
       },
@@ -2180,7 +2616,7 @@
         "dynamic_handles": [],
         "group": "logic",
         "handles": [],
-        "label": "Hand over to another flow",
+        "label": "Iniciar Outro Fluxo",
         "terminal": true,
         "type": "start_flow"
       },
@@ -2193,19 +2629,19 @@
           "cond:true",
           "cond:false"
         ],
-        "label": "Branch on a condition",
+        "label": "Condição (Se / Senão)",
         "terminal": false,
         "type": "condition"
       },
       {
         "annotation": false,
-        "description": "Waits, then carries on. Picks up at the next hour you allow sending.",
+        "description": "Aguarda um intervalo de tempo configurado antes de prosseguir.",
         "dynamic_handles": [],
         "group": "logic",
         "handles": [
           "default"
         ],
-        "label": "Wait",
+        "label": "Aguardar (Delay)",
         "terminal": false,
         "type": "smart_delay"
       },
@@ -2220,7 +2656,7 @@
         ],
         "group": "logic",
         "handles": [],
-        "label": "Split the traffic",
+        "label": "Divisão de Tráfego (Teste A/B)",
         "terminal": false,
         "type": "randomizer"
       },
@@ -2233,7 +2669,7 @@
           "default",
           "error"
         ],
-        "label": "Call another system",
+        "label": "Chamar API Externa (Webhook)",
         "terminal": false,
         "type": "external_request"
       },
@@ -2246,7 +2682,7 @@
           "default",
           "timeout"
         ],
-        "label": "Ask a question",
+        "label": "Fazer uma Pergunta (Coletar Dados)",
         "terminal": false,
         "type": "data_collection"
       },
@@ -2259,7 +2695,7 @@
           "default",
           "error"
         ],
-        "label": "Send a text",
+        "label": "Enviar SMS",
         "terminal": false,
         "type": "send_sms"
       },
@@ -2272,7 +2708,7 @@
           "default",
           "error"
         ],
-        "label": "Send an email",
+        "label": "Enviar E-mail",
         "terminal": false,
         "type": "send_email"
       },

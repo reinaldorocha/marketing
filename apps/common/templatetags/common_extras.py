@@ -32,7 +32,7 @@ FILTER_ICONS = frozenset({"status", "channel", "tag", "clock"})
 # is only the render-time question of which glyph and which colour, so the two
 # are allowed to differ (a platform can exist before it has artwork). Keep this
 # in step with the branches in partials/_platform_icon.html.
-PLATFORMS = frozenset({"telegram", "instagram", "messenger", "whatsapp", "sms", "email"})
+PLATFORMS = frozenset({"telegram", "instagram", "messenger", "whatsapp", "whatsapp_evolution", "sms", "email"})
 
 
 @register.filter
@@ -50,7 +50,8 @@ def platform_class(platform: Any) -> str:
     reaches the UI as soon as issue #4 adds it to the model, whereas its
     artwork lands with the adapter, several layers later.
     """
-    return f"pi-{platform}" if platform in PLATFORMS else "pi-unknown"
+    norm = "whatsapp" if platform == "whatsapp_evolution" else platform
+    return f"pi-{norm}" if norm in PLATFORMS else "pi-unknown"
 
 
 @register.filter
@@ -60,7 +61,8 @@ def platform_ink_class(platform: Any) -> str:
     Unknown keys get no tint at all rather than a made-up one: the fallback
     glyph inherits the surrounding text colour, which is always legible.
     """
-    return f"pi-ink-{platform}" if platform in PLATFORMS else ""
+    norm = "whatsapp" if platform == "whatsapp_evolution" else platform
+    return f"pi-ink-{norm}" if norm in PLATFORMS else ""
 
 
 @register.filter
