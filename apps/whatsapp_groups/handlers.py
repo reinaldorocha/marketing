@@ -12,6 +12,8 @@ from apps.whatsapp_groups.services import (
     deliver_single_group,
     mark_broadcast_failed_committed,
     resolve_target_groups,
+    set_broadcast_completed_committed,
+    set_broadcast_total_groups_committed,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,12 +59,10 @@ def handle_group_broadcast_send(payload: dict, action: Any) -> None:
         broadcast.total_groups_count = total_groups
 
         if total_groups == 0:
-            broadcast.status = BroadcastStatus.COMPLETED
-            broadcast.sent_at = timezone.now()
-            broadcast.save(update_fields=["status", "total_groups_count", "sent_at", "updated_at"])
+            set_broadcast_completed_committed(broadcast.id)
             return
 
-        broadcast.save(update_fields=["total_groups_count", "updated_at"])
+        set_broadcast_total_groups_committed(broadcast.id, total_groups)
 
         delay = min(max(broadcast.delay_seconds, 0), 15)
         now = timezone.now()

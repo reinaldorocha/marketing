@@ -480,7 +480,11 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
         persisted_contact = None
         if initial_contact and getattr(initial_contact, "pk", None):
             try:
-                persisted_contact = Contact.objects.filter(pk=initial_contact.pk).first()
+                persisted_contact = (
+                    Contact.objects.for_workspace(webhook.workspace)
+                    .filter(pk=initial_contact.pk)
+                    .first()
+                )
             except Exception:
                 persisted_contact = None
 
@@ -499,7 +503,11 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
         persisted_contact = None
         if initial_contact and getattr(initial_contact, "pk", None):
             try:
-                persisted_contact = Contact.objects.filter(pk=initial_contact.pk).first()
+                persisted_contact = (
+                    Contact.objects.for_workspace(webhook.workspace)
+                    .filter(pk=initial_contact.pk)
+                    .first()
+                )
             except Exception:
                 persisted_contact = None
 

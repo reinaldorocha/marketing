@@ -273,29 +273,21 @@ def send_message_to_group(
         )
 
 
-def _save_durable_checkpoint(
-    broadcast_id: Any,
-    delivery_logs: list[dict[str, Any]],
-    sent_count: int,
-    error_count: int,
-) -> None:
-    """Save broadcast delivery progress in a separate committed connection.
+def mark_broadcast_failed_committed(broadcast_id: Any) -> None:
+    """Mark a broadcast as FAILED in an independent committed transaction.
 
-    Ensures that checkpoints survive even if the caller is wrapped inside
-    a database transaction (such as a queue worker) that later rolls back.
+    Used when fanout or execution fails terminally, ensuring that the terminal
+    FAILED status is committed independently and survives worker rollback.
     """
     def _run() -> None:
         from django.db import connection as db_connection
         try:
-            now = timezone.now()
             (
                 GroupBroadcast.objects.unscoped()
                 .filter(pk=broadcast_id)
                 .update(
-                    delivery_logs=delivery_logs,
-                    sent_count=sent_count,
-                    error_count=error_count,
-                    updated_at=now,
+                    status=BroadcastStatus.FAILED,
+                    updated_at=timezone.now(),
                 )
             )
         finally:
@@ -306,8 +298,8 @@ def _save_durable_checkpoint(
     t.join()
 
 
-def mark_broadcast_failed_committed(broadcast_id: Any) -> None:
-    """Mark a broadcast as FAILED in a separate committed transaction."""
+def set_broadcast_total_groups_committed(broadcast_id: Any, total_groups: int) -> None:
+    """Update total_groups_count in an independent committed transaction."""
     def _run() -> None:
         from django.db import connection as db_connection
         try:
@@ -315,8 +307,32 @@ def mark_broadcast_failed_committed(broadcast_id: Any) -> None:
                 GroupBroadcast.objects.unscoped()
                 .filter(pk=broadcast_id)
                 .update(
-                    status=BroadcastStatus.FAILED,
+                    total_groups_count=total_groups,
                     updated_at=timezone.now(),
+                )
+            )
+        finally:
+            db_connection.close()
+
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join()
+
+
+def set_broadcast_completed_committed(broadcast_id: Any) -> None:
+    """Set broadcast status to COMPLETED with 0 groups in an independent committed transaction."""
+    def _run() -> None:
+        from django.db import connection as db_connection
+        try:
+            now = timezone.now()
+            (
+                GroupBroadcast.objects.unscoped()
+                .filter(pk=broadcast_id)
+                .update(
+                    status=BroadcastStatus.COMPLETED,
+                    total_groups_count=0,
+                    sent_at=now,
+                    updated_at=now,
                 )
             )
         finally:
@@ -377,8 +393,6 @@ def dispatch_group_broadcast(broadcast: GroupBroadcast) -> dict[str, Any]:
         broadcast.error_count = error_count
         broadcast.updated_at = timezone.now()
         broadcast.save(update_fields=["delivery_logs", "sent_count", "error_count", "updated_at"])
-        # Commit checkpoint durably so it survives even if outer caller rolls back
-        _save_durable_checkpoint(broadcast.id, logs, sent_count, error_count)
 
         # Throttle between groups to prevent burst bans
         if idx < total_groups - 1 and broadcast.delay_seconds > 0:
@@ -470,51 +484,67 @@ def claim_group_broadcast_for_sending(
     claim_owner: str = "",
     allow_resume: bool = False,
 ) -> GroupBroadcast | None:
-    """Atomically transition a scheduled group broadcast to sending status.
+    """Atomically transition a scheduled group broadcast to sending status in an independent transaction.
 
     Guarantees that between concurrent queue workers and hourly housekeeping,
     only one caller can claim and execute the broadcast.
     If allow_resume is True (e.g. queue retry), also allows resuming a broadcast
     currently in SENDING status that is owned by this execution (matching claim_owner).
     Also reclaims stale SENDING broadcasts (> 5 minutes without update).
+
+    Crucially, committing the claim in an independent transaction releases the row
+    lock immediately, so the caller's transaction never maintains an exclusive lock
+    that could cause circular wait with other operations.
     """
-    with transaction.atomic():
-        broadcast = (
-            GroupBroadcast.objects.unscoped()
-            .select_for_update()
-            .filter(pk=broadcast_id)
-            .first()
-        )
-        if not broadcast:
-            return None
+    result: list[GroupBroadcast | None] = [None]
 
-        now = timezone.now()
-        is_stale = (
-            broadcast.status == BroadcastStatus.SENDING
-            and broadcast.updated_at
-            and (now - broadcast.updated_at).total_seconds() > 300
-        )
+    def _run() -> None:
+        from django.db import connection as db_connection
+        try:
+            with transaction.atomic():
+                broadcast = (
+                    GroupBroadcast.objects.unscoped()
+                    .select_for_update()
+                    .filter(pk=broadcast_id)
+                    .first()
+                )
+                if not broadcast:
+                    return
 
-        can_claim = False
-        if broadcast.status == BroadcastStatus.SCHEDULED:
-            can_claim = True
-        elif is_stale:
-            can_claim = True
-        elif allow_resume and broadcast.status == BroadcastStatus.SENDING:
-            if claim_owner and broadcast.claim_token == claim_owner:
-                can_claim = True
-            elif not broadcast.claim_token and claim_owner:
-                can_claim = True
+                now = timezone.now()
+                is_stale = (
+                    broadcast.status == BroadcastStatus.SENDING
+                    and broadcast.updated_at
+                    and (now - broadcast.updated_at).total_seconds() > 300
+                )
 
-        if not can_claim:
-            return None
+                can_claim = False
+                if broadcast.status == BroadcastStatus.SCHEDULED:
+                    can_claim = True
+                elif is_stale:
+                    can_claim = True
+                elif allow_resume and broadcast.status == BroadcastStatus.SENDING:
+                    if claim_owner and broadcast.claim_token == claim_owner:
+                        can_claim = True
+                    elif not broadcast.claim_token and claim_owner:
+                        can_claim = True
 
-        broadcast.status = BroadcastStatus.SENDING
-        if claim_owner:
-            broadcast.claim_token = claim_owner
-        broadcast.updated_at = now
-        broadcast.save(update_fields=["status", "claim_token", "updated_at"])
-        return broadcast
+                if not can_claim:
+                    return
+
+                broadcast.status = BroadcastStatus.SENDING
+                if claim_owner:
+                    broadcast.claim_token = claim_owner
+                broadcast.updated_at = now
+                broadcast.save(update_fields=["status", "claim_token", "updated_at"])
+                result[0] = broadcast
+        finally:
+            db_connection.close()
+
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join()
+    return result[0]
 
 
 def process_scheduled_broadcasts() -> int:
