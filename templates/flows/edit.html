@@ -91,13 +91,13 @@ attacker-authored HTML.
     is not a blank rectangle.
     {% endcomment %}
     <div class="h-full flex flex-col items-center justify-center gap-2 p-8">
-        <p class="text-sm" style="color: var(--text-secondary);">Loading the flow builder…</p>
+        <p class="text-sm" style="color: var(--text-secondary);">Carregando o editor de fluxos…</p>
         {% if not can_edit %}<p class="text-xs" style="color: var(--text-tertiary);">Read-only: you can look at this flow but not change it.</p>{% endif %}
     </div>
     {% else %}
     <div class="h-full flex items-center justify-center p-8">
         <div class="alert-error max-w-lg text-left">
-            <p class="font-medium">The flow builder could not load.</p>
+        <p class="font-medium">Não foi possível carregar o editor de fluxos.</p>
             <p class="mt-1">
                 Its JavaScript bundle has not been built. Run <code>make frontend</code> and reload,
                 or rebuild the container image.
@@ -114,7 +114,7 @@ attacker-authored HTML.
          hx-get="{% url 'flows:trigger_panel' workspace_id=request.workspace.id flow_id=flow.id %}"
          hx-trigger="triggers-opened from:body once, triggersChanged from:body"
          hx-swap="outerHTML">
-        <p class="p-4 text-sm" style="color: var(--text-secondary);">Loading triggers…</p>
+        <p class="p-4 text-sm" style="color: var(--text-secondary);">Carregando gatilhos…</p>
     </div>
 </aside>
 </div>

@@ -118,10 +118,10 @@ def _visible_flows(request: WorkspaceRequest) -> Any:
 #: finished. Archived only appears when the status filter asks for it. The tone
 #: is the status-pill tone the section's dot and rows wear.
 SECTIONS: tuple[tuple[str, str, str], ...] = (
-    (FlowStatus.ACTIVE, "Live", "success"),
-    (FlowStatus.OFFLINE, "Offline", "warning"),
-    (FlowStatus.DRAFT, "Draft", "neutral"),
-    (FlowStatus.ARCHIVED, "Archived", "neutral"),
+    (FlowStatus.ACTIVE, "Ativos", "success"),
+    (FlowStatus.OFFLINE, "Desativados", "warning"),
+    (FlowStatus.DRAFT, "Rascunhos", "neutral"),
+    (FlowStatus.ARCHIVED, "Arquivados", "neutral"),
 )
 
 #: The window the row's run count covers.

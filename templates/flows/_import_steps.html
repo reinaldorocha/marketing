@@ -6,7 +6,7 @@ needs, import it. `current` is 1 or 2; the third step is the button on page 2.
 <ol class="stepper mb-6" aria-label="Import steps">
     <li><span class="stepper-step {% if current == 1 %}is-current{% else %}is-done{% endif %}" {% if current == 1 %}aria-current="step"{% endif %}>
         <span class="stepper-index">{% if current == 1 %}1{% else %}<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span class="sr-only">Done:</span>{% endif %}</span>
-        <span class="stepper-label">Choose a file</span>
+        <span class="stepper-label">Escolha um arquivo</span>
     </span></li>
     <li class="stepper-link{% if current > 1 %} is-done{% endif %}" aria-hidden="true"></li>
     <li><span class="stepper-step {% if current == 2 %}is-current{% endif %}" {% if current == 2 %}aria-current="step"{% endif %}>

@@ -145,9 +145,9 @@ is what scrolls and a scroll event never bubbles out of it.
             {% if can_edit %}
             <div class="row-menu-sep"></div>
             <a class="row-menu-item" role="menuitem"
-               href="{% url 'flows:export' workspace_id=request.workspace.id flow_id=flow.id %}">Download a copy</a>
+               href="{% url 'flows:export' workspace_id=request.workspace.id flow_id=flow.id %}">Baixar uma cópia</a>
             <a class="row-menu-item" role="menuitem"
-               href="{% url 'flows:export_bundle' workspace_id=request.workspace.id flow_id=flow.id %}">Download with everything it uses</a>
+               href="{% url 'flows:export_bundle' workspace_id=request.workspace.id flow_id=flow.id %}">Baixar com todos os recursos usados</a>
             <div class="row-menu-sep"></div>
             {% if flow.status == "archived" %}
             <button type="button" class="row-menu-item" role="menuitem"

@@ -33,7 +33,7 @@ summary and (for ref triggers) its per-connection links.
             </span>
             <span class="truncate">{{ row.trigger.channel_connection.display_name }}</span>
             {% else %}
-            <span>All matching channels</span>
+            <span>Todos os canais correspondentes</span>
             {% endif %}
         </div>
 
@@ -70,10 +70,10 @@ summary and (for ref triggers) its per-connection links.
                 hx-vals='{"direction": "down"}' hx-swap="none" aria-label="Move down">↓</button>
         <button type="button" class="btn-pill-secondary btn-pill-sm"
                 hx-get="{% url 'flows:trigger_form' workspace_id=request.workspace.id flow_id=flow.id %}?trigger={{ row.trigger.id }}"
-                hx-target="#trigger-form" hx-swap="innerHTML">Edit</button>
+                hx-target="#trigger-form" hx-swap="innerHTML">Editar</button>
         <button type="button" class="btn-pill-secondary btn-pill-sm btn-danger-soft"
                 hx-post="{% url 'flows:trigger_delete' workspace_id=request.workspace.id flow_id=flow.id trigger_id=row.trigger.id %}"
-                hx-confirm="Delete this trigger?" hx-swap="none">Delete</button>
+                hx-confirm="Excluir este gatilho?" hx-swap="none">Excluir</button>
     </div>
     {% endif %}
 </div>

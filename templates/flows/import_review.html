@@ -37,7 +37,7 @@ from visiting a stranger's address.
 
     {% comment %} What will be created {% endcomment %}
     <section class="rounded-xl border p-4 mb-4" style="border-color: var(--border); background: var(--surface-1);">
-        <h2 class="text-sm font-semibold mb-2" style="color: var(--text-primary);">Flows in this file</h2>
+        <h2 class="text-sm font-semibold mb-2" style="color: var(--text-primary);">Fluxos neste arquivo</h2>
         <ul class="space-y-1">
             {% for flow in plan.document.flows %}
             <li class="text-sm" style="color: var(--text-secondary);">
@@ -167,8 +167,8 @@ from visiting a stranger's address.
             <button type="submit" name="then" value="import" class="btn-pill-primary">
                 Import {{ plan.document.flows|length }} flow{{ plan.document.flows|length|pluralize }}
             </button>
-            <button type="submit" class="btn-pill-secondary">Save for later</button>
-            <a href="{{ list_url }}" class="btn-link">Back to flows</a>
+            <button type="submit" class="btn-pill-secondary">Salvar para depois</button>
+            <a href="{{ list_url }}" class="btn-link">Voltar aos fluxos</a>
             <button type="button" class="btn-danger-link ml-auto"
                     hx-post="{{ discard_url }}" hx-swap="none"
                     hx-on::after-request="if (JSON.parse(event.detail.xhr.getResponseHeader('HX-Trigger') || '{}').flowImportDiscarded) window.location = '{{ list_url|escapejs }}';">Discard this import</button>

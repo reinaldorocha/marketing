@@ -42,6 +42,8 @@ Os retornos de conexão, configuração e validação de WhatsApp, Telegram, SMS
 
 Nesta nova varredura foram corrigidas listas e filtros de contatos, fluxos e sequências, componentes comuns, canais e painéis de análises, endpoints e notificações. Permanecem em revisão as telas de detalhe, os formulários extensos e os e-mails transacionais, que serão tratados em lotes para preservar a revisão de cada texto.
 
+O módulo de fluxos recebeu uma revisão específica: editor, importação, galeria de modelos, gatilhos, exportação, filtros e estados agora usam português. A migração `flows.0009` mantém os rótulos do banco sincronizados com os estados mostrados na interface.
+
 ## Critério de encerramento
 
 Esta revisão só será marcada como concluída depois de: migrações limpas; verificações do Django e testes relevantes aprovados; ausência de texto em inglês nas telas próprias; e confirmação de funcionamento da implantação em produção.
