@@ -196,9 +196,9 @@ def configure_proxy(env, backup):
         print("Requesting HTTPS certificate from Let's Encrypt", flush=True)
         cert = api("/nginx/certificates", {
             "provider": "letsencrypt", "domain_names": [domain],
-            # NPM takes the ACME contact from its authenticated administrator.
-            # Its public API intentionally rejects arbitrary contact fields here.
-            "meta": {"dns_challenge": False},
+            # NPM takes the ACME contact and HTTP challenge defaults from its
+            # authenticated administrator. Omitting `meta` is required by its
+            # current request validator.
         })
     payload = {
         "domain_names": [domain], "forward_scheme": "http", "forward_host": "marketing-web",
