@@ -174,7 +174,7 @@ def _connect(request: WorkspaceRequest, data: dict[str, Any]) -> str:
         connection.delete()
         return SUBSCRIBE_FAILED
 
-    messages.success(request, f"Connected {connection.display_name}. Send it a message to check it works.")
+    messages.success(request, f"{connection.display_name} conectado. Envie uma mensagem para confirmar o funcionamento.")
     return ""
 
 
@@ -259,9 +259,9 @@ def _edit(request: WorkspaceRequest, workspace_id: str, *, template: WhatsAppTem
             with transaction.atomic():
                 saved.save()
         except IntegrityError:
-            form.add_error("name", "This number already has a template with that name and language.")
+            form.add_error("name", "Este número já possui um modelo com esse nome e idioma.")
         else:
-            messages.success(request, f"Saved {saved.name}. Submit it when you are ready for Meta to review it.")
+            messages.success(request, f"{saved.name} foi salvo. Envie-o quando estiver pronto para a análise da Meta.")
             return redirect(reverse("channels:whatsapp_templates", kwargs={"workspace_id": workspace_id}))
 
     return render(
@@ -344,9 +344,9 @@ def whatsapp_template_submit(request: WorkspaceRequest, workspace_id: str, templ
     except APIError as exc:
         # str(exc) is the adapter's own sentence — host and status code, never
         # the URL or the response body (providers/exceptions.py).
-        messages.error(request, f"Meta would not accept {template.name}: {exc}")
+        messages.error(request, f"A Meta não aceitou {template.name}: {exc}")
     else:
-        messages.success(request, f"{template.name} is with Meta for review. This usually takes minutes to a day.")
+        messages.success(request, f"{template.name} está em análise pela Meta. Isso costuma levar de alguns minutos a um dia.")
     return redirect(reverse("channels:whatsapp_templates", kwargs={"workspace_id": workspace_id}))
 
 
@@ -358,7 +358,7 @@ def whatsapp_template_delete(request: WorkspaceRequest, workspace_id: str, templ
     template = get_scoped_object_or_404(WhatsAppTemplate, request.workspace, pk=template_id)
     name = template.name
     whatsapp_templates.delete_template(template)
-    messages.success(request, f"Deleted {name}.")
+    messages.success(request, f"{name} foi excluído.")
     return redirect(reverse("channels:whatsapp_templates", kwargs={"workspace_id": workspace_id}))
 
 
@@ -387,7 +387,7 @@ def whatsapp_cost_hints(request: WorkspaceRequest, workspace_id: str) -> HttpRes
             # own clean_* methods substitute Decimal("0") for a blank.
             amounts={category: form.cleaned_data[category] for category in ("marketing", "utility", "authentication")},
         )
-        messages.success(request, "Saved the cost estimates.")
+        messages.success(request, "Estimativas de custo salvas.")
         return redirect(reverse("channels:whatsapp_cost_hints", kwargs={"workspace_id": workspace_id}))
 
     return render(

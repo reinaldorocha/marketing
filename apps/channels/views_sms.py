@@ -234,7 +234,7 @@ def _connect(
 
     messages.success(
         request,
-        f"Connected {connection.display_name}. Paste the webhook URL below into Twilio to start receiving messages.",
+        f"{connection.display_name} conectado. Cole a URL do webhook abaixo no Twilio para começar a receber mensagens.",
     )
     return ""
 
@@ -273,12 +273,12 @@ def sms_settings_update(request: WorkspaceRequest, workspace_id: str) -> HttpRes
 
     _save_settings(row)
     if cost_ok:
-        messages.success(request, "SMS settings saved.")
+        messages.success(request, "Configurações de SMS salvas.")
     else:
         messages.warning(
             request,
-            "SMS settings saved, but the price per segment was not a number "
-            f"between 0 and {MAX_SEGMENT_COST} and was left unchanged.",
+            "As configurações de SMS foram salvas, mas o preço por segmento não é um número "
+            f"entre 0 e {MAX_SEGMENT_COST}; o valor anterior foi mantido.",
         )
     return redirect(reverse("channels:sms_settings", kwargs={"workspace_id": workspace_id}))
 

@@ -167,7 +167,7 @@ def instagram_callback(request: Any) -> HttpResponse:
     if error:
         # The operator pressed Cancel on Meta's screen, or Meta refused. Neither
         # is our failure and neither needs a scary page.
-        messages.info(request, "Instagram was not connected.")
+        messages.info(request, "O Instagram não foi conectado.")
         return redirect(settings_url)
 
     code = (request.GET.get("code") or "").strip()
@@ -262,7 +262,7 @@ def _complete(request: Any, workspace: Any, code: str) -> str:
     except IntegrityError:
         existing = _reconnect(workspace, profile, token, expires_at)
         if existing is not None:
-            messages.success(request, f"Reconnected {connection.display_name}.")
+            messages.success(request, f"{connection.display_name} foi reconectado.")
             return ""
         # SPEC §5's unique (platform, external_id) is deployment-wide, so this
         # can be another workspace's row. The wording never says which
@@ -271,8 +271,8 @@ def _complete(request: Any, workspace: Any, code: str) -> str:
 
     messages.success(
         request,
-        f"Connected {connection.display_name}. Subscribe your Meta app to this account's "
-        f"webhook fields to start receiving messages. See docs/channels/instagram.md.",
+        f"{connection.display_name} conectado. Inscreva seu aplicativo Meta nos campos de webhook desta conta "
+        "para começar a receber mensagens.",
     )
     return ""
 

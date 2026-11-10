@@ -181,5 +181,5 @@ def _connect(request: WorkspaceRequest, token: str) -> str:
         connection.delete()
         return WEBHOOK_FAILED
 
-    messages.success(request, f"Connected @{username}. Send it /start to check it works.")
+    messages.success(request, f"@{username} conectado. Envie /start para confirmar o funcionamento.")
     return ""
