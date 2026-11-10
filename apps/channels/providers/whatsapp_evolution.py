@@ -144,6 +144,7 @@ class EvolutionClient:
             headers["instanceId"] = self.instance_id
         if idempotency_key:
             headers["X-Idempotency-Key"] = idempotency_key
+            headers["Idempotency-Key"] = idempotency_key
         return headers
 
     def _request(
@@ -248,8 +249,60 @@ class EvolutionClient:
             timeout=10.0,
         )
 
-    def find_sent_message(self, idempotency_key: str) -> str | None:
-        """Lookup hook for checking if a message was already sent with this idempotency key."""
+    def find_sent_message(self, idempotency_key: str, recipient: str = "") -> str | None:
+        """Query Evolution API to check if a message with this idempotency key was already sent."""
+        if not idempotency_key:
+            return None
+        payload: dict[str, Any] = {
+            "where": {
+                "idempotencyKey": idempotency_key,
+            },
+            "idempotencyKey": idempotency_key,
+            "idempotency_key": idempotency_key,
+        }
+        if recipient:
+            clean_recip = _clean_recipient(recipient)
+            payload["where"]["key"] = {"remoteJid": clean_recip}
+            payload["where"]["remoteJid"] = clean_recip
+
+        endpoints = [f"{self.api_url}/chat/findMessages"]
+        if self.instance_id:
+            endpoints.append(f"{self.api_url}/chat/findMessages/{self.instance_id}")
+
+        for endpoint in endpoints:
+            try:
+                res = self._request(
+                    "POST",
+                    endpoint,
+                    headers=self._headers(idempotency_key=idempotency_key),
+                    json=payload,
+                    timeout=10.0,
+                )
+                if isinstance(res, dict):
+                    msg_id = res.get("id") or res.get("messageId") or res.get("key", {}).get("id")
+                    if msg_id:
+                        return str(msg_id)
+                    msgs = res.get("messages") or res.get("records") or res.get("data")
+                    if isinstance(msgs, list) and msgs:
+                        first = msgs[0]
+                        if isinstance(first, dict):
+                            return str(
+                                first.get("id")
+                                or first.get("messageId")
+                                or first.get("key", {}).get("id")
+                                or "found"
+                            )
+                elif isinstance(res, list) and res:
+                    first = res[0]
+                    if isinstance(first, dict):
+                        return str(
+                            first.get("id")
+                            or first.get("messageId")
+                            or first.get("key", {}).get("id")
+                            or "found"
+                        )
+            except Exception:
+                continue
         return None
 
     def send_text(
@@ -334,6 +387,8 @@ class EvolutionClient:
         url: str,
         delay: int | None = None,
         mentions: list[str] | None = None,
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Send a WhatsApp Push-To-Talk (PTT) voice note (gravado na hora)."""
         return self.send_media(
@@ -343,22 +398,33 @@ class EvolutionClient:
             delay=delay,
             mentions=mentions,
             ptt=True,
+            idempotency_key=idempotency_key,
+            **kwargs,
         )
 
     # -----------------------------------------------------------------------
     # Formatos Especiais da Evolution GO (Item 3)
     # -----------------------------------------------------------------------
 
-    def send_sticker(self, number: str, url: str) -> dict[str, Any]:
+    def send_sticker(
+        self,
+        number: str,
+        url: str,
+        idempotency_key: str = "",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """Call POST /send/sticker (WebP image/sticker)."""
-        payload = {
+        payload: dict[str, Any] = {
             "number": _clean_recipient(number),
             "sticker": url,
         }
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/sticker",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=25.0,
         )
@@ -369,21 +435,26 @@ class EvolutionClient:
         question: str,
         options: list[str],
         max_answers: int = 1,
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Call POST /send/poll (Interactive Poll/Enquete)."""
         clean_options = [str(opt).strip() for opt in options if str(opt).strip()]
         if len(clean_options) < 2:
             raise ValueError("Enquete precisa de ao menos 2 opções de resposta.")
-        payload = {
+        payload: dict[str, Any] = {
             "number": _clean_recipient(number),
             "question": question[:255],
             "options": clean_options[:12],
             "maxAnswer": max(1, min(len(clean_options), max_answers)),
         }
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/poll",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=15.0,
         )
@@ -395,6 +466,8 @@ class EvolutionClient:
         longitude: float,
         name: str = "",
         address: str = "",
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Call POST /send/location (GPS Location pin)."""
         payload: dict[str, Any] = {
@@ -406,10 +479,13 @@ class EvolutionClient:
             payload["name"] = name
         if address:
             payload["address"] = address
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/location",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=15.0,
         )
@@ -420,9 +496,11 @@ class EvolutionClient:
         full_name: str,
         phone: str,
         organization: str = "",
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Call POST /send/contact (vCard contact card)."""
-        payload = {
+        payload: dict[str, Any] = {
             "number": _clean_recipient(number),
             "vcard": {
                 "fullName": full_name,
@@ -430,10 +508,13 @@ class EvolutionClient:
                 "organization": organization or None,
             },
         }
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/contact",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=15.0,
         )
@@ -445,19 +526,24 @@ class EvolutionClient:
         description: str,
         footer: str,
         buttons: list[dict[str, Any]],
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Call POST /send/button."""
-        payload = {
+        payload: dict[str, Any] = {
             "number": _clean_recipient(number),
             "title": title,
             "description": description,
             "footer": footer,
             "buttons": buttons,
         }
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/button",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=15.0,
         )
@@ -470,9 +556,11 @@ class EvolutionClient:
         footer_text: str,
         button_text: str,
         sections: list[dict[str, Any]],
+        idempotency_key: str = "",
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Call POST /send/list."""
-        payload = {
+        payload: dict[str, Any] = {
             "number": _clean_recipient(number),
             "title": title,
             "description": description,
@@ -480,10 +568,13 @@ class EvolutionClient:
             "buttonText": button_text or "Ver Opções",
             "sections": sections,
         }
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+            payload["idempotencyKey"] = idempotency_key
         return self._request(
             "POST",
             f"{self.api_url}/send/list",
-            headers=self._headers(),
+            headers=self._headers(idempotency_key=idempotency_key),
             json=payload,
             timeout=15.0,
         )
@@ -1106,6 +1197,11 @@ class WhatsAppEvolutionAdapter(Adapter):
                 code="recipient_unsupported",
             )
 
+        idempotency_key = (
+            getattr(outbound, "idempotency_key", "")
+            or (getattr(outbound, "extra", {}) or {}).get("idempotency_key", "")
+            or ""
+        )
         client = self.get_client(connection)
         rendered = downgrade(outbound, self.capabilities)
 

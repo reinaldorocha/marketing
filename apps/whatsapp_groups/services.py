@@ -590,7 +590,12 @@ def check_provider_sent_message(
     if client is not None:
         if hasattr(client, "find_sent_message"):
             try:
-                res = client.find_sent_message(idempotency_key)
+                import inspect
+                sig = inspect.signature(client.find_sent_message)
+                if "recipient" in sig.parameters:
+                    res = client.find_sent_message(idempotency_key, recipient=group_jid)
+                else:
+                    res = client.find_sent_message(idempotency_key)
                 if res:
                     return str(res)
             except Exception:
@@ -715,6 +720,7 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
 
     idempotency_key = f"group_broadcast:{broadcast_id}:{group_jid}"
     cancelled = False
+    uncertain_pending = False
     group_name = group_jid
     success = False
     error_msg = ""
@@ -744,6 +750,15 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
                 )
                 success = True
                 return
+            else:
+                logger.warning(
+                    "Uncertain delivery outcome for group %s in broadcast %s and provider cannot confirm; "
+                    "keeping pending without automatic re-send",
+                    group_jid,
+                    broadcast_id,
+                )
+                uncertain_pending = True
+                return
 
         group = WhatsAppGroup.objects.unscoped().filter(connection=broadcast.connection, jid=group_jid).first()
         if group and group.name:
@@ -771,6 +786,9 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
                 will_retry=False,
                 cancelled=True,
             )
+        elif uncertain_pending:
+            # Maintain the uncertain delivery pending without re-sending or concluding as terminal
+            pass
         else:
             will_retry = (
                 not success
@@ -789,7 +807,7 @@ def deliver_single_group(broadcast_id: Any, group_jid: str, action: Any = None) 
                 cancelled=False,
             )
 
-    if not cancelled and not success:
+    if not cancelled and not uncertain_pending and not success:
         raise RuntimeError(f"Delivery to group {group_jid} failed: {error_msg}")
 
 
