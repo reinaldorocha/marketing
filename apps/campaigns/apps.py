@@ -31,7 +31,7 @@ class CampaignsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.campaigns"
     label = "campaigns"
-    verbose_name = "Campaigns"
+    verbose_name = "Campanhas"
 
     def ready(self) -> None:
         from apps.campaigns import (

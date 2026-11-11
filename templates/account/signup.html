@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% load socialaccount %}
 
-{% block title %}Create your account · BrightBean Chat{% endblock %}
+{% block title %}Criar sua conta · BrightBean Chat{% endblock %}
 
 {% block auth_content %}
 <div class="auth-card">
-  {% include "partials/_auth_brand.html" with heading="Create your account" %}
+  {% include "partials/_auth_brand.html" with heading="Criar sua conta" %}
 
   {% if invited_email_locked %}
     <div class="alert-info mb-4">
-      You were invited to join an organization. Signing up here adds you to it.
+      Você foi convidado para uma organização. Ao criar sua conta, você entrará nela.
     </div>
   {% endif %}
 
@@ -19,10 +19,10 @@
       {% provider_login_url provider process="login" as provider_url %}
       <form method="post" action="{{ provider_url }}">
         {% csrf_token %}
-        <button type="submit" class="btn-social">Continue with {{ provider.name }}</button>
+        <button type="submit" class="btn-social">Continuar com {{ provider.name }}</button>
       </form>
     {% endfor %}
-    <div class="divider-text my-5">or</div>
+    <div class="divider-text my-5">ou</div>
   {% endif %}
 
   <form method="post" action="{% url 'account_signup' %}">
@@ -49,11 +49,11 @@
       </div>
     {% endfor %}
     {{ redirect_field }}
-    <button type="submit" class="btn-brand mt-1">Create account</button>
+    <button type="submit" class="btn-brand mt-1">Criar conta</button>
   </form>
 
   <p class="text-center text-sm mt-5" style="color: var(--text-secondary);">
-    Already have an account? <a href="{% url 'account_login' %}" class="font-semibold underline underline-offset-2" style="color: var(--text-primary);">Sign in</a>.
+    Já tem uma conta? <a href="{% url 'account_login' %}" class="font-semibold underline underline-offset-2" style="color: var(--text-primary);">Entrar</a>.
   </p>
 </div>
 {% endblock %}

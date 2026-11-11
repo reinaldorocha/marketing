@@ -4,7 +4,7 @@ from django.apps import AppConfig
 class NotificationsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.notifications"
-    verbose_name = "Notifications"
+    verbose_name = "Notificações"
 
     def ready(self) -> None:
         # Importing the registry is what populates it: the eight event types

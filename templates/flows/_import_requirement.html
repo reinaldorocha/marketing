@@ -89,7 +89,7 @@ hand-posted field cannot introduce one.
     {% if not options %}
     <p class="text-xs mt-1.5" style="color: var(--text-tertiary);">
         No {{ requirement.name|default:requirement.key }} account is connected. You can
-        <a href="{{ connect_url }}" class="btn-text-hover-primary" style="text-decoration: underline;">connect one</a>
+            <a href="{{ connect_url }}" class="btn-text-hover-primary" style="text-decoration: underline;">conectar um</a>
         or pick one after importing.
     </p>
     {% endif %}
@@ -127,7 +127,7 @@ hand-posted field cannot introduce one.
                 aria-label="What to do with {{ requirement.name|default:kind }}">
             <option value="">Choose…</option>
             {% if requirement.creatable %}
-            <option value="create" {% if resolution.action == "create" %}selected{% endif %}>Create it</option>
+            <option value="create" {% if resolution.action == "create" %}selected{% endif %}>Criar</option>
             {% endif %}
             <option value="map" {% if resolution.action == "map" %}selected{% endif %}>Use an existing one</option>
             {% if requirement.optional %}

@@ -28,9 +28,9 @@ export function ProblemsRail({ onPick }: { onPick?: () => void } = {}) {
   }
 
   return (
-    <section className="fb-problems" aria-label="Problems">
+    <section className="fb-problems" aria-label="Problemas">
       {message ? <p className="alert-error mb-2">{message}</p> : null}
-      {stale && issues.length > 0 ? <p className="fb-empty mb-1">Re-checking…</p> : null}
+      {stale && issues.length > 0 ? <p className="fb-empty mb-1">Verificando novamente…</p> : null}
 
       {issues.map((issue, index_) => (
         <button
@@ -51,7 +51,7 @@ export function ProblemsRail({ onPick }: { onPick?: () => void } = {}) {
         >
           {issue.message}
           {issue.code === "flow_has_no_trigger" || issue.code === "flow_triggers_all_disabled" ? (
-            <span className="fb-problem-action">Open trigger settings →</span>
+            <span className="fb-problem-action">Abrir configurações do gatilho →</span>
           ) : null}
           {/* The code is on the element, not in the sentence. It is how a
               support conversation identifies a finding, and `code` is also

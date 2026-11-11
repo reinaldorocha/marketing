@@ -530,7 +530,7 @@ API_WEBHOOK_DELIVERY_LOG_KEEP = env.int("API_WEBHOOK_DELIVERY_LOG_KEEP", default
 # imported, because a settings module must not import model code — the app
 # registry does not exist yet. apps.common.checks.check_platform_env_slugs fails
 # the build if the two ever disagree.
-PLATFORM_ENV_SLUGS = ("telegram", "instagram", "messenger", "whatsapp", "sms", "email")
+PLATFORM_ENV_SLUGS = ("telegram", "instagram", "messenger", "whatsapp", "whatsapp_evolution", "sms", "email")
 
 
 def _platform_credentials_from_env() -> dict[str, dict[str, str]]:

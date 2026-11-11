@@ -6,7 +6,7 @@ from django.apps import AppConfig
 class ChannelsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.channels"
-    verbose_name = "Channels"
+    verbose_name = "Canais"
 
     def ready(self) -> None:
         """Run the import side effects that have to happen once per process.

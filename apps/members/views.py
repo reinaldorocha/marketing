@@ -128,7 +128,7 @@ def invite_member(request: OrgRequest) -> HttpResponse:
     except MembershipError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Invitation sent.")
+        messages.success(request, "Convite enviado.")
     return redirect(reverse("members:list"))
 
 
@@ -142,7 +142,7 @@ def resend_invite(request: OrgRequest, invitation_id: str) -> HttpResponse:
     except MembershipError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Invitation resent.")
+        messages.success(request, "Convite reenviado.")
     return redirect(reverse("members:list"))
 
 
@@ -156,7 +156,7 @@ def revoke_invite(request: OrgRequest, invitation_id: str) -> HttpResponse:
     except MembershipError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Invitation revoked.")
+        messages.success(request, "Convite revogado.")
     return redirect(reverse("members:list"))
 
 
@@ -170,7 +170,7 @@ def update_member_role(request: OrgRequest, membership_id: str) -> HttpResponse:
     except MembershipError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Role updated.")
+        messages.success(request, "Função atualizada.")
     return redirect(reverse("members:list"))
 
 
@@ -184,7 +184,7 @@ def remove_member_view(request: OrgRequest, membership_id: str) -> HttpResponse:
     except MembershipError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Member removed.")
+        messages.success(request, "Membro removido.")
     return redirect(reverse("members:list"))
 
 
@@ -213,7 +213,7 @@ def manage_workspaces(request: OrgRequest, membership_id: str) -> HttpResponse:
         except MembershipError as exc:
             messages.error(request, str(exc))
         else:
-            messages.success(request, "Workspace access updated.")
+            messages.success(request, "Acesso ao espaço de trabalho atualizado.")
         return redirect(reverse("members:manage_workspaces", kwargs={"membership_id": membership_id}))
 
     current = {
@@ -270,7 +270,7 @@ def accept_invite(request: HttpRequest, token: str) -> HttpResponse:
                 {"invitation": invitation, "error": str(exc)},
                 status=422,
             )
-        messages.success(request, f"You have joined {invitation.organization.name}.")
+        messages.success(request, f"Você entrou em {invitation.organization.name}.")
         return redirect(reverse("index"))
 
     return render(request, "members/accept_invite.html", {"invitation": invitation})

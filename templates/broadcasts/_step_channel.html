@@ -12,11 +12,11 @@ notice the later steps show, which arrives as composer.window_notice.
       hx-target="#broadcast-wizard"
       hx-swap="innerHTML">
     {% csrf_token %}
-    <h2 class="wizard-title">Choose a channel</h2>
-    <p class="wizard-lede">Only channels whose platform permits broadcasts are listed.</p>
+    <h2 class="wizard-title">Escolha um canal</h2>
+    <p class="wizard-lede">Somente canais cuja plataforma permite disparos são exibidos.</p>
 
     <fieldset class="option-cards">
-        <legend class="sr-only">Channel</legend>
+        <legend class="sr-only">Canal</legend>
         {% for connection in connections %}
         <label class="option-card">
             <input type="radio" name="connection_id" value="{{ connection.id }}"
@@ -29,11 +29,11 @@ notice the later steps show, which arrives as composer.window_notice.
             <span class="option-card-radio" aria-hidden="true"></span>
         </label>
         {% empty %}
-        {% include "components/empty_state.html" with icon="channels" title="No channel accepts broadcasts" body="Connect one whose platform permits broadcasts, then come back." %}
+        {% include "components/empty_state.html" with icon="channels" title="Nenhum canal aceita disparos" body="Conecte um canal cuja plataforma permita disparos e volte aqui." %}
         {% endfor %}
     </fieldset>
 
     <div class="wizard-actions">
-        <button type="submit" class="btn-pill-primary" {% if not connections %}disabled{% endif %}>Continue</button>
+        <button type="submit" class="btn-pill-primary" {% if not connections %}disabled{% endif %}>Continuar</button>
     </div>
 </form>

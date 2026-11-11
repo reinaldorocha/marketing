@@ -27,17 +27,17 @@ export interface PublishView {
 }
 
 const SAVE_COPY: Record<string, string> = {
-  clean: "No changes",
-  dirty: "Unsaved changes",
+  clean: "Sem alterações",
+  dirty: "Alterações não salvas",
   saving: "Saving…",
-  saved: "Saved",
-  rejected: "Not saved",
-  error: "Save failed",
+  saved: "Salvo",
+  rejected: "Não salvo",
+  error: "Falha ao salvar",
 };
 
 const PENDING: ReadonlySet<string> = new Set(UNSAVED);
 
-export const OFFLINE_HINT = "Stops this flow now, including conversations already in it.";
+export const OFFLINE_HINT = "Interrompe este fluxo imediatamente, inclusive as conversas que já estão nele.";
 
 export function publishView(
   save: SaveSlice,
@@ -54,14 +54,14 @@ export function publishView(
   // last live version is not a draft — whereas an edit made since is, and
   // "Set live" will publish it, so that one must still say so.
   const neverLive = save.version !== null && !save.version.published && !save.version.published_at;
-  const saveLabel = !pending && neverLive && save.version ? `${saveCopy} · Draft v${save.version.version}` : saveCopy;
+  const saveLabel = !pending && neverLive && save.version ? `${saveCopy} · Rascunho v${save.version.version}` : saveCopy;
 
   if (flowStatus === "archived") {
     return {
-      statusLabel: "Archived",
+      statusLabel: "Arquivado",
       statusTone: "plain",
       saveLabel,
-      publishLabel: "Set live",
+      publishLabel: "Ativar",
       publishHint: null,
       action: "publish",
       secondary: null,
@@ -78,12 +78,12 @@ export function publishView(
     // "Live", the word the flow list's pill and switch use for the same state
     // (HANDOFF §3: "status pill (Draft / Live vN)"), with the version that is
     // running so an edit-in-progress is visibly not it.
-    const live = save.publishedVersion ? `Live v${save.publishedVersion.version}` : "Live";
+    const live = save.publishedVersion ? `Ativo v${save.publishedVersion.version}` : "Ativo";
     return {
-      statusLabel: allOff ? `${live} · Triggers off` : triggerCount === 0 ? `${live} · No triggers` : live,
+      statusLabel: allOff ? `${live} · Gatilhos desativados` : triggerCount === 0 ? `${live} · Sem gatilhos` : live,
       statusTone: allOff || triggerCount === 0 ? "warning" : "success",
       saveLabel,
-      publishLabel: action === "enable" ? "Turn on triggers" : action === "offline" ? "Set offline" : "Set live",
+      publishLabel: action === "enable" ? "Ativar gatilhos" : action === "offline" ? "Desativar" : "Ativar",
       publishHint: action === "offline" ? OFFLINE_HINT : null,
       action,
       secondary: action === "offline" ? null : "offline",
@@ -92,10 +92,10 @@ export function publishView(
 
   if (flowStatus === "offline") {
     return {
-      statusLabel: "Offline",
+      statusLabel: "Desativado",
       statusTone: "warning",
       saveLabel,
-      publishLabel: "Set live",
+      publishLabel: "Ativar",
       publishHint: null,
       action: "publish",
       secondary: null,
@@ -103,10 +103,10 @@ export function publishView(
   }
 
   return {
-    statusLabel: "Draft",
+    statusLabel: "Rascunho",
     statusTone: "plain",
     saveLabel,
-    publishLabel: "Set live",
+    publishLabel: "Ativar",
     publishHint: null,
     action: "publish",
     secondary: null,

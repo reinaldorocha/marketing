@@ -49,7 +49,7 @@ def update_settings(request: OrgRequest) -> HttpResponse:
     # Strip first, then reject — see apps/workspaces/views.py for the same trap.
     name = (request.POST.get("name") or "").strip()[:100]
     if not name:
-        messages.error(request, "An organization needs a name.")
+        messages.error(request, "A organização precisa de um nome.")
         return redirect(reverse("organizations:settings"))
     org.name = name
     # Unlike a workspace's, this one is never blank — it is the fallback every
@@ -58,12 +58,12 @@ def update_settings(request: OrgRequest) -> HttpResponse:
     # check is is_valid_timezone and not membership of timezone_choices().
     submitted_timezone = (request.POST.get("default_timezone") or org.default_timezone).strip()[:63]
     if not is_valid_timezone(submitted_timezone):
-        messages.error(request, "That is not a timezone we recognise.")
+        messages.error(request, "Esse fuso horário não é reconhecido.")
         return redirect(reverse("organizations:settings"))
     org.default_timezone = submitted_timezone
     org.logo_url = (request.POST.get("logo_url") or "").strip()
     org.save(update_fields=["name", "default_timezone", "logo_url", "updated_at"])
-    messages.success(request, "Organization settings saved.")
+    messages.success(request, "Configurações da organização salvas.")
     return redirect(reverse("organizations:settings"))
 
 
@@ -127,10 +127,10 @@ def billing_view(request: OrgRequest) -> HttpResponse:
 def create_workspace(request: OrgRequest) -> HttpResponse:
     name = (request.POST.get("name") or "").strip()[:100]
     if not name:
-        messages.error(request, "A workspace needs a name.")
+        messages.error(request, "O espaço de trabalho precisa de um nome.")
         return redirect(reverse("organizations:workspaces"))
     if Workspace.objects.for_org(request.org.pk).filter(name=name).exists():
-        messages.error(request, "A workspace with that name already exists.")
+        messages.error(request, "Já existe um espaço de trabalho com esse nome.")
         return redirect(reverse("organizations:workspaces"))
     # The count and the insert are one critical section. See
     # apps/billing/entitlements.organization_locked: a lock released when the
@@ -145,7 +145,7 @@ def create_workspace(request: OrgRequest) -> HttpResponse:
         # The creator becomes its admin, or nobody can configure the thing they
         # just made.
         WorkspaceMembership.objects.create(user=request.user, workspace=workspace, workspace_role=WorkspaceRole.ADMIN)
-    messages.success(request, f"Created {workspace.name}.")
+    messages.success(request, f"{workspace.name} foi criado.")
     return redirect(reverse("organizations:workspaces"))
 
 
@@ -178,12 +178,12 @@ def set_workspace_archived(request: OrgRequest, target_id: str) -> HttpResponse:
                 return redirect(reverse("organizations:workspaces"))
             workspace.is_archived = archiving
             workspace.save(update_fields=["is_archived", "updated_at"])
-            messages.success(request, f"Restored {workspace.name}.")
+            messages.success(request, f"{workspace.name} foi restaurado.")
             return redirect(reverse("organizations:workspaces"))
 
     workspace.is_archived = archiving
     workspace.save(update_fields=["is_archived", "updated_at"])
-    messages.success(request, f"{'Archived' if workspace.is_archived else 'Restored'} {workspace.name}.")
+    messages.success(request, f"{'Arquivado' if workspace.is_archived else 'Restaurado'}: {workspace.name}.")
     return redirect(reverse("organizations:workspaces"))
 
 

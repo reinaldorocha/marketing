@@ -51,7 +51,7 @@ export function ConditionKeySelect(props: FieldProps) {
         disabled={readOnly}
         onChange={(event) => set(path, event.target.value, `key:${path.join(".")}`)}
       >
-        <option value="">Choose…</option>
+        <option value="">Escolha…</option>
         {options.map((option) => (
           <option key={option.id} value={option.id}>
             {option.label}
@@ -61,7 +61,7 @@ export function ConditionKeySelect(props: FieldProps) {
       </select>
       {options.length === 0 ? (
         <p className="fb-field-help">
-          Nothing to choose yet. Create one, then return to this rule.
+          Ainda não há itens para selecionar. Crie um e depois volte a esta regra.
         </p>
       ) : null}
     </FieldShell>

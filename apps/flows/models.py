@@ -64,10 +64,10 @@ class FlowStatus(models.TextChoices):
     as a draft somebody never finished.
     """
 
-    DRAFT = "draft", "Draft"
-    ACTIVE = "active", "Active"
-    OFFLINE = "offline", "Offline"
-    ARCHIVED = "archived", "Archived"
+    DRAFT = "draft", "Rascunho"
+    ACTIVE = "active", "Ativo"
+    OFFLINE = "offline", "Desativado"
+    ARCHIVED = "archived", "Arquivado"
 
 
 class Flow(WorkspaceScopedModel):
@@ -97,7 +97,6 @@ class Flow(WorkspaceScopedModel):
         related_name="flows",
         help_text="Conexão padrão associada a este fluxo.",
     )
-
     # Follower Gate Settings (can override or inherit connection settings)
     require_follower = models.BooleanField(
         null=True,

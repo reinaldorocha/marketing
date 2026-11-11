@@ -11,7 +11,7 @@ empty row.
     {% for group in groups %}
     <template x-for="value in {{ model }}['{{ group.key|escapejs }}']" :key="'{{ group.key|escapejs }}:' + value">
         <button type="button" class="filter-chip"
-                :aria-label="'Remove filter ' + fcGroups['{{ group.key|escapejs }}'] + ': ' + (fcLabels['{{ group.key|escapejs }}'][value] || value)"
+                :aria-label="'Remover filtro ' + fcGroups['{{ group.key|escapejs }}'] + ': ' + (fcLabels['{{ group.key|escapejs }}'][value] || value)"
                 @click="{{ model }}['{{ group.key|escapejs }}'] = {{ model }}['{{ group.key|escapejs }}'].filter(v => v !== value); {{ onchange }}">
             <span class="filter-chip-key">{{ group.label }}:</span>
             <span x-text="fcLabels['{{ group.key|escapejs }}'][value] || value"></span>
@@ -19,5 +19,5 @@ empty row.
         </button>
     </template>
     {% endfor %}
-    <button type="button" class="filter-clear" @click="Object.keys({{ model }}).forEach(k => {{ model }}[k] = []); {{ onchange }}">Clear all</button>
+    <button type="button" class="filter-clear" @click="Object.keys({{ model }}).forEach(k => {{ model }}[k] = []); {{ onchange }}">Limpar tudo</button>
 </div>

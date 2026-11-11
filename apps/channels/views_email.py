@@ -210,7 +210,7 @@ def _connect(request: WorkspaceRequest, provider: str) -> str:
     except IntegrityError:
         return DUPLICATE_ACCOUNT_ERROR
 
-    messages.success(request, f"Connected {domain}.")
+    messages.success(request, f"{domain} conectado.")
     return ""
 
 
@@ -224,7 +224,7 @@ def _credentials(request: WorkspaceRequest, provider: str, from_address: str) ->
     if provider == "resend":
         api_key = (request.POST.get("api_key") or "").strip()
         if not api_key:
-            return "Paste the API key from your Resend dashboard."
+            return "Informe a chave de API do painel do Resend."
         # Resend's own webhook signing secret. Optional at connect time: bounce
         # handling needs it, sending does not, and an operator who has not
         # created the endpoint yet should not be blocked from connecting.
@@ -234,9 +234,9 @@ def _credentials(request: WorkspaceRequest, provider: str, from_address: str) ->
         secret = (request.POST.get("secret_access_key") or "").strip()
         region = (request.POST.get("region") or "").strip().lower()
         if not key_id or not secret or not region:
-            return "Enter the access key, the secret and the AWS region."
+            return "Informe a chave de acesso, o segredo e a região da AWS."
         if not AWS_REGION_RE.match(region):
-            return "That is not an AWS region name. It looks like eu-west-1 or us-gov-east-1."
+            return "Esse não é um nome de região AWS válido, como eu-west-1 ou us-gov-east-1."
         return {
             **common,
             "access_key_id": key_id,
@@ -251,13 +251,13 @@ def _credentials(request: WorkspaceRequest, provider: str, from_address: str) ->
 
     host = (request.POST.get("host") or "").strip()
     if not host:
-        return "Enter the SMTP host your provider gave you."
+        return "Informe o host SMTP fornecido pelo seu provedor."
     port = (request.POST.get("port") or "").strip() or "587"
     if not port.isdigit():
-        return "Enter a numeric SMTP port, usually 587 for STARTTLS or 465 for SSL."
+        return "Informe uma porta SMTP numérica, normalmente 587 para STARTTLS ou 465 para SSL."
     security = (request.POST.get("security") or "starttls").strip().lower()
     if security not in {"starttls", "ssl", "none"}:
-        return "Choose STARTTLS, SSL or none for the connection encryption."
+        return "Escolha STARTTLS, SSL ou nenhuma opção para a criptografia da conexão."
     return {
         **common,
         "host": host,
@@ -309,9 +309,9 @@ def update_credentials(request: WorkspaceRequest, workspace_id: str, connection_
     if changed:
         connection.credentials = credentials  # type: ignore[assignment]
         connection.save(update_fields=["credentials", "updated_at"])
-        messages.success(request, "Updated this channel's webhook settings.")
+        messages.success(request, "Configurações de webhook deste canal atualizadas.")
     else:
-        messages.info(request, "Nothing to update.")
+        messages.info(request, "Não há alterações para salvar.")
     return redirect(reverse("channels:detail", kwargs={"workspace_id": workspace_id, "connection_id": connection.pk}))
 
 

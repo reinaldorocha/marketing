@@ -187,6 +187,21 @@ class TestTheBootTimeAllowlistChecks:
 
         assert [error.id for error in check_condition_allowlists()] == ["contacts.E001"]
 
+    def test_an_unrecognised_identity_extra_is_reported(self, monkeypatch):
+        from apps.contacts import conditions
+        from apps.contacts.checks import check_condition_allowlists
+
+        broken = dict(conditions.SYSTEM_FIELDS)
+        broken["oops"] = conditions.SystemField(
+            "channel_identities__extra__arbitrary_path",
+            conditions.TYPE_TEXT,
+            "Oops",
+            nullable=True,
+        )
+        monkeypatch.setattr(conditions, "SYSTEM_FIELDS", broken)
+
+        assert [error.id for error in check_condition_allowlists()] == ["contacts.E001"]
+
     def test_a_wrong_nullability_declaration_is_reported(self, monkeypatch):
         from apps.contacts import conditions
         from apps.contacts.checks import check_condition_allowlists

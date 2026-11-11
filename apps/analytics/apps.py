@@ -20,4 +20,4 @@ class AnalyticsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.analytics"
     label = "analytics"
-    verbose_name = "Analytics"
+    verbose_name = "Análises"

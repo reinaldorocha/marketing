@@ -22,7 +22,7 @@ const EMPTY_COPY: Partial<Record<ListKey, string>> = {
   custom_fields: "Custom fields arrive with the contacts app. Type a name to use it now.",
   sequences: "Sequences arrive with the sequences app. Type a name to use it now.",
   flows: "This workspace has no other flows yet.",
-  members: "No workspace members to choose from.",
+  members: "Não há membros neste espaço para selecionar.",
   connections: "No channels are connected yet.",
 };
 
@@ -68,7 +68,7 @@ export function picklistSelect(list: ListKey, { creatable }: { creatable: boolea
           disabled={readOnly}
           onChange={(event) => set(path, event.target.value, `pick:${path.join(".")}`)}
         >
-          <option value="">Choose…</option>
+          <option value="">Escolha…</option>
           {options.map((option) => (
             <option key={option.id} value={option.id}>
               {option.label}
@@ -83,7 +83,7 @@ export function picklistSelect(list: ListKey, { creatable }: { creatable: boolea
               "flow_id (no longer available)", and an id tells the reader
               nothing they can act on. What they need to know is that this one
               points at something gone, and to pick again. */}
-          {current && !known ? <option value={current}>Whatever this pointed at has gone</option> : null}
+          {current && !known ? <option value={current}>O item selecionado não existe mais</option> : null}
         </select>
         {options.length === 0 ? <p className="fb-field-help">{EMPTY_COPY[list]}</p> : null}
       </FieldShell>
@@ -113,7 +113,7 @@ export function MemberMultiSelect(props: FieldProps) {
 
   return (
     <FieldShell {...props}>
-      {picklists.members.length === 0 ? <p className="fb-field-help">No workspace members to choose from.</p> : null}
+      {picklists.members.length === 0 ? <p className="fb-field-help">Não há membros neste espaço para selecionar.</p> : null}
       {picklists.members.map((member) => (
         <label key={member.id} className="flex items-center gap-2 text-xs mb-1">
           <input

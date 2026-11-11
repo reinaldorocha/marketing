@@ -43,21 +43,21 @@ to the button, and tabbing out of it closes it too.
     <button type="button" x-ref="trigger" class="filter-trigger{% if icon_only %} filter-trigger-icon{% endif %}"
             :class="Object.values({{ model }}).some(a => a.length) && 'is-active'"
             @click="fpToggle($event)"
-            {% if icon_only %}title="Filter" {% endif %}aria-haspopup="dialog" :aria-expanded="open ? 'true' : 'false'">
+            {% if icon_only %}title="Filtrar" {% endif %}aria-haspopup="dialog" :aria-expanded="open ? 'true' : 'false'">
         {% include "partials/_nav_icon.html" with name="filter" icon_size=15 %}
-        {% if icon_only %}<span class="sr-only">Filter</span>{% else %}Filter{% endif %}
+        {% if icon_only %}<span class="sr-only">Filtrar</span>{% else %}Filtrar{% endif %}
         <span class="filter-trigger-count" x-show="Object.values({{ model }}).some(a => a.length)" x-cloak
               x-text="Object.values({{ model }}).reduce((n, a) => n + a.length, 0)"></span>
     </button>
     <div x-show="open" x-cloak x-ref="panel"
          :style="`top:${top}px; left:${left}px;`"
          class="filter-popover fixed z-50"
-         role="dialog" aria-label="Filters">
+         role="dialog" aria-label="Filtros">
         <div class="filter-popover-head">
-            <span class="filter-popover-title">Filters</span>
+            <span class="filter-popover-title">Filtros</span>
             <button type="button" class="filter-clear"
                     x-show="Object.values({{ model }}).some(a => a.length)"
-                    @click="Object.keys({{ model }}).forEach(k => {{ model }}[k] = []); {{ onchange }}">Clear all</button>
+                    @click="Object.keys({{ model }}).forEach(k => {{ model }}[k] = []); {{ onchange }}">Limpar tudo</button>
         </div>
         {% for group in groups %}
         <div class="filter-section" role="group" aria-label="{{ group.label }}">
@@ -71,14 +71,14 @@ to the button, and tabbing out of it closes it too.
                     {{ opt.label }}{% if opt.count is not None %} <span class="filter-pill-count">{{ opt.count }}</span>{% endif %}
                 </button>
                 {% empty %}
-                <p class="text-[13px]" style="color: var(--text-tertiary);">Nothing to filter by yet.</p>
+                <p class="text-[13px]" style="color: var(--text-tertiary);">Ainda não há opções para filtrar.</p>
                 {% endfor %}
             </div>
         </div>
         {% endfor %}
         <div class="filter-popover-foot">
             <button type="button" class="btn-pill-secondary btn-pill-sm" @click="fpClose()"
-                    x-text="n === null ? 'Done' : (n === 0 ? 'No {{ noun_plural|escapejs }} match' : 'Show ' + n + ' ' + (n === 1 ? '{{ noun|escapejs }}' : '{{ noun_plural|escapejs }}'))">Done</button>
+                    x-text="n === null ? 'Concluído' : (n === 0 ? 'Nenhum resultado' : 'Mostrar ' + n + ' ' + (n === 1 ? '{{ noun|escapejs }}' : '{{ noun_plural|escapejs }}'))">Concluído</button>
         </div>
     </div>
 </div>

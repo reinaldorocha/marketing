@@ -109,8 +109,8 @@ export function MediaPickerDialog({ env, platform, kind: fixedKind, onPick, onCl
           </select>
         )}
         <select className="bb-select w-32" aria-label="Folder" value={folder} onChange={(event) => setFolder(event.target.value)}>
-          <option value="">All folders</option>
-          <option value={ROOT_FOLDER}>No folder</option>
+          <option value="">Todas as pastas</option>
+          <option value={ROOT_FOLDER}>Sem pasta</option>
           {folders.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.name}
@@ -122,8 +122,8 @@ export function MediaPickerDialog({ env, platform, kind: fixedKind, onPick, onCl
         </button>
       </div>
 
-      {status === "error" ? <p className="fb-field-error">The media library could not be reached.</p> : null}
-      {status !== "loading" && assets.length === 0 ? <p className="fb-empty">Nothing in the library matches.</p> : null}
+      {status === "error" ? <p className="fb-field-error">Não foi possível acessar a biblioteca de mídia.</p> : null}
+      {status !== "loading" && assets.length === 0 ? <p className="fb-empty">Nenhum item da biblioteca corresponde à busca.</p> : null}
 
       <div className="fb-asset-grid">
         {assets.map((asset) => (

@@ -176,7 +176,7 @@ def revoke_key(request: OrgRequest, api_key_id: Any) -> HttpResponse:
         raise Http404("No such API key.")
 
     if revoke_api_key(api_key):
-        messages.success(request, f"Revoked “{api_key.name}”.")
+        messages.success(request, f"“{api_key.name}” foi revogada.")
     else:
-        messages.info(request, f"“{api_key.name}” was already revoked.")
+        messages.info(request, f"“{api_key.name}” já estava revogada.")
     return redirect(reverse("settings_org_api_keys"))

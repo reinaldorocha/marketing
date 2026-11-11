@@ -31,7 +31,7 @@ goes.
         {% endcomment %}
         {% if can_edit_flows %}
         <a class="{% if setup_remaining %}btn-pill-secondary{% else %}btn-pill-primary{% endif %} flex-shrink-0" href="{% url 'flows:list' workspace_id=request.workspace.id %}">
-            {% include "partials/_nav_icon.html" with name="flows" icon_size=16 %} New flow
+            {% include "partials/_nav_icon.html" with name="flows" icon_size=16 %} Novo fluxo
         </a>
         {% endif %}
     </div>
@@ -45,16 +45,16 @@ goes.
     <section class="card p-6 mb-5">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
             <div>
-                <h2 class="section-title">Finish setting up</h2>
+                <h2 class="section-title">Concluir configuração</h2>
                 <p class="text-[13px] mt-1" style="color: var(--text-tertiary);">
-                    {{ setup_remaining }} step{{ setup_remaining|pluralize }} left. About five minutes.
+                    Restam {{ setup_remaining }} etapa{{ setup_remaining|pluralize }}. Cerca de cinco minutos.
                 </p>
             </div>
             <div class="flex items-center gap-3">
                 <div class="w-[180px] h-1.5 rounded-full overflow-hidden" style="background: var(--surface-2);">
                     <div class="h-full" style="width: {{ setup_percent }}%; background: var(--success-500);"></div>
                 </div>
-                <span class="text-[13px] font-semibold" style="color: var(--text-secondary);">{{ setup_done }} of {{ setup_steps|length }}</span>
+                <span class="text-[13px] font-semibold" style="color: var(--text-secondary);">{{ setup_done }} de {{ setup_steps|length }}</span>
             </div>
         </div>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -98,12 +98,12 @@ goes.
     <section class="card p-[22px] mb-5">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
             <div>
-                <h2 class="section-title">Start from a template</h2>
+                <h2 class="section-title">Começar por um modelo</h2>
                 <p class="text-[13px] mt-1" style="color: var(--text-tertiary);">
-                    {{ flow_template_total }} ready-made flow{{ flow_template_total|pluralize }}. Pick one and change the words to suit you.
+                    {{ flow_template_total }} fluxo{{ flow_template_total|pluralize }} pronto{{ flow_template_total|pluralize }} para uso. Escolha um e adapte o conteúdo.
                 </p>
             </div>
-            <a class="btn-pill-secondary btn-pill-sm flex-shrink-0" href="{% url 'flows:template_gallery' workspace_id=request.workspace.id %}">Browse all {{ flow_template_total }}</a>
+            <a class="btn-pill-secondary btn-pill-sm flex-shrink-0" href="{% url 'flows:template_gallery' workspace_id=request.workspace.id %}">Ver todos ({{ flow_template_total }})</a>
         </div>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {% comment %}
@@ -123,28 +123,28 @@ goes.
         {% if kpis %}
         <section class="card p-6">
             <div class="flex items-baseline justify-between mb-4">
-                <h2 class="section-title">Last 7 days</h2>
+                <h2 class="section-title">Últimos 7 dias</h2>
                 {% if can_view_analytics %}
                 <a class="text-[13px] font-semibold underline underline-offset-2" style="color: var(--text-primary);"
-                   href="{% url 'analytics:overview' workspace_id=request.workspace.id %}?days=7">See insights</a>
+                   href="{% url 'analytics:overview' workspace_id=request.workspace.id %}?days=7">Ver análises</a>
                 {% endif %}
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-5">
                 <div>
                     <div class="figure">{{ kpis.messages_in }}</div>
-                    <div class="figure-label mt-1">Messages in</div>
+                    <div class="figure-label mt-1">Mensagens recebidas</div>
                 </div>
                 <div>
                     <div class="figure">{{ kpis.messages_out }}</div>
-                    <div class="figure-label mt-1">Messages out</div>
+                    <div class="figure-label mt-1">Mensagens enviadas</div>
                 </div>
                 <div>
                     <div class="figure">{{ kpis.contacts_new }}</div>
-                    <div class="figure-label mt-1">New contacts</div>
+                    <div class="figure-label mt-1">Novos contatos</div>
                 </div>
                 <div>
                     <div class="figure">{{ kpis.active_flows }}</div>
-                    <div class="figure-label mt-1">Live flows</div>
+                    <div class="figure-label mt-1">Fluxos ativos</div>
                 </div>
             </div>
             {% comment %}
@@ -154,7 +154,7 @@ goes.
               and "broken" should not look the same.
             {% endcomment %}
             <div class="flex items-end gap-2 h-[110px] mt-6" role="img"
-                 aria-label="Messages received per day over the last seven days">
+                 aria-label="Mensagens recebidas por dia nos últimos sete dias">
                 {% for day in kpis.daily_messages %}
                 <div class="flex-1 rounded-t-md" style="height: {{ day.height }}%; min-height: 3px; background: var(--neutral-300);"
                      title="{{ day.date|date:'D j M' }}: {{ day.messages_in }}"></div>
@@ -167,7 +167,7 @@ goes.
         {% endif %}
 
         <section class="card p-6">
-            <h2 class="section-title mb-4">Needs you</h2>
+            <h2 class="section-title mb-4">Requer sua atenção</h2>
             {% for item in needs_you %}
             <a class="flex gap-3 py-3.5 no-underline {% if not forloop.last %}border-b{% endif %}"
                style="border-color: var(--divider);" href="{{ item.url }}">
@@ -181,7 +181,7 @@ goes.
                 </span>
             </a>
             {% empty %}
-            <p class="text-[13px]" style="color: var(--text-tertiary);">Nothing is waiting on you.</p>
+            <p class="text-[13px]" style="color: var(--text-tertiary);">Não há pendências para você.</p>
             {% endfor %}
         </section>
     </div>

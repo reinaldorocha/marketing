@@ -127,8 +127,8 @@ def _check_edges(edges: list[dict[str, Any]], specs: dict[str, NodeSpec], config
                 Issue(
                     code="dangling_edge",
                     message=(
-                        "A connection points at a step that is not in this flow any more. "
-                        "Delete the connection and draw it again."
+                        "Uma conexão aponta para uma etapa que não existe mais neste fluxo. "
+                        "Exclua a conexão e crie-a novamente."
                     ),
                     edge_id=edge_id,
                 )
@@ -141,8 +141,8 @@ def _check_edges(edges: list[dict[str, Any]], specs: dict[str, NodeSpec], config
                     Issue(
                         code="note_node_connected",
                         message=(
-                            "A note is connected to something. Notes are there for you to read and "
-                            "take no part in what the flow does, so delete the connection."
+                            "Uma anotação está conectada a outra etapa. Anotações servem apenas para consulta "
+                            "e não participam do fluxo; exclua essa conexão."
                         ),
                         edge_id=edge_id,
                         node_id=node_id,
@@ -155,8 +155,8 @@ def _check_edges(edges: list[dict[str, Any]], specs: dict[str, NodeSpec], config
                 Issue(
                     code="terminal_node_has_outgoing_edge",
                     message=(
-                        "This step ends the flow, so nothing joined after it can ever run. "
-                        "Delete the connection leaving it."
+                        "Esta etapa encerra o fluxo, então nenhuma etapa conectada depois dela será executada. "
+                        "Exclua a conexão de saída."
                     ),
                     edge_id=edge_id,
                     node_id=source,
@@ -169,7 +169,7 @@ def _check_edges(edges: list[dict[str, Any]], specs: dict[str, NodeSpec], config
                 Issue(
                     code="malformed_handle",
                     message=(
-                        "A connection leaves this step by a path that does not exist. Delete it and draw it again."
+                        "Uma conexão sai desta etapa por um caminho que não existe. Exclua-a e crie-a novamente."
                     ),
                     edge_id=edge_id,
                     node_id=source,
@@ -183,9 +183,8 @@ def _check_edges(edges: list[dict[str, Any]], specs: dict[str, NodeSpec], config
                 Issue(
                     code="handle_not_available",
                     message=(
-                        "A connection leaves this step by a path it no longer has, usually because "
-                        "the button or the option it followed was removed. Delete the connection "
-                        "and draw it again."
+                        "Uma conexão sai desta etapa por um caminho que ela não possui mais, geralmente porque "
+                        "o botão ou a opção correspondente foi removido. Exclua a conexão e crie-a novamente."
                     ),
                     edge_id=edge_id,
                     node_id=source,
@@ -199,8 +198,8 @@ def _check_edges(edges: list[dict[str, Any]], specs: dict[str, NodeSpec], config
                 Issue(
                     code="duplicate_handle_edge",
                     message=(
-                        "Two connections leave this step the same way, and only one of them will be "
-                        "followed. Delete the one you do not want."
+                        "Duas conexões saem desta etapa pelo mesmo caminho e apenas uma será seguida. "
+                        "Exclua a conexão que não deseja usar."
                     ),
                     edge_id=edge_id,
                     node_id=source,
@@ -280,8 +279,8 @@ def _check_reply_ids(nodes: list[dict[str, Any]]) -> list[Issue]:
             Issue(
                 code="duplicate_reply_id",
                 message=(
-                    f"A button and a quick reply on this step are both called {reply_id!r}. A reply "
-                    f"only carries the name, so the flow cannot tell which one was tapped. Rename one."
+                    f"Um botão e uma resposta rápida desta etapa usam o mesmo identificador {reply_id!r}. "
+                    f"A resposta recebida contém apenas esse identificador; renomeie um deles."
                 ),
                 node_id=node.get("id"),
                 path="quick_replies",
@@ -327,7 +326,7 @@ def _check_entry_nodes(routable: list[str], entries: list[str]) -> list[Issue]:
         return [
             Issue(
                 code="no_entry_node",
-                message="This flow has no steps yet, so there is nothing to run. Add one.",
+                message="Este fluxo ainda não tem etapas para executar. Adicione uma etapa.",
             )
         ]
 
@@ -336,9 +335,8 @@ def _check_entry_nodes(routable: list[str], entries: list[str]) -> list[Issue]:
             Issue(
                 code="no_entry_node",
                 message=(
-                    "Every step follows another one, so there is nowhere for the flow to begin. "
-                    "One step has to have nothing pointing into it: find the connection that loops "
-                    "back to the step you want first, and delete it."
+                    "Todas as etapas recebem uma conexão, então não há onde o fluxo começar. "
+                    "Uma etapa precisa ficar sem conexões de entrada; encontre e exclua a conexão que volta para a primeira etapa."
                 ),
             )
         ]
@@ -351,8 +349,8 @@ def _check_entry_nodes(routable: list[str], entries: list[str]) -> list[Issue]:
             Issue(
                 code="multiple_entry_nodes",
                 message=(
-                    f"{len(entries)} steps have nothing pointing into them, so it is not clear where "
-                    f"this flow begins. Exactly one may. Join the others up, or delete them."
+                    f"{len(entries)} etapas não têm conexões de entrada, então não está claro onde "
+                    f"este fluxo começa. Apenas uma pode ficar assim; conecte ou exclua as demais."
                 ),
                 node_id=node_id,
             )
@@ -393,7 +391,7 @@ def _unreachable_warnings(
     return [
         Issue(
             code="unreachable_node",
-            message="Nothing leads to this step, so it will never run. Join it up, or delete it.",
+            message="Nenhuma conexão leva a esta etapa, então ela nunca será executada. Conecte-a ou exclua-a.",
             node_id=node_id,
         )
         for node_id in sorted(routable - seen)
@@ -427,7 +425,7 @@ def _capability_warnings(nodes: list[dict[str, Any]], platforms: Sequence[str]) 
                     issues.append(
                         _warn(
                             "no_connection_for_node",
-                            f"This step uses {r_type} recipient, but no WhatsApp Evolution account is connected here.",
+                            f"Esta etapa usa o destinatário {r_type}, mas não há uma conta WhatsApp Evolution conectada neste espaço.",
                             node,
                             "config.recipient_type",
                         )
@@ -441,7 +439,7 @@ def _capability_warnings(nodes: list[dict[str, Any]], platforms: Sequence[str]) 
                 issues.append(
                     _warn(
                         "no_connection_for_node",
-                        f"This step sends over {required}, and no {required} account is connected here.",
+                        f"Esta etapa envia por {required}, mas não há uma conta {required} conectada neste espaço.",
                         node,
                     )
                 )
@@ -463,8 +461,8 @@ def _send_message_warnings(
     if recipient_type in ("custom", "group") and platform != Platform.WHATSAPP_EVOLUTION.value:
         yield _warn(
             "unsupported_recipient_type",
-            f"{platform} does not support alternative recipient ({recipient_type}). "
-            f"Messages would be misdirected to the customer contact.",
+            f"{platform} não oferece destinatário alternativo ({recipient_type}). "
+            f"A mensagem seria direcionada ao contato principal.",
             node,
             "config.recipient_type",
         )
@@ -475,7 +473,7 @@ def _send_message_warnings(
         if isinstance(block_type, str) and block_type != "text" and not capabilities.supports_block(block_type):
             yield _warn(
                 "capability_unsupported",
-                f"{platform} cannot show {block_type} properly. It will be sent in a simpler form.",
+                f"{platform} não exibe {block_type} adequadamente. O conteúdo será enviado em uma forma mais simples.",
                 node,
                 f"config.blocks[{index}]",
             )
@@ -483,7 +481,7 @@ def _send_message_warnings(
         if isinstance(text, str) and len(text) > capabilities.max_text_len:
             yield _warn(
                 "capability_limit_exceeded",
-                f"{platform} cuts messages off at {capabilities.max_text_len} characters and this one is {len(text)}.",
+                f"{platform} limita mensagens a {capabilities.max_text_len} caracteres e esta possui {len(text)}.",
                 node,
                 f"config.blocks[{index}].text",
             )
@@ -494,8 +492,8 @@ def _send_message_warnings(
         # because the buttons took the only control set the message has.
         yield _warn(
             "capability_unsupported",
-            f"{platform} shows buttons or quick replies, not both. The quick replies will "
-            "arrive as a numbered list at the end of the message instead.",
+            f"{platform} mostra botões ou respostas rápidas, mas não os dois juntos. As respostas rápidas "
+            "serão enviadas como lista numerada no fim da mensagem.",
             node,
             "config.quick_replies",
         )
@@ -510,14 +508,14 @@ def _send_message_warnings(
         if not supported:
             yield _warn(
                 "capability_unsupported",
-                f"{platform} does not support {label}. They will be added to the end of the message as text instead.",
+                f"{platform} não oferece suporte a {label}. Eles serão adicionados ao fim da mensagem como texto.",
                 node,
                 f"config.{key}",
             )
         elif len(items) > ceiling:
             yield _warn(
                 "capability_limit_exceeded",
-                f"{platform} allows {ceiling} {label} and this step has {len(items)}.",
+                f"{platform} permite {ceiling} {label} e esta etapa possui {len(items)}.",
                 node,
                 f"config.{key}",
             )
@@ -527,7 +525,7 @@ def _send_message_warnings(
             if isinstance(button, dict) and button.get("action") == "url":
                 yield _warn(
                     "capability_unsupported",
-                    f"{platform} has no link buttons; the URL is appended to the text instead.",
+                    f"{platform} não possui botões de link; a URL será adicionada ao texto.",
                     node,
                     f"config.buttons[{index}]",
                 )

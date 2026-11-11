@@ -10,13 +10,13 @@ thinks in: who you are, how you sign in, and where you are signed in.
 {% block content_wrap %} is cleared because this page brings its own cards; the
 settings layout only wraps pages that are still bare HTML.
 {% endcomment %}
-{% block title %}Profile · BrightBean Chat{% endblock %}
+{% block title %}Perfil · BrightBean Chat{% endblock %}
 {% block content_wrap %}{% endblock %}
 
 {% block content %}
 <div class="max-w-[1060px] w-full">
-    <h1 class="page-title">Profile</h1>
-    <p class="page-lede mt-1.5 mb-6">How you appear to your team and in internal notes.</p>
+    <h1 class="page-title">Perfil</h1>
+    <p class="page-lede mt-1.5 mb-6">Como você aparece para sua equipe e nas notas internas.</p>
 
     <form class="card p-6 mb-5" method="post" action="{% url 'accounts:settings' %}">
         {% csrf_token %}
@@ -28,26 +28,26 @@ settings layout only wraps pages that are still bare HTML.
             </div>
         </div>
 
-        <label class="block text-[13px] font-semibold mb-1.5" for="account-name" style="color: var(--text-primary);">Name</label>
+        <label class="block text-[13px] font-semibold mb-1.5" for="account-name" style="color: var(--text-primary);">Nome</label>
         <input id="account-name" class="form-input-styled w-full" type="text" name="name"
                value="{{ request.user.name }}" maxlength="255" placeholder="Marta Kovács">
         <p class="text-[13px] mt-1.5 mb-5" style="color: var(--text-tertiary);">
-            What your team sees on assignments and internal notes.
+            O que sua equipe vê nas atribuições e notas internas.
         </p>
 
         <div class="flex items-center gap-2">
-            <button type="submit" class="btn-pill-primary">Save changes</button>
+            <button type="submit" class="btn-pill-primary">Salvar alterações</button>
         </div>
     </form>
 
     <section class="card p-6 mb-5">
-        <h2 class="section-title">Signing in</h2>
+        <h2 class="section-title">Acesso</h2>
         <p class="text-sm mt-1 mb-4" style="color: var(--text-tertiary);">
-            You sign in with a password, as {{ request.user.email }}.
+            Você acessa com senha usando {{ request.user.email }}.
         </p>
         <div class="flex flex-wrap gap-2">
-            <a class="btn-pill-secondary btn-pill-sm" href="{% url 'account_change_password' %}">Change password</a>
-            <a class="btn-pill-secondary btn-pill-sm" href="{% url 'account_email' %}">Add another email</a>
+            <a class="btn-pill-secondary btn-pill-sm" href="{% url 'account_change_password' %}">Alterar senha</a>
+            <a class="btn-pill-secondary btn-pill-sm" href="{% url 'account_email' %}">Adicionar outro e-mail</a>
         </div>
     </section>
 </div>

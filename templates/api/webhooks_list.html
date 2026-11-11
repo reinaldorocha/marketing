@@ -52,7 +52,7 @@ back. Open is the one action, and it is where the rest are.
         </div>
         <div class="bb-modal-actions">
             <button type="button" class="btn-pill-secondary" @click="close()">Cancel</button>
-            <button type="submit" class="btn-pill-primary">Add endpoint</button>
+            <button type="submit" class="btn-pill-primary">Adicionar endpoint</button>
         </div>
     </form>
     {% endmodal %}
@@ -78,12 +78,12 @@ back. Open is the one action, and it is where the rest are.
     </div>
     {% else %}
     <div class="empty-state">
-        <p class="empty-state-title">No endpoints yet</p>
+        <p class="empty-state-title">Nenhum endpoint ainda</p>
         <p class="empty-state-body">
             An endpoint is how something outside BrightBean Chat hears about a new message, a
             finished flow or a tagged contact, as it happens.
         </p>
-        <button type="button" class="btn-pill-secondary mt-4" @click="$modal('add-endpoint')">Add an endpoint</button>
+        <button type="button" class="btn-pill-secondary mt-4" @click="$modal('add-endpoint')">Adicionar endpoint</button>
     </div>
     {% endif %}
 </div>

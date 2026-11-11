@@ -3890,6 +3890,12 @@ button.stepper-step:disabled { cursor: not-allowed; opacity: 0.55; }
   color: var(--text-secondary);
 }
 .fb-trigger-detail { font-size: var(--fs-sm); line-height: 1.45; color: var(--text-tertiary); }
+.fb-trigger-platforms { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem; }
+.fb-trigger-platform {
+  display: inline-flex; align-items: center; padding: 0.0625rem 0.3125rem;
+  border: 1px solid var(--border); border-radius: var(--radius-full);
+  font-size: var(--fs-2xs); font-weight: 600; color: var(--text-secondary); background: var(--surface-1);
+}
 
 /* ── The step list, and one step's header ────────────────────── */
 
@@ -4260,6 +4266,16 @@ button.stepper-step:disabled { cursor: not-allowed; opacity: 0.55; }
 .fb-addstep-item:hover { background: var(--surface-2); }
 .fb-addstep-item:focus-visible { outline: 2px solid var(--accent-sky); outline-offset: -2px; }
 .fb-addstep-hint { font-size: var(--fs-2xs); color: var(--text-tertiary); }
+.fb-addstep-channel { display: inline-flex; margin-top: 0.1875rem; font-size: var(--fs-2xs); font-weight: 700; color: var(--accent-sky); }
+
+.fb-channel-guide {
+  margin: 0 0 0.875rem; padding: 0.625rem 0.75rem; border: 1px solid var(--border);
+  border-radius: var(--radius-md); background: var(--surface-1); font-size: var(--fs-sm);
+  line-height: 1.45; color: var(--text-secondary);
+}
+.fb-channel-guide-title { margin: 0 0 0.35rem; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-primary); }
+.fb-channel-guide p { margin: 0.3rem 0 0; }
+.fb-channel-guide p:first-of-type { margin-top: 0; }
 
 .fb-addstep-swatch {
   width: 0.5rem;

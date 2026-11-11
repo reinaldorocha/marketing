@@ -13,7 +13,7 @@ class BroadcastsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.broadcasts"
     label = "broadcasts"
-    verbose_name = "Broadcasts"
+    verbose_name = "Disparos"
 
     def ready(self) -> None:
         """Registration is an import side effect, the house pattern.
