@@ -151,7 +151,16 @@ def published_version(flow: Flow) -> FlowVersion | None:
 
 
 @transaction.atomic
-def create_flow(*, workspace: Any, name: str, folder: str = "", user: Any = None, graph: Any = None) -> Flow:
+def create_flow(
+    *,
+    workspace: Any,
+    name: str,
+    folder: str = "",
+    channel_platform: str = "",
+    default_connection: Any = None,
+    user: Any = None,
+    graph: Any = None,
+) -> Flow:
     """A new flow, with version 1 already there as a draft.
 
     Creating the first version here rather than lazily means every read path can
@@ -165,7 +174,14 @@ def create_flow(*, workspace: Any, name: str, folder: str = "", user: Any = None
     Create button on the flows list asks for a starter; the product decision
     stays at the product surface.
     """
-    flow = Flow(workspace=workspace, name=name, folder=folder, status=FlowStatus.DRAFT)
+    flow = Flow(
+        workspace=workspace,
+        name=name,
+        folder=folder,
+        channel_platform=channel_platform,
+        default_connection=default_connection,
+        status=FlowStatus.DRAFT,
+    )
     flow.save()
     FlowVersion(
         workspace=flow.workspace,

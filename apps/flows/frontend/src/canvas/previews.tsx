@@ -1,3 +1,4 @@
+import { useBuilder } from "../store/context";
 /**
  * The compact summary on each node card.
  *
@@ -56,6 +57,12 @@ function SendMessagePreview({ config }: PreviewProps) {
   const text = blocks.find((block) => block["type"] === "text");
   const recipientType = isRecord(config) && typeof config["recipient_type"] === "string" ? config["recipient_type"] : "contact";
 
+  const flow = useBuilder((state) => state.flow);
+  const triggers = useBuilder((state) => state.triggers);
+  const channel = flow?.channel_platform?.toLowerCase() || "";
+  const isInstagram = channel === "instagram" || (!channel && triggers.some((t) => t.connection?.platform === "instagram" || t.platforms.includes("instagram")));
+  const isWhatsapp = channel === "whatsapp" || channel.includes("whatsapp") || (!channel && !isInstagram);
+
   let mainPreview: ReactNode = null;
   if (text && typeof text["text"] === "string") {
     mainPreview = <p>{truncate(text["text"])}</p>;
@@ -101,14 +108,26 @@ function SendMessagePreview({ config }: PreviewProps) {
   return (
     <>
       {recipientType === "group" ? (
-        <span className="text-[10px] uppercase font-semibold tracking-wider text-emerald-600 block mb-1">
-          👥 Grupo WhatsApp
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 px-2 py-0.5 rounded mb-1.5 border border-emerald-200 dark:border-emerald-800/50">
+          👥 WhatsApp • Grupo
         </span>
       ) : recipientType === "custom" ? (
-        <span className="text-[10px] uppercase font-semibold tracking-wider text-blue-600 block mb-1">
-          📞 Telefone específico
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 dark:bg-blue-950/50 dark:text-blue-300 px-2 py-0.5 rounded mb-1.5 border border-blue-200 dark:border-blue-800/50">
+          📞 WhatsApp • Telefone específico
         </span>
-      ) : null}
+      ) : isInstagram ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-fuchsia-700 bg-fuchsia-50 dark:bg-fuchsia-950/50 dark:text-fuchsia-300 px-2 py-0.5 rounded mb-1.5 border border-fuchsia-200 dark:border-fuchsia-800/50">
+          🟣 Instagram • Seguidor no Direct
+        </span>
+      ) : isWhatsapp ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 px-2 py-0.5 rounded mb-1.5 border border-emerald-200 dark:border-emerald-800/50">
+          🟢 WhatsApp • Contato da conversa
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-50 dark:bg-slate-900 dark:text-slate-300 px-2 py-0.5 rounded mb-1.5 border border-slate-200 dark:border-slate-800">
+          💬 Contato da conversa
+        </span>
+      )}
       {mainPreview}
       <Pills items={list(isRecord(config) ? config["buttons"] : undefined).map((b) => String(b["label"] ?? ""))} />
       <Pills
@@ -188,16 +207,16 @@ function RandomizerPreview({ config }: PreviewProps) {
 }
 
 const VERB_COPY: Record<string, string> = {
-  add_tag: "Add tag",
-  remove_tag: "Remove tag",
-  set_field: "Set field",
-  clear_field: "Clear field",
-  subscribe_sequence: "Subscribe",
-  unsubscribe_sequence: "Unsubscribe",
-  open_conversation: "Open conversation",
-  close_conversation: "Close conversation",
-  assign_conversation: "Assign",
-  notify_members: "Notify",
+  add_tag: "Adicionar tag",
+  remove_tag: "Remover tag",
+  set_field: "Definir campo",
+  clear_field: "Limpar campo",
+  subscribe_sequence: "Inscrever na sequência",
+  unsubscribe_sequence: "Cancelar inscrição",
+  open_conversation: "Abrir conversa",
+  close_conversation: "Fechar conversa",
+  assign_conversation: "Atribuir a",
+  notify_members: "Notificar membros",
 };
 
 function ActionPreview({ config }: PreviewProps) {

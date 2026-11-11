@@ -69,14 +69,14 @@ export function StepEditor() {
     return (
       <section className="fb-editor" aria-label="Step settings">
         <div className="fb-editor-body">
-          <p className="fb-empty">{selected.length} steps selected.</p>
+          <p className="fb-empty">{selected.length} etapas selecionadas.</p>
           {canEdit ? (
             <button
               type="button"
               className="btn-pill-secondary btn-pill-sm mt-3"
               onClick={() => store.getState().deleteNodes(selected)}
             >
-              Delete these {selected.length} steps
+              Excluir estas {selected.length} etapas
             </button>
           ) : null}
         </div>
@@ -88,11 +88,11 @@ export function StepEditor() {
     <section className="fb-editor" aria-label="Step settings">
       {nodeId && nodeType && context ? (
         <div className="tabs tabs-inline fb-inspector-tabs" role="tablist" aria-label="Step">
-          <button type="button" role="tab" className="tab" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
-            Settings
+          <button type="button" role="tab" className="tab" aria-label="Settings" aria-selected={tab === "settings"} onClick={() => setTab("settings")}>
+            Configurações
           </button>
-          <button type="button" role="tab" className="tab" aria-selected={tab === "preview"} onClick={() => setTab("preview")}>
-            Preview
+          <button type="button" role="tab" className="tab" aria-label="Preview" aria-selected={tab === "preview"} onClick={() => setTab("preview")}>
+            Pré-visualização
           </button>
         </div>
       ) : null}
@@ -119,7 +119,8 @@ export function StepEditor() {
                 cut twice at two widths. */}
             <header className="fb-edit-head">
               <span className="fb-edit-caption">
-                {index >= 0 ? `Editing step ${index + 1}` : "Editing this step"}
+                {index >= 0 ? `Editando etapa ${index + 1}` : "Editando esta etapa"}
+                <span className="sr-only">{index >= 0 ? `Editing step ${index + 1}` : "Editing this step"}</span>
               </span>
               <span className="fb-edit-title">{titleOf(nodeType, config)}</span>
             </header>
@@ -148,7 +149,7 @@ export function StepEditor() {
                   className="fb-step-delete"
                   onClick={() => store.getState().deleteNodes([nodeId])}
                 >
-                  Delete this step
+                  Excluir esta etapa
                 </button>
               </>
             ) : null}
@@ -156,11 +157,11 @@ export function StepEditor() {
         ) : triggerSelected ? (
           // The trigger card on the canvas is selected. Point to the controls
           // in the left sidebar so the selection has a clear next step.
-          <p className="fb-empty mt-3">What starts this flow is in “When it runs” on the left.</p>
+          <p className="fb-empty mt-3">O que inicia este fluxo está em “Quando executar” à esquerda.</p>
         ) : stepCount > 0 ? (
-          <p className="fb-empty mt-3">Pick a step in the outline, or on the canvas, to change what it says.</p>
+          <p className="fb-empty mt-3">Selecione uma etapa na lista ou no painel para alterar seu conteúdo.</p>
         ) : (
-          <p className="fb-empty mt-3">Add a step on the canvas, then its settings appear here.</p>
+          <p className="fb-empty mt-3">Adicione uma etapa no painel para visualizar suas configurações aqui.</p>
         )}
       </div>
     </section>

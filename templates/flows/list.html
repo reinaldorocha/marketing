@@ -74,7 +74,7 @@ swap in styles.css meaningful.
       state x-model reads — hence the default on Blank and the @reset beside it.
     {% endcomment %}
     <form hx-post="{% url 'flows:create' workspace_id=request.workspace.id %}" hx-swap="none"
-          x-data="{ start: 'blank' }" @reset="start = 'blank'">
+          x-data="{ start: 'blank', channel: 'whatsapp', connectionId: '' }" @reset="start = 'blank'; channel = 'whatsapp'; connectionId = ''">
         <div class="bb-modal-body">
             <fieldset class="field">
                 <legend class="field-label">Começar a partir de</legend>
@@ -108,10 +108,49 @@ swap in styles.css meaningful.
                     </label>
                 </div>
             </fieldset>
-            <div class="field" x-show="start === 'blank'">
-                <label class="field-label" for="new-flow-name">Qual é o nome deste fluxo?</label>
-                <input class="form-input-styled" id="new-flow-name" type="text" name="name" maxlength="200"
-                       :required="start === 'blank'" autofocus placeholder="Comment to DM">
+
+            <div x-show="start === 'blank'" class="space-y-4">
+                <fieldset class="field">
+                    <legend class="field-label">Qual é o canal deste fluxo?</legend>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                        <label class="option-card cursor-pointer" :class="channel === 'whatsapp' ? 'ring-2 ring-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20' : ''">
+                            <input type="radio" name="channel_platform" value="whatsapp" x-model="channel" checked class="sr-only">
+                            <span class="text-xl">🟢</span>
+                            <span class="option-card-body">
+                                <span class="option-card-title font-semibold text-emerald-700 dark:text-emerald-400">WhatsApp</span>
+                                <span class="option-card-text text-xs">Mensagens privadas ou grupos, palavras-chave e atendimento</span>
+                            </span>
+                        </label>
+                        <label class="option-card cursor-pointer" :class="channel === 'instagram' ? 'ring-2 ring-fuchsia-500 bg-fuchsia-50/30 dark:bg-fuchsia-950/20' : ''">
+                            <input type="radio" name="channel_platform" value="instagram" x-model="channel" class="sr-only">
+                            <span class="text-xl">🟣</span>
+                            <span class="option-card-body">
+                                <span class="option-card-title font-semibold text-fuchsia-700 dark:text-fuchsia-400">Instagram</span>
+                                <span class="option-card-text text-xs">Respostas a comentários, Directs (DMs) e Stories</span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                {% if available_connections %}
+                <div class="field" x-show="channel">
+                    <label class="field-label" for="new-flow-connection">Conexão padrão <span style="color: var(--text-tertiary);">(opcional)</span></label>
+                    <select id="new-flow-connection" name="default_connection_id" x-model="connectionId" class="form-input-styled">
+                        <option value="">Automática / Qualquer conexão compatível</option>
+                        {% for conn in available_connections %}
+                        <option value="{{ conn.id }}" x-show="channel === '{{ conn.platform }}' || (channel === 'whatsapp' && '{{ conn.platform }}'.includes('whatsapp'))">
+                            {{ conn.name }} ({{ conn.platform }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="field">
+                    <label class="field-label" for="new-flow-name">Nome do fluxo</label>
+                    <input class="form-input-styled" id="new-flow-name" type="text" name="name" maxlength="200"
+                           :required="start === 'blank'" autofocus placeholder="Ex: Boas-vindas novos clientes">
+                </div>
             </div>
         </div>
         <div class="bb-modal-actions">
@@ -138,8 +177,8 @@ swap in styles.css meaningful.
           @submit.prevent>
         <label class="search-field w-full sm:w-64">
             {% include "partials/_nav_icon.html" with name="search" icon_size=16 %}
-            <input type="search" id="flow-search" name="q" x-model="q" placeholder="Search flows"
-                   class="search-input" aria-label="Search flows">
+            <input type="search" id="flow-search" name="q" x-model="q" placeholder="Buscar fluxos..."
+                   class="search-input" aria-label="Buscar fluxos">
         </label>
         {% comment %}
           One Filter button for status and folder (HANDOFF §2.2), replacing the
@@ -155,13 +194,13 @@ swap in styles.css meaningful.
     <section class="card p-[22px] mb-7">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
             <div>
-                <h2 class="section-title">Start from a template</h2>
+                <h2 class="section-title">Começar a partir de um modelo pronto</h2>
                 <p class="text-[13px] mt-1" style="color: var(--text-tertiary);">
-                    {{ template_total }} ready-made flow{{ template_total|pluralize }}. Pick one and change the words to suit you.
+                    {{ template_total }} modelo{{ template_total|pluralize }} pronto{{ template_total|pluralize }}. Escolha um e personalize para o seu negócio.
                 </p>
             </div>
             <a class="btn-pill-secondary btn-pill-sm flex-shrink-0"
-               href="{% url 'flows:template_gallery' workspace_id=request.workspace.id %}">Browse all {{ template_total }}</a>
+               href="{% url 'flows:template_gallery' workspace_id=request.workspace.id %}">Ver todos os {{ template_total }}</a>
         </div>
         <div class="tpl-grid">
             {% comment %}

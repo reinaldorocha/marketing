@@ -123,7 +123,7 @@ function FlowNodeCardInner({
           </span>
         ) : null}
         {isEntry && !isNote ? (
-          <span className="fb-entry-flag ml-auto">Starts here</span>
+          <span className="fb-entry-flag ml-auto">Inicia aqui</span>
         ) : null}
       </div>
       <div className="fb-node-title truncate">{spec?.label ?? type}</div>
@@ -151,12 +151,12 @@ function FlowNodeCardInner({
               {chip.failed > 0 ? (
                 <span
                   className="fb-badge fb-badge-error"
-                  title="Sends that failed"
+                  title="Envios com falha"
                 >
-                  {chip.failed} failed
+                  {chip.failed} com falha
                 </span>
               ) : null}
-              <span className="fb-pill" title="Sent · delivered · clicked">
+              <span className="fb-pill" title="Enviado · entregue · clicado">
                 {chip.sent} · {chip.delivered} · {chip.clicked}
                 {chip.ctr === null ? null : (
                   <span className="fb-pill-rate" title="Clicks per send">

@@ -117,6 +117,9 @@ export interface FlowMeta {
   name: string;
   status: string;
   folder: string;
+  channel_platform?: string;
+  default_connection_id?: string | null;
+  default_connection_name?: string | null;
   updated_at: string;
 }
 

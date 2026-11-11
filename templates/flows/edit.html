@@ -91,30 +91,29 @@ attacker-authored HTML.
     is not a blank rectangle.
     {% endcomment %}
     <div class="h-full flex flex-col items-center justify-center gap-2 p-8">
-        <p class="text-sm" style="color: var(--text-secondary);">Loading the flow builder…</p>
-        {% if not can_edit %}<p class="text-xs" style="color: var(--text-tertiary);">Read-only: you can look at this flow but not change it.</p>{% endif %}
+        <p class="text-sm" style="color: var(--text-secondary);">Carregando o construtor de fluxos…</p>
+        {% if not can_edit %}<p class="text-xs" style="color: var(--text-tertiary);">Somente leitura: você pode visualizar este fluxo, mas não alterá-lo.</p>{% endif %}
     </div>
     {% else %}
     <div class="h-full flex items-center justify-center p-8">
         <div class="alert-error max-w-lg text-left">
-            <p class="font-medium">The flow builder could not load.</p>
+            <p class="font-medium">O construtor de fluxos não pôde ser carregado.</p>
             <p class="mt-1">
-                Its JavaScript bundle has not been built. Run <code>make frontend</code> and reload,
-                or rebuild the container image.
+                O bundle JavaScript não foi compilado. Execute <code>npm run build:js</code> e recarregue a página.
             </p>
-            {% if not can_edit %}<p class="mt-2">Read-only: you can look at this flow but not change it.</p>{% endif %}
+            {% if not can_edit %}<p class="mt-2">Somente leitura: você pode visualizar este fluxo, mas não alterá-lo.</p>{% endif %}
         </div>
     </div>
     {% endif %}
 </div>
 
-<aside x-show="triggersOpen" x-cloak aria-label="Triggers"
+<aside x-show="triggersOpen" x-cloak aria-label="Gatilhos"
        class="bb-drawer anim-collapse absolute inset-y-0 right-0 w-96 max-w-full z-30 overflow-y-auto">
     <div id="flow-triggers"
          hx-get="{% url 'flows:trigger_panel' workspace_id=request.workspace.id flow_id=flow.id %}"
          hx-trigger="triggers-opened from:body once, triggersChanged from:body"
          hx-swap="outerHTML">
-        <p class="p-4 text-sm" style="color: var(--text-secondary);">Loading triggers…</p>
+        <p class="p-4 text-sm" style="color: var(--text-secondary);">Carregando gatilhos…</p>
     </div>
 </aside>
 </div>

@@ -43,19 +43,18 @@ export function Preview() {
 
   return (
     <section className="fb-preview" aria-label="Preview">
-      <p className="fb-section-label">Preview</p>
+      <p className="fb-section-label">Pré-visualização</p>
       <div className="fb-phone">
         <div className="fb-phone-screen">
           {nodeId && nodeType ? (
             <Bubbles type={nodeType} config={config} />
           ) : (
-            <p className="fb-phone-empty">Pick a step to see it the way they will.</p>
+            <p className="fb-phone-empty">Selecione uma etapa para visualizar como o contato a verá.</p>
           )}
         </div>
       </div>
       <p className="fb-preview-note">
-        Placeholders like <code>{"{{ first_name }}"}</code> are filled in when the message is actually
-        sent.
+        Variáveis como <code>{"{{ first_name }}"}</code> serão preenchidas automaticamente no momento do envio.
       </p>
     </section>
   );
@@ -72,7 +71,7 @@ function Bubbles({ type, config }: { type: string; config: unknown }) {
       return <Bubble text={prompt} />;
     }
     const label = nodeSpec(type)?.label ?? type;
-    return <p className="fb-phone-empty">{label} does not send anything, so there is nothing to show.</p>;
+    return <p className="fb-phone-empty">{label} não envia mensagens (does not send anything), portanto não há pré-visualização.</p>;
   }
 
   return (
@@ -87,7 +86,7 @@ function Bubbles({ type, config }: { type: string; config: unknown }) {
         }
         return (
           <div key={index} className="fb-phone-attachment">
-            {kind ? `${kind.charAt(0).toUpperCase()}${kind.slice(1)}` : "Attachment"}
+            {kind ? `${kind.charAt(0).toUpperCase()}${kind.slice(1)}` : "Anexo"}
           </div>
         );
       })}
@@ -99,7 +98,7 @@ function Bubble({ text: body, buttons = [] }: { text: string; buttons?: string[]
   return (
     <div className="fb-phone-turn">
       <div className="fb-phone-bubble">
-        {body || <span className="fb-phone-placeholder">No message yet</span>}
+        {body || <span className="fb-phone-placeholder">Nenhuma mensagem definida</span>}
       </div>
       {buttons.length > 0 ? (
         <div className="fb-phone-buttons">

@@ -110,6 +110,23 @@ def _visible_flows(request: WorkspaceRequest) -> Any:
         named = Q(folder__in=[folder for folder in folders if folder != UNFILED_VALUE])
         flows = flows.filter(named | Q(folder="") if UNFILED_VALUE in folders else named)
 
+    channels = multi(request.GET, "channel")
+    if channels:
+        channel_q = Q()
+        for ch in channels:
+            ch_lower = ch.lower()
+            if ch_lower in ("whatsapp", "whatsapp_evolution", "whatsapp_cloud"):
+                channel_q |= Q(channel_platform__in=["whatsapp", "whatsapp_evolution", "whatsapp_cloud"]) | (
+                    Q(channel_platform="") & Q(triggers__channel_connection__platform__in=["whatsapp", "whatsapp_evolution", "whatsapp_cloud"])
+                )
+            elif ch_lower == "instagram":
+                channel_q |= Q(channel_platform="instagram") | (
+                    Q(channel_platform="") & Q(triggers__channel_connection__platform="instagram")
+                )
+            else:
+                channel_q |= Q(channel_platform=ch_lower)
+        flows = flows.filter(channel_q).distinct()
+
     return flows.order_by("name")
 
 
@@ -217,7 +234,18 @@ def _list_context(request: WorkspaceRequest) -> dict[str, Any]:
     can_edit = request.workspace_membership.effective_permissions.get("edit_flows", False)
     statuses = multi(request.GET, "status", allowed=FlowStatus.values)
     folder_values = multi(request.GET, "folder")
-    filtered = bool((request.GET.get("q") or "").strip() or statuses or folder_values)
+    channels = multi(request.GET, "channel")
+    filtered = bool((request.GET.get("q") or "").strip() or statuses or folder_values or channels)
+
+    from apps.flows.compat import installed_model
+    conn_model = installed_model("channels", "apps.channels", "ChannelConnection")
+    available_connections = []
+    if conn_model is not None:
+        available_connections = list(
+            conn_model.objects.for_workspace(request.workspace)
+            .filter(status="active")
+            .values("id", "name", "platform")
+        )
 
     # Templates in the empty state, and only there: this is the exact moment
     # somebody has nothing and no idea what to build, and the page offered them
@@ -258,8 +286,17 @@ def _list_context(request: WorkspaceRequest) -> dict[str, Any]:
         # The Filter popover's state and its sections. `filters` seeds the
         # page's Alpine model, so a reload or a shared link opens with the same
         # selection it was made with.
-        "filters": {"status": statuses, "folder": folder_values},
+        "filters": {"status": statuses, "folder": folder_values, "channel": channels},
+        "available_connections": available_connections,
         "filter_groups": [
+            {
+                "key": "channel",
+                "label": "Canal",
+                "options": [
+                    {"value": "whatsapp", "label": "🟢 WhatsApp"},
+                    {"value": "instagram", "label": "🟣 Instagram"},
+                ],
+            },
             # Each status carries its count, so nobody has to pick a filter to
             # find out it is empty. Labels rather than the enum's: "Live" says
             # what an active flow is doing, "Active" says what a column holds.
@@ -382,8 +419,19 @@ def _name_from(request: WorkspaceRequest, fallback: str = "") -> str:
 def flow_create(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
     name = _name_from(request)
     if not name:
-        return toast_response(tone="error", title="Name required", body="Give the flow a name to create it.")
+        return toast_response(tone="error", title="Name required", body="Dê um nome ao fluxo para criá-lo.")
     folder = (request.POST.get("folder") or "").strip()[:_MAX_NAME]
+    channel_platform = (request.POST.get("channel_platform") or "").strip().lower()
+    connection_id = (request.POST.get("default_connection_id") or request.POST.get("connection_id") or "").strip()
+    default_conn = None
+    if connection_id:
+        from apps.flows.compat import installed_model
+        conn_model = installed_model("channels", "apps.channels", "ChannelConnection")
+        if conn_model is not None:
+            default_conn = conn_model.objects.for_workspace(request.workspace).filter(pk=connection_id).first()
+            if default_conn and not channel_platform:
+                channel_platform = default_conn.platform
+
     # The one caller that asks for a starter graph. Everything else that creates
     # a flow — the importer, the broadcast composer — writes its own version 1
     # immediately afterwards. See apps.flows.starter.
@@ -393,11 +441,13 @@ def flow_create(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
         folder=folder,
         user=request.user,
         graph=starter_graph(),
+        channel_platform=channel_platform,
+        default_connection=default_conn,
     )
     return toast_response(
         tone="success",
         title="Flow created",
-        body=f"{flow.name} starts with a first message. Open it to edit.",
+        body=f"{flow.name} criado com sucesso. Abra para editar.",
         events={"flowsChanged": True},
     )
 

@@ -59,10 +59,15 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
   const canRedo = useBuilder((state) => state.future.length > 0);
   const errorCount = useBuilder((state) => state.validation.errors.length);
   const warningCount = useBuilder((state) => state.validation.warnings.length);
-  const flowStatus = useBuilder((state) => state.flow?.status);
+  const flow = useBuilder((state) => state.flow);
+  const flowStatus = flow?.status;
   const env = useBuilder((state) => state.env);
   const triggers = useBuilder((state) => state.triggers);
   const view = publishView(save, flowStatus, triggers.length, triggers.filter((trigger) => trigger.enabled).length);
+
+  const channel = flow?.channel_platform?.toLowerCase() || "";
+  const isWhatsapp = channel === "whatsapp" || channel.includes("whatsapp") || (!channel && triggers.some((t) => t.connection?.platform?.includes("whatsapp") || t.platforms.some((p) => p.includes("whatsapp"))));
+  const isInstagram = channel === "instagram" || (!channel && triggers.some((t) => t.connection?.platform === "instagram" || t.platforms.includes("instagram")));
   // Which action is in flight, not just whether one is: two buttons can start
   // one, and the busy label belongs on the one that was clicked — not on
   // whichever button the response has since relabelled.
@@ -172,13 +177,22 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
       {/* The way back and the flow's own name and state, on the left. */}
       <div className="fb-toolbar-identity">
         {env.listUrl ? (
-          <a className="fb-toolbar-back" href={env.listUrl}>
+          <a className="fb-toolbar-back" href={env.listUrl} title="Voltar para a lista de fluxos">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
-            Flows
+            Fluxos
           </a>
         ) : null}
         {env.listUrl ? <span className="fb-toolbar-sep" aria-hidden="true">/</span> : null}
         <FlowName />
+        {isWhatsapp ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-sm" title="Fluxo especializado para WhatsApp">
+            🟢 WhatsApp
+          </span>
+        ) : isInstagram ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/50 dark:text-fuchsia-300 border border-fuchsia-200 dark:border-fuchsia-800/60 shadow-sm" title="Fluxo especializado para Instagram">
+            🟣 Instagram
+          </span>
+        ) : null}
         <span className={`fb-flow-status fb-flow-status-${view.statusTone}`} aria-live="polite">
           <span className="fb-flow-status-dot" aria-hidden="true" />
           {view.statusLabel}
@@ -188,17 +202,17 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
             {view.saveLabel}
           </span>
         ) : (
-          <span className="fb-save-state">Read-only</span>
+          <span className="fb-save-state">Somente leitura</span>
         )}
       </div>
 
       <div className="fb-toolbar-actions">
         {canEdit ? (
           <>
-            <button type="button" className="fb-toolbar-icon" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={() => store.getState().undo()}>
+            <button type="button" className="fb-toolbar-icon" aria-label="Undo" title="Desfazer (Ctrl+Z)" disabled={!canUndo} onClick={() => store.getState().undo()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
             </button>
-            <button type="button" className="fb-toolbar-icon" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={() => store.getState().redo()}>
+            <button type="button" className="fb-toolbar-icon" aria-label="Redo" title="Refazer (Ctrl+Y)" disabled={!canRedo} onClick={() => store.getState().redo()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></svg>
             </button>
           </>
@@ -208,7 +222,7 @@ export function Toolbar({ autosave }: { autosave: Autosave | null }) {
           type="button"
           className="fb-toolbar-icon"
           aria-label={statsVisible ? "Hide stats" : "Show stats"}
-          title={statsVisible ? "Hide stats" : "Show stats"}
+          title={statsVisible ? "Ocultar métricas" : "Ver métricas"}
           aria-pressed={statsVisible}
           onClick={() => store.getState().toggleStats()}
         >
@@ -333,7 +347,7 @@ function FlowName() {
     <button
       type="button"
       className="fb-flow-name"
-      title="Rename this flow"
+      title="Renomear este fluxo"
       onClick={() => {
         setDraft(name);
         setEditing(true);
@@ -451,10 +465,10 @@ function OverflowMenu() {
       {open ? (
         <div className="fb-overflow-menu" role="menu">
           {env.exportUrl ? (
-            <a role="menuitem" href={env.exportUrl} onClick={close}>Download a copy</a>
+            <a role="menuitem" aria-label="Download a copy" href={env.exportUrl} onClick={close}>Baixar cópia (JSON)</a>
           ) : null}
           {env.exportBundleUrl ? (
-            <a role="menuitem" href={env.exportBundleUrl} onClick={close}>Download with everything it uses</a>
+            <a role="menuitem" aria-label="Download with everything it uses" href={env.exportBundleUrl} onClick={close}>Baixar com todas dependências</a>
           ) : null}
         </div>
       ) : null}

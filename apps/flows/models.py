@@ -82,6 +82,22 @@ class Flow(WorkspaceScopedModel):
     # only "unfiled" there is.
     folder = models.CharField(max_length=200, blank=True, default="")
 
+    # Canal principal do fluxo: 'whatsapp', 'instagram' ou vazio (multicanal)
+    channel_platform = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="Canal principal deste fluxo: whatsapp, instagram, ou vazio para multicanal.",
+    )
+    default_connection = models.ForeignKey(
+        "channels.ChannelConnection",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="flows",
+        help_text="Conexão padrão associada a este fluxo.",
+    )
+
     # Follower Gate Settings (can override or inherit connection settings)
     require_follower = models.BooleanField(
         null=True,

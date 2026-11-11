@@ -66,15 +66,15 @@ function TriggerCardInner() {
 
       <div className="fb-node-body">
         {triggers.length === 0 ? (
-          <span className="fb-empty">Click to choose what starts it.</span>
+          <span className="fb-empty">Clique para escolher o que inicia o fluxo.</span>
         ) : (
           <>
             {triggers.length > 1 ? (
               <span className="fb-empty">
-                and {triggers.length - 1} other way{triggers.length === 2 ? "" : "s"} in
+                e mais {triggers.length - 1} {triggers.length === 2 ? "outra forma" : "outras formas"}
               </span>
             ) : null}
-            {off ? <span className="fb-node-warn">Switched off, so nothing reaches this flow</span> : null}
+            {off ? <span className="fb-node-warn">Desativado (nenhuma mensagem iniciará o fluxo)</span> : null}
           </>
         )}
       </div>

@@ -28,6 +28,14 @@ import { newNodeConfig } from "../schema/sample";
 import { useBuilder, useBuilderStore } from "../store/context";
 import { StepMenu } from "./AddStep";
 
+const HANDLE_TRANSLATIONS: Record<string, string> = {
+  Timeout: "Tempo esgotado",
+  Error: "Erro",
+  Yes: "Sim",
+  No: "Não",
+  Next: "Próximo",
+};
+
 /** A kind of step that leaves by at least one handle, so the flow carries on. */
 function carriesOn(type: string): boolean {
   const spec = nodeSpec(type);
@@ -91,7 +99,8 @@ export function HandleLabelEdge({
     targetPosition,
   });
 
-  const label = sourceHandleId ? handleLabel(sourceHandleId, config) : "";
+  const rawLabel = sourceHandleId ? handleLabel(sourceHandleId, config) : "";
+  const label = HANDLE_TRANSLATIONS[rawLabel] || rawLabel;
   const invalid = issues?.some((issue) => issue.severity === "error");
   const insertable = canEdit && owned && (branches <= 1 || Boolean(selected) || open);
 
@@ -136,7 +145,7 @@ export function HandleLabelEdge({
                 type="button"
                 className="fb-edge-insert-button"
                 aria-label="Add a step here"
-                title="Add a step here"
+                title="Adicionar etapa aqui"
                 aria-haspopup="menu"
                 aria-expanded={open}
                 onClick={() => setOpen((was) => !was)}
