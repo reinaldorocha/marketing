@@ -38,15 +38,15 @@ export function MediaBlockEditor(props: FieldProps) {
     <div className="fb-field">
       {mediaId ? (
         <p className="fb-field-help flex items-center gap-2">
-          <span className="fb-pill">Library asset {mediaId.slice(0, 8)}…</span>
+          <span className="fb-pill">Arquivo da biblioteca {mediaId.slice(0, 8)}…</span>
           {readOnly ? null : (
             <button
               type="button"
               className="btn-link text-xs"
-              aria-label="Remove the chosen library asset"
+              aria-label="Remover o arquivo selecionado da biblioteca"
               onClick={() => clear([...path, "media_id"])}
             >
-              Remove
+              Remover
             </button>
           )}
         </p>
@@ -54,7 +54,7 @@ export function MediaBlockEditor(props: FieldProps) {
 
       {readOnly ? null : (
         <button type="button" className="btn-outline-sm mb-2" onClick={() => setPicking((open) => !open)}>
-          {picking ? "Close the library" : "Choose from the library"}
+          {picking ? "Fechar biblioteca" : "Escolher da biblioteca"}
         </button>
       )}
 
@@ -70,7 +70,7 @@ export function MediaBlockEditor(props: FieldProps) {
 
       <div className="fb-field">
         <label className="fb-field-label" htmlFor={`fb-url-${path.join("-")}`}>
-          …or a direct URL
+          …ou uma URL direta
         </label>
         <input
           id={`fb-url-${path.join("-")}`}
@@ -78,7 +78,7 @@ export function MediaBlockEditor(props: FieldProps) {
           className="form-input-styled"
           value={url}
           disabled={readOnly || Boolean(mediaId)}
-          placeholder={mediaId ? "Using a library asset" : "https://example.com/image.png"}
+          placeholder={mediaId ? "Usando um arquivo da biblioteca" : "https://exemplo.com/imagem.png"}
           onChange={(event) => {
             const next = event.target.value;
             if (next === "") {
@@ -90,7 +90,7 @@ export function MediaBlockEditor(props: FieldProps) {
           }}
         />
         <p className="fb-field-help">
-          Pick from the library and we keep the file. Paste a link and it is yours to keep working.
+          Escolha na biblioteca para manter o arquivo. Cole um link para usar uma mídia externa.
         </p>
       </div>
 

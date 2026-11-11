@@ -165,7 +165,7 @@ export function SelectField(props: FieldProps) {
         disabled={readOnly}
         onChange={(event) => set(path, event.target.value, `enum:${path.join(".")}`)}
       >
-        {required && typeof value === "string" && options.includes(value) ? null : <option value="">Choose…</option>}
+        {required && typeof value === "string" && options.includes(value) ? null : <option value="">Escolha…</option>}
         {/* The label, not the wire value. These rendered verbatim, so a select
             offered `system_field` and `has_no_value` — see ENUM_LABELS. */}
         {options.map((option) => (

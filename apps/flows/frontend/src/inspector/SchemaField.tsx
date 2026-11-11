@@ -417,7 +417,7 @@ export function VariantField({
         disabled={readOnly}
         onChange={(event) => set(path, seedVariant(rawSchema, event.target.value), `variant:${formatPath(path)}`)}
       >
-        <option value="">Choose…</option>
+        <option value="">Escolha…</option>
         {tags.map((tag) => (
           <option key={tag} value={tag}>
             {variantLabel(tag)}
@@ -498,7 +498,7 @@ export function UnionField({
           set(path, defaultFor(branchAt(rawSchema, Number(event.target.value))), `union:${formatPath(path)}`)
         }
       >
-        {current === -1 ? <option value="">Choose…</option> : null}
+        {current === -1 ? <option value="">Escolha…</option> : null}
         {labels.map((label, index) => (
           <option key={index} value={index}>
             {label}

@@ -22,7 +22,7 @@ const EMPTY_COPY: Partial<Record<ListKey, string>> = {
   custom_fields: "Custom fields arrive with the contacts app. Type a name to use it now.",
   sequences: "Sequences arrive with the sequences app. Type a name to use it now.",
   flows: "This workspace has no other flows yet.",
-  members: "No workspace members to choose from.",
+  members: "Não há membros neste espaço para selecionar.",
   connections: "No channels are connected yet.",
 };
 
@@ -68,7 +68,7 @@ export function picklistSelect(list: ListKey, { creatable }: { creatable: boolea
           disabled={readOnly}
           onChange={(event) => set(path, event.target.value, `pick:${path.join(".")}`)}
         >
-          <option value="">Choose…</option>
+          <option value="">Escolha…</option>
           {options.map((option) => (
             <option key={option.id} value={option.id}>
               {option.label}
