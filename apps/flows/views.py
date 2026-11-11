@@ -241,11 +241,17 @@ def _list_context(request: WorkspaceRequest) -> dict[str, Any]:
     conn_model = installed_model("channels", "apps.channels", "ChannelConnection")
     available_connections = []
     if conn_model is not None:
-        available_connections = list(
-            conn_model.objects.for_workspace(request.workspace)
+        available_connections = [
+            {
+                "id": str(c["id"]),
+                "name": c["display_name"],
+                "display_name": c["display_name"],
+                "platform": c["platform"],
+            }
+            for c in conn_model.objects.for_workspace(request.workspace)
             .filter(status="active")
-            .values("id", "name", "platform")
-        )
+            .values("id", "display_name", "platform")
+        ]
 
     # Templates in the empty state, and only there: this is the exact moment
     # somebody has nothing and no idea what to build, and the page offered them
