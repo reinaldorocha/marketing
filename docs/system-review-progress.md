@@ -37,6 +37,7 @@ Atualizado em 11 de novembro de 2026. Este arquivo registra escopo, achados, dec
 ### 2.3. Configurações Operacionais Acessíveis sem `.env`
 - **Problema:** Para configurar credenciais de Meta App ID, Meta App Secret ou Token de Verificação de Webhook, era necessário editar o arquivo `.env` no servidor.
 - **Decisão:** Criada a tela operacional (`/settings/operational/`) onde o usuário visualiza e salva credenciais de Meta App de forma segura e criptografada via `PlatformCredential` da organização. A resolução em `apps/credentials/resolution.py` prioriza o banco de dados antes das variáveis de ambiente.
+- **Correção de rota:** A resolução de URLs para exibição ao operador foi corrigida de `channels:instagram_callback` para `instagram_callback` (declarada no escopo global em `apps/channels/urls_oauth.py`), sanando o erro 500 no carregamento da tela operacional.
 
 ### 2.4. Handles e Textos Técnicos no Canvas
 - **Problema:** Nós de condição e tempo exibiam rótulos técnicos em inglês como `cond:true`, `cond:false`, `timeout`, `error` e `default`.
