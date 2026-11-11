@@ -27,30 +27,38 @@
             </div>
 
             <div class="field">
-                <label class="field-label" for="target-flow">Fluxo a Iniciar</label>
-                <select class="form-input-styled" id="target-flow" name="target_flow" required>
-                    <option value="">Selecione um fluxo publicado...</option>
+                <label class="field-label" for="target-flow">Fluxo a Iniciar (Opcional)</label>
+                <select class="form-input-styled" id="target-flow" name="target_flow">
+                    <option value="">Nenhum (Apenas cadastrar/atualizar contato e etiquetas)</option>
                     {% for flow in flows %}
                     <option value="{{ flow.id }}">{{ flow.name }}</option>
                     {% endfor %}
                 </select>
-                <p class="field-hint mt-1">O fluxo que será disparado imediatamente para o lead recebido.</p>
+                <p class="field-hint mt-1">Selecione o fluxo a iniciar ou deixe em branco se este webhook apenas adiciona/remove etiquetas (ex: Venda Aprovada).</p>
             </div>
 
             <div class="field">
-                <label class="field-label" for="channel-connection">Canal de Envio (WhatsApp)</label>
+                <label class="field-label" for="channel-connection">Canal de Envio (WhatsApp / Instagram)</label>
                 <select class="form-input-styled" id="channel-connection" name="channel_connection">
                     <option value="">Nenhum canal pré-definido</option>
                     {% for conn in connections %}
                     <option value="{{ conn.id }}">{{ conn.display_name }} ({{ conn.get_platform_display }})</option>
                     {% endfor %}
                 </select>
-                <p class="field-hint mt-1">Selecione o número de WhatsApp (Evolution GO) para vincular a identidade e enviar a mensagem.</p>
+                <p class="field-hint mt-1">Vincule o canal utilizado para interagir com este contato.</p>
             </div>
 
-            <div class="field">
-                <label class="field-label" for="default-tags">Tags automáticas (separadas por vírgula)</label>
-                <input class="form-input-styled" id="default-tags" type="text" name="default_tags" placeholder="lead, landing-page, facebook">
+            <div class="grid sm:grid-cols-2 gap-3">
+                <div class="field">
+                    <label class="field-label" for="default-tags">Adicionar Etiquetas (separadas por vírgula)</label>
+                    <input class="form-input-styled" id="default-tags" type="text" name="default_tags" placeholder="Venda pendente, Pix gerado">
+                    <p class="field-hint mt-1">Ex: 'Venda pendente' no evento de PIX ou carrinho.</p>
+                </div>
+                <div class="field">
+                    <label class="field-label" for="remove-tags">Remover Etiquetas (separadas por vírgula)</label>
+                    <input class="form-input-styled" id="remove-tags" type="text" name="remove_tags" placeholder="Venda pendente">
+                    <p class="field-hint mt-1">Ex: 'Venda pendente' no evento de Venda Aprovada.</p>
+                </div>
             </div>
 
             <h3 class="text-sm font-semibold pt-2" style="color: var(--text-primary);">Mapeamento de Campos do JSON Recebido</h3>

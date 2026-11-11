@@ -158,6 +158,7 @@ def create_flow(
     folder: str = "",
     channel_platform: str = "",
     default_connection: Any = None,
+    is_independent: bool = False,
     user: Any = None,
     graph: Any = None,
 ) -> Flow:
@@ -180,6 +181,7 @@ def create_flow(
         folder=folder,
         channel_platform=channel_platform,
         default_connection=default_connection,
+        is_independent=is_independent,
         status=FlowStatus.DRAFT,
     )
     flow.save()

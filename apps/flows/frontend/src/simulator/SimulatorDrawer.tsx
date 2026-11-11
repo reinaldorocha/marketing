@@ -11,7 +11,9 @@ import {
   advanceSimulator,
   replySimulator,
   resetSimulator,
+  simulateSaleApproved,
   startSimulator,
+  updateSimulatorContact,
   type SimulatorState,
   type SimulatorTraceItem,
 } from "../api/flows";
@@ -153,6 +155,60 @@ export function SimulatorDrawer() {
     } catch (err) {
       console.error("Failed to reset simulator:", err);
       void handleStart();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaleApproved = async () => {
+    if (!state || loading) return;
+    setLoading(true);
+    try {
+      const res = await simulateSaleApproved(env, { session_id: state.session_id });
+      setState(res);
+      syncTraceToCanvas(res);
+    } catch (err) {
+      console.error("Failed to simulate sale approved:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddTag = async (tagName: string) => {
+    if (!state || !tagName.trim() || loading) return;
+    const cleanTag = tagName.trim();
+    const currentTags = state.virtual_contact.tags || [];
+    if (currentTags.includes(cleanTag)) return;
+    const newTags = [...currentTags, cleanTag];
+    setLoading(true);
+    try {
+      const res = await updateSimulatorContact(env, {
+        session_id: state.session_id,
+        contact: { tags: newTags },
+      });
+      setState(res);
+      syncTraceToCanvas(res);
+    } catch (err) {
+      console.error("Failed to add tag in simulator:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveTag = async (tagName: string) => {
+    if (!state || loading) return;
+    const currentTags = state.virtual_contact.tags || [];
+    const newTags = currentTags.filter((t) => t !== tagName);
+    setLoading(true);
+    try {
+      const res = await updateSimulatorContact(env, {
+        session_id: state.session_id,
+        contact: { tags: newTags },
+      });
+      setState(res);
+      syncTraceToCanvas(res);
+    } catch (err) {
+      console.error("Failed to remove tag in simulator:", err);
     } finally {
       setLoading(false);
     }
@@ -326,6 +382,55 @@ export function SimulatorDrawer() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+
+          <div>
+            <label className="block text-[10px] text-slate-500 mb-1">Etiquetas Atuais do Contato Virtual</label>
+            <div className="flex flex-wrap gap-1 mb-1.5">
+              {(state?.virtual_contact.tags || []).map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    className="hover:text-red-500 font-bold text-xs"
+                    onClick={() => void handleRemoveTag(tag)}
+                    title="Remover etiqueta"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {(state?.virtual_contact.tags || []).length === 0 ? (
+                <span className="text-[10px] text-slate-400 italic">Sem etiquetas</span>
+              ) : null}
+            </div>
+            <div className="flex gap-1.5 pt-0.5">
+              <button
+                type="button"
+                className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                onClick={() => void handleAddTag("Venda pendente")}
+              >
+                + Venda pendente
+              </button>
+              <button
+                type="button"
+                className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                onClick={() => void handleAddTag("Cliente")}
+              >
+                + Cliente
+              </button>
+              <button
+                type="button"
+                className="text-[10px] px-1.5 py-0.5 rounded border border-blue-300 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
+                onClick={() => void handleAddTag("Carrinho abandonado")}
+              >
+                + Carrinho abandonado
+              </button>
+            </div>
+          </div>
+
           <div className="flex justify-end pt-1">
             <button
               type="button"
@@ -342,28 +447,53 @@ export function SimulatorDrawer() {
       ) : null}
 
       {/* Simulator Control Shortcuts Bar */}
-      <div className="px-3 py-2 bg-slate-100/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-        <span className="text-[11px] text-slate-500">
-          Passos executados: {state?.visited_nodes.length || 0}
-        </span>
-        <div className="flex items-center gap-1.5">
+      <div className="px-3 py-2 bg-slate-100/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-1.5 text-xs">
+        <button
+          type="button"
+          className="px-2 py-1 text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 rounded hover:bg-emerald-100 transition shadow-sm"
+          onClick={() => void handleSaleApproved()}
+          disabled={loading}
+          title="Simula webhook de Venda Aprovada (remove 'Venda pendente' e adiciona 'Cliente')"
+        >
+          ⚡ Simular Venda Aprovada
+        </button>
+
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            className="px-2 py-1 text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 transition"
+            className="px-1.5 py-1 text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 transition"
+            onClick={() => void handleAdvance(900, false)}
+            disabled={loading}
+            title="Avança o relógio virtual em 15 minutos (tempo comum de recuperação PIX)"
+          >
+            +15m
+          </button>
+          <button
+            type="button"
+            className="px-1.5 py-1 text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 transition"
             onClick={() => void handleAdvance(3600, false)}
             disabled={loading}
             title="Avança o relógio virtual em 1 hora"
           >
-            +1 hora
+            +1h
           </button>
           <button
             type="button"
-            className="px-2 py-1 text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 transition text-amber-600 dark:text-amber-400"
+            className="px-1.5 py-1 text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 transition"
+            onClick={() => void handleAdvance(172800, false)}
+            disabled={loading}
+            title="Avança o relógio virtual em 2 dias (tempo de pós-venda)"
+          >
+            +2d
+          </button>
+          <button
+            type="button"
+            className="px-1.5 py-1 text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 transition text-amber-600 dark:text-amber-400"
             onClick={() => void handleAdvance(0, true)}
             disabled={loading}
             title="Dispara o gatilho de timeout da etapa atual"
           >
-            Forçar Timeout
+            Timeout
           </button>
         </div>
       </div>

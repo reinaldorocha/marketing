@@ -91,4 +91,6 @@ urlpatterns = [
     path("api/flows/<uuid:flow_id>/simulator/reply/", views_simulator.simulator_reply, name="api_simulator_reply"),
     path("api/flows/<uuid:flow_id>/simulator/advance/", views_simulator.simulator_advance, name="api_simulator_advance"),
     path("api/flows/<uuid:flow_id>/simulator/reset/", views_simulator.simulator_reset, name="api_simulator_reset"),
+    path("api/flows/<uuid:flow_id>/simulator/sale-approved/", views_simulator.simulator_sale_approved, name="api_simulator_sale_approved"),
+    path("api/flows/<uuid:flow_id>/simulator/update-contact/", views_simulator.simulator_update_contact, name="api_simulator_update_contact"),
 ]

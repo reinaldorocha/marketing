@@ -97,6 +97,12 @@ class Flow(WorkspaceScopedModel):
         related_name="flows",
         help_text="Conexão padrão associada a este fluxo.",
     )
+    # Automação independente (ex: recuperação de carrinho, pós-venda).
+    # Executa em segundo plano sem ser cancelada por conversas normais no chat.
+    is_independent = models.BooleanField(
+        default=False,
+        help_text="Automação independente (ex: recuperação, pós-venda). Não é cancelada por conversas no chat.",
+    )
     # Follower Gate Settings (can override or inherit connection settings)
     require_follower = models.BooleanField(
         null=True,
@@ -317,6 +323,13 @@ class FlowExecution(ContactScopedModel):
     #: runs cannot move a flow's reported numbers.
     preview = models.BooleanField(default=False)
 
+    #: Indica se esta execução pertence a uma automação independente (ex: recuperação, pós-venda)
+    is_independent = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Indica se esta execução é de uma automação independente.",
+    )
+
     #: Why a failed execution failed. Scrubbed and capped on write.
     last_error = models.TextField(blank=True, default="")
 
@@ -358,6 +371,11 @@ class FlowExecution(ContactScopedModel):
             update_fields = kwargs.get("update_fields")
             if update_fields:
                 kwargs["update_fields"] = set(update_fields) | {"flow"}
+        if not self.is_independent and getattr(self, "flow", None) and getattr(self.flow, "is_independent", False):
+            self.is_independent = True
+            update_fields = kwargs.get("update_fields")
+            if update_fields:
+                kwargs["update_fields"] = set(update_fields) | {"is_independent"}
         super().save(*args, **kwargs)
 
     @property

@@ -377,3 +377,142 @@ def update_settings(request: WorkspaceRequest, workspace_id: str) -> HttpRespons
     )
     messages.success(request, "Configurações do espaço de trabalho salvas.")
     return redirect(reverse("workspaces:settings", kwargs={"workspace_id": workspace_id}))
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_GET
+def operational_settings(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
+    """Consolidated operational settings: Meta app credentials, Instagram profile tools,
+    WhatsApp instances, SMTP tests, and webhooks overview.
+    """
+    from apps.api.models import InboundLeadWebhook, OutboundWebhook
+    from apps.channels.models import ChannelConnection
+    from apps.common.platforms import Platform
+    from apps.credentials.models import PlatformCredential, mask_credentials
+    from apps.credentials.resolution import resolve_platform_credentials
+
+    # 1. Meta App credentials (Instagram / Messenger)
+    resolution = resolve_platform_credentials(Platform.INSTAGRAM.value, workspace=request.workspace)
+    meta_is_configured = bool(resolution)
+    meta_source = resolution.source
+    meta_masked = mask_credentials(resolution.credentials) if meta_is_configured else {}
+
+    # Check if configured at organization level
+    org_cred = (
+        PlatformCredential.objects.for_org(request.workspace.organization_id)
+        .filter(platform=Platform.INSTAGRAM.value)
+        .first()
+    )
+
+    # 2. WhatsApp Connections (Evolution GO and Cloud API)
+    whatsapp_evolution_conns = ChannelConnection.objects.for_workspace(request.workspace).filter(
+        platform=Platform.WHATSAPP_EVOLUTION.value
+    )
+    whatsapp_cloud_conns = ChannelConnection.objects.for_workspace(request.workspace).filter(
+        platform=Platform.WHATSAPP.value
+    )
+
+    # 3. Instagram Connections
+    instagram_conns = ChannelConnection.objects.for_workspace(request.workspace).filter(
+        platform=Platform.INSTAGRAM.value
+    )
+
+    # 4. Webhooks
+    lead_webhooks = InboundLeadWebhook.objects.for_workspace(request.workspace).order_by("-created_at")[:10]
+    outbound_webhooks = OutboundWebhook.objects.for_workspace(request.workspace).order_by("-created_at")[:10]
+
+    # Meta webhook callback URLs to show operator
+    callback_path = reverse("channels:instagram_callback")
+    meta_callback_url = request.build_absolute_uri(callback_path)
+    meta_webhook_url = request.build_absolute_uri("/webhooks/instagram/")
+
+    return render(
+        request,
+        "workspaces/operational_settings.html",
+        {
+            "meta_is_configured": meta_is_configured,
+            "meta_source": meta_source,
+            "meta_masked": meta_masked,
+            "org_cred": org_cred,
+            "meta_callback_url": meta_callback_url,
+            "meta_webhook_url": meta_webhook_url,
+            "whatsapp_evolution_conns": whatsapp_evolution_conns,
+            "whatsapp_cloud_conns": whatsapp_cloud_conns,
+            "instagram_conns": instagram_conns,
+            "lead_webhooks": lead_webhooks,
+            "outbound_webhooks": outbound_webhooks,
+        },
+    )
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def operational_meta_app_save(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
+    """Save Meta App credentials (client_id, client_secret, verify_token) directly to organization."""
+    from apps.common.platforms import Platform
+    from apps.credentials.models import PlatformCredential
+
+    client_id = (request.POST.get("client_id") or "").strip()
+    client_secret = (request.POST.get("client_secret") or "").strip()
+    verify_token = (request.POST.get("verify_token") or "").strip()
+
+    if not client_id or not client_secret:
+        messages.error(request, "App ID (Client ID) e App Secret (Client Secret) são obrigatórios.")
+        return redirect(reverse("workspaces:operational_settings", kwargs={"workspace_id": workspace_id}))
+
+    creds = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }
+    if verify_token:
+        creds["verify_token"] = verify_token
+
+    org = request.workspace.organization
+    PlatformCredential.objects.update_or_create(
+        organization=org,
+        platform=Platform.INSTAGRAM.value,
+        defaults={"credentials": creds},
+    )
+    PlatformCredential.objects.update_or_create(
+        organization=org,
+        platform=Platform.MESSENGER.value,
+        defaults={"credentials": creds},
+    )
+
+    messages.success(request, "Credenciais do Meta App (Instagram / Facebook) salvas e criptografadas com sucesso!")
+    return redirect(reverse("workspaces:operational_settings", kwargs={"workspace_id": workspace_id}))
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def operational_smtp_test(request: WorkspaceRequest, workspace_id: str) -> HttpResponse:
+    """Test outbound SMTP email delivery."""
+    from django.conf import settings
+    from django.core.mail import send_mail
+
+    recipient = (request.POST.get("test_email") or request.user.email or "").strip()
+    if not recipient:
+        messages.error(request, "Informe um endereço de e-mail de destino para o teste.")
+        return redirect(reverse("workspaces:operational_settings", kwargs={"workspace_id": workspace_id}))
+
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@marketing.profjonathanrocha.com.br")
+
+    try:
+        sent = send_mail(
+            subject="Teste de Envio SMTP · Marketing",
+            message=f"Olá!\n\nEste é um e-mail de teste confirmando que a sua configuração SMTP está funcionando corretamente.\n\nEspaço: {request.workspace.name}\nData: {timezone.now().strftime('%d/%m/%Y %H:%M:%S')}",
+            from_email=from_email,
+            recipient_list=[recipient],
+            fail_silently=False,
+        )
+        if sent:
+            messages.success(request, f"E-mail de teste enviado com sucesso para {recipient}!")
+        else:
+            messages.warning(request, f"O servidor SMTP não reportou envio para {recipient}.")
+    except Exception as exc:
+        messages.error(request, f"Falha no envio SMTP: {exc}")
+
+    return redirect(reverse("workspaces:operational_settings", kwargs={"workspace_id": workspace_id}))

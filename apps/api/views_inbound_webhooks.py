@@ -80,13 +80,18 @@ def lead_webhook_create(request: WorkspaceRequest, workspace_id: str) -> HttpRes
     flow_id = request.POST.get("target_flow")
     connection_id = request.POST.get("channel_connection")
     tags_raw = request.POST.get("default_tags", "")
+    remove_tags_raw = request.POST.get("remove_tags", "")
 
-    flow = get_scoped_object_or_404(Flow, request.workspace, pk=flow_id)
+    flow = None
+    if flow_id and flow_id != "none":
+        flow = get_scoped_object_or_404(Flow, request.workspace, pk=flow_id)
+
     connection = None
-    if connection_id:
+    if connection_id and connection_id != "none":
         connection = get_scoped_object_or_404(ChannelConnection, request.workspace, pk=connection_id)
 
     default_tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+    remove_tags = [t.strip() for t in remove_tags_raw.split(",") if t.strip()]
 
     # Mapping fields from form
     field_mapping = {
@@ -104,6 +109,7 @@ def lead_webhook_create(request: WorkspaceRequest, workspace_id: str) -> HttpRes
         channel_connection=connection,
         field_mapping=field_mapping,
         default_tags=default_tags,
+        remove_tags=remove_tags,
     )
     secret = webhook.rotate_secret()
     webhook.save()
@@ -114,17 +120,137 @@ def lead_webhook_create(request: WorkspaceRequest, workspace_id: str) -> HttpRes
 
 @login_required
 @require_permission("manage_workspace_settings")
+@require_POST
+def lead_webhook_update(request: WorkspaceRequest, workspace_id: str, webhook_id: str) -> HttpResponse:
+    """Update settings and field mapping of an existing lead webhook."""
+    webhook = get_scoped_object_or_404(InboundLeadWebhook, request.workspace, pk=webhook_id)
+    name = (request.POST.get("name") or webhook.name).strip()[:200]
+    flow_id = request.POST.get("target_flow")
+    connection_id = request.POST.get("channel_connection")
+    tags_raw = request.POST.get("default_tags", "")
+    remove_tags_raw = request.POST.get("remove_tags", "")
+
+    flow = None
+    if flow_id and flow_id != "none":
+        flow = get_scoped_object_or_404(Flow, request.workspace, pk=flow_id)
+
+    connection = None
+    if connection_id and connection_id != "none":
+        connection = get_scoped_object_or_404(ChannelConnection, request.workspace, pk=connection_id)
+
+    default_tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+    remove_tags = [t.strip() for t in remove_tags_raw.split(",") if t.strip()]
+
+    field_mapping = {
+        "name_field": request.POST.get("name_field", "name").strip(),
+        "phone_field": request.POST.get("phone_field", "phone").strip(),
+        "email_field": request.POST.get("email_field", "email").strip(),
+        "tags_field": request.POST.get("tags_field", "tags").strip(),
+        "opt_in_field": request.POST.get("opt_in_field", "opt_in").strip(),
+    }
+
+    webhook.name = name
+    webhook.target_flow = flow
+    webhook.channel_connection = connection
+    webhook.default_tags = default_tags
+    webhook.remove_tags = remove_tags
+    webhook.field_mapping = field_mapping
+    webhook.save()
+
+    messages.success(request, f"Webhook '{name}' atualizado com sucesso!")
+    return redirect("lead_webhooks:detail", workspace_id=workspace_id, webhook_id=webhook.pk)
+
+
+@login_required
+@require_permission("manage_workspace_settings")
+@require_POST
+def lead_webhook_test_event(request: WorkspaceRequest, workspace_id: str, webhook_id: str) -> HttpResponse:
+    """Simulate receiving a test event payload or load sample payload (Hotmart, Kiwify, etc.)."""
+    webhook = get_scoped_object_or_404(InboundLeadWebhook, request.workspace, pk=webhook_id)
+    sample_type = request.POST.get("sample_type", "kiwify_pix")
+
+    samples = {
+        "kiwify_pix": {
+            "event": "pix_generated",
+            "Customer": {
+                "full_name": "Marcos Oliveira",
+                "email": "marcos@exemplo.com",
+                "mobile": "+5511988887777",
+            },
+            "order_id": "kiw_987654321",
+            "order_status": "waiting_payment",
+            "pix_code": "00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Prof Jonathan6009SAO PAULO62070503***6304ABCD",
+        },
+        "kiwify_approved": {
+            "event": "order_approved",
+            "Customer": {
+                "full_name": "Marcos Oliveira",
+                "email": "marcos@exemplo.com",
+                "mobile": "+5511988887777",
+            },
+            "order_id": "kiw_987654321",
+            "order_status": "paid",
+        },
+        "hotmart_pix": {
+            "event": "PURCHASE_BILLET_PRINTED",
+            "data": {
+                "buyer": {
+                    "name": "Carla Mendes",
+                    "email": "carla@exemplo.com",
+                    "checkout_phone": "+5521977776666",
+                },
+                "purchase": {
+                    "status": "WAITING_PAYMENT",
+                    "transaction": "HP123456789",
+                },
+            },
+        },
+        "cart_abandoned": {
+            "event": "cart_abandoned",
+            "customer": {
+                "name": "Lucas Souza",
+                "phone": "+5531999998888",
+                "email": "lucas@exemplo.com",
+            },
+            "checkout_url": "https://pay.exemplo.com/carrinho/abc123xyz",
+        },
+    }
+
+    chosen_payload = samples.get(sample_type, samples["kiwify_pix"])
+    webhook.recent_test_payload = chosen_payload
+    webhook.save(update_fields=["recent_test_payload"])
+    messages.success(request, f"Payload de exemplo '{sample_type}' carregado para teste e mapeamento visual.")
+    return redirect("lead_webhooks:detail", workspace_id=workspace_id, webhook_id=webhook.pk)
+
+
+@login_required
+@require_permission("manage_workspace_settings")
 @require_GET
 def lead_webhook_detail(request: WorkspaceRequest, workspace_id: str, webhook_id: str) -> HttpResponse:
     """View details, endpoint URL, mapping, and logs for a lead webhook."""
     webhook = get_scoped_object_or_404(InboundLeadWebhook, request.workspace, pk=webhook_id)
     logs = webhook.logs.select_related("contact", "execution").order_by("-received_at")[:50]
+    flows = Flow.objects.for_workspace(request.workspace).filter(status=FlowStatus.ACTIVE)
+    connections = ChannelConnection.objects.for_workspace(request.workspace).filter(status=ConnectionStatus.ACTIVE)
 
     try:
         receiver_path = reverse("api:inbound_lead_receiver", kwargs={"webhook_id": webhook.pk})
     except NoReverseMatch:
         receiver_path = reverse("inbound_lead_receiver", kwargs={"webhook_id": webhook.pk})
     endpoint_url = request.build_absolute_uri(receiver_path)
+
+    # Preview extraction against recent_test_payload if available
+    mapping = webhook.field_mapping or {}
+    test_payload = webhook.recent_test_payload or {}
+    extracted_preview = None
+    if test_payload:
+        extracted_preview = {
+            "name": _extract_val(test_payload, mapping.get("name_field", "name")),
+            "phone": _extract_val(test_payload, mapping.get("phone_field", "phone")),
+            "email": _extract_val(test_payload, mapping.get("email_field", "email")),
+            "tags": _extract_val(test_payload, mapping.get("tags_field", "tags")),
+            "opt_in": _extract_val(test_payload, mapping.get("opt_in_field", "opt_in")),
+        }
 
     return render(
         request,
@@ -133,6 +259,9 @@ def lead_webhook_detail(request: WorkspaceRequest, workspace_id: str, webhook_id
             "webhook": webhook,
             "endpoint_url": endpoint_url,
             "logs": logs,
+            "flows": flows,
+            "connections": connections,
+            "extracted_preview": extracted_preview,
         },
     )
 
@@ -204,6 +333,21 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
             return JsonResponse({"error": "invalid_json_payload"}, status=400)
     except Exception as exc:
         return JsonResponse({"error": f"malformed_json: {exc}"}, status=400)
+
+    # Save to recent_test_payload for visual preview / mapping
+    try:
+        webhook.recent_test_payload = payload
+        webhook.save(update_fields=["recent_test_payload"])
+    except Exception:
+        pass
+
+    # Test mode: return immediately with parsed payload confirmation
+    if request.headers.get("X-Test-Event") == "true" or request.GET.get("test") in ("1", "true"):
+        return JsonResponse({
+            "status": "test_received",
+            "message": "Evento de teste recebido e salvo para mapeamento visual!",
+            "payload": payload,
+        }, status=200)
 
     # 3. Idempotency / Deduplication
     idempotency_key = str(
@@ -411,16 +555,54 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
                 if update_kwargs:
                     contact_services.update_contact(contact, **update_kwargs)
 
+            # Multi-event and rule matching
+            raw_event = str(
+                payload.get("event")
+                or payload.get("status")
+                or payload.get("order_status")
+                or payload.get("type")
+                or payload.get("event_type")
+                or ""
+            ).strip()
+            rule_add_tags: list[str] = []
+            rule_remove_tags: list[str] = []
+            target_flow = webhook.target_flow
+
+            for rule in (webhook.event_rules or []):
+                if isinstance(rule, dict) and rule.get("event_value"):
+                    ev_val = str(rule.get("event_value")).strip().lower()
+                    if ev_val and ev_val == raw_event.lower():
+                        rule_add_tags = rule.get("add_tags") or []
+                        rule_remove_tags = rule.get("remove_tags") or []
+                        if rule.get("target_flow_id"):
+                            flow_cand = Flow.objects.for_workspace(webhook.workspace).filter(pk=rule.get("target_flow_id"), status=FlowStatus.ACTIVE).first()
+                            if flow_cand:
+                                target_flow = flow_cand
+                        break
+
+            # Remove tags
+            all_remove_tags = list(webhook.remove_tags or [])
+            all_remove_tags.extend(rule_remove_tags)
+            for r_tag in all_remove_tags:
+                r_clean = str(r_tag).strip()
+                if r_clean:
+                    from apps.contacts.models import Tag
+                    t_obj = Tag.objects.for_workspace(webhook.workspace).filter(name__iexact=r_clean).first()
+                    if t_obj:
+                        contact_services.remove_tag(contact, t_obj)
+
             # Apply default and payload tags
             all_tags = list(webhook.default_tags or [])
+            all_tags.extend(rule_add_tags)
             if isinstance(raw_tags, list):
                 all_tags.extend(str(t).strip() for t in raw_tags if str(t).strip())
             elif isinstance(raw_tags, str) and raw_tags.strip():
                 all_tags.extend(str(t).strip() for t in raw_tags.split(",") if str(t).strip())
 
             for tag_name in all_tags:
-                if tag_name:
-                    tag_obj, _ = contact_services.get_or_create_tag(webhook.workspace, tag_name)
+                tag_clean = str(tag_name).strip()
+                if tag_clean:
+                    tag_obj, _ = contact_services.get_or_create_tag(webhook.workspace, tag_clean)
                     contact_services.add_tag(contact, tag_obj)
 
             # 6. Bind channel identity (WhatsApp)
@@ -448,28 +630,34 @@ def inbound_lead_receiver(request: HttpRequest, webhook_id: str) -> HttpResponse
             if identity and raw_opt_in in (True, "true", "True", "yes", "1", 1):
                 apply_opt_in(identity, source=OptInSource.API.value)
 
-            # 8. Start the configured flow
-            execution = start_flow(
-                contact=contact,
-                flow=webhook.target_flow,
-                connection=webhook.channel_connection,
-                variables=payload,
-                started_by=StartedBy.API,
-            )
+            # 8. Start the configured flow (if defined)
+            execution = None
+            if target_flow:
+                execution = start_flow(
+                    contact=contact,
+                    flow=target_flow,
+                    connection=webhook.channel_connection,
+                    variables=payload,
+                    started_by=StartedBy.API,
+                )
 
             # 9. Complete delivery log
             log.status = "success"
             log.contact = contact
             log.execution = execution
-            log.save(update_fields=["status", "contact", "execution"])
+            if not target_flow:
+                log.error_message = "Atualização de contato e etiquetas concluída (sem fluxo vinculado)."
+            log.save(update_fields=["status", "contact", "execution", "error_message"])
             cache.delete(lock_key)
 
             return JsonResponse(
                 {
                     "status": "success",
                     "contact_id": str(contact.pk),
-                    "execution_id": str(execution.pk),
+                    "execution_id": str(execution.pk) if execution else None,
                     "log_id": str(log.pk),
+                    "tags_added": [str(t) for t in all_tags if t],
+                    "tags_removed": [str(t) for t in all_remove_tags if t],
                 },
                 status=200,
             )

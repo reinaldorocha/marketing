@@ -1,0 +1,137 @@
+{
+  "app": "brightbean-chat",
+  "entry": "flow-1",
+  "flows": [
+    {
+      "folder": "Recuperação",
+      "is_independent": true,
+      "graph": {
+        "edges": [
+          {
+            "id": "aguardo_15m-default-checa_pix",
+            "source": "aguardo_15m",
+            "sourceHandle": "default",
+            "target": "checa_pix"
+          },
+          {
+            "id": "checa_pix-cond-true-lembrete_pix",
+            "source": "checa_pix",
+            "sourceHandle": "cond:true",
+            "target": "lembrete_pix"
+          }
+        ],
+        "nodes": [
+          {
+            "config": {
+              "duration": {
+                "unit": "minutes",
+                "value": 15
+              },
+              "mode": "duration"
+            },
+            "id": "aguardo_15m",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "type": "smart_delay"
+          },
+          {
+            "config": {
+              "match": "all",
+              "rules": [
+                {
+                  "key": "e01ff3eb-0d5b-5831-9800-838789472640",
+                  "op": "has",
+                  "source": "tag"
+                }
+              ]
+            },
+            "id": "checa_pix",
+            "position": {
+              "x": 300,
+              "y": 0
+            },
+            "type": "condition"
+          },
+          {
+            "config": {
+              "blocks": [
+                {
+                  "text": "Olá, {{first_name}}! Notamos que o seu Pix ainda não foi concluído.\nSeu pedido está reservado por pouco tempo. Segue o código Pix para pagamento:\n{{pix_code}}\nAssim que o pagamento for confirmado, seu acesso será liberado imediatamente!",
+                  "type": "text"
+                }
+              ]
+            },
+            "id": "lembrete_pix",
+            "position": {
+              "x": 600,
+              "y": 0
+            },
+            "type": "send_message"
+          }
+        ],
+        "schema": 1
+      },
+      "key": "flow-1",
+      "name": "Recuperação de Pix Pendente",
+      "triggers": [
+        {
+          "config": {},
+          "platform": null,
+          "type": "api"
+        },
+        {
+          "config": {
+            "keywords": [
+              {
+                "mode": "any_word",
+                "text": "pix"
+              },
+              {
+                "mode": "any_word",
+                "text": "teste_pix"
+              }
+            ]
+          },
+          "platform": "whatsapp",
+          "type": "keyword"
+        }
+      ]
+    }
+  ],
+  "format": 1,
+  "requirements": {
+    "comment_posts": [],
+    "custom_field": [],
+    "flow": [],
+    "from_override": [],
+    "link_handle": [],
+    "media": [],
+    "member": [],
+    "platform": [
+      {
+        "key": "whatsapp",
+        "name": "whatsapp",
+        "used_by": [
+          "flow-1:trigger-1"
+        ]
+      }
+    ],
+    "request_header": [],
+    "segment": [],
+    "sequence": [],
+    "tag": [
+      {
+        "key": "venda-pendente",
+        "name": "Venda pendente",
+        "ref": "e01ff3eb-0d5b-5831-9800-838789472640",
+        "used_by": [
+          "flow-1:checa_pix"
+        ]
+      }
+    ],
+    "whatsapp_template": []
+  },
+  "schema": 1
+}

@@ -862,6 +862,27 @@ class FlowSimulatorSession:
             self.variables = dict(ctx.variables)
 
             if isinstance(result, Continue):
+                if node_type == "condition":
+                    cond_cfg = graph.config(node_id) or {}
+                    rules = cond_cfg.get("rules") or []
+                    tag_rules = [r for r in rules if isinstance(r, dict) and r.get("source") == "tag"]
+                    if tag_rules:
+                        tag_name = tag_rules[0].get("key") or tag_rules[0].get("value") or "Venda pendente"
+                        if result.handle == "cond:true":
+                            msg = f"Condição avaliada: contato possui a etiqueta '{tag_name}'. Prosseguindo com envio do lembrete."
+                        else:
+                            msg = f"Condição avaliada: contato NÃO possui a etiqueta '{tag_name}'. Recuperação ignorada: o contato não possui mais a etiqueta {tag_name}."
+                    else:
+                        msg = f"Condição avaliada: {'Atende aos critérios (Sim)' if result.handle == 'cond:true' else 'Não atende aos critérios (Não)'}."
+
+                    self.trace.append({
+                        "type": "system",
+                        "kind": "condition",
+                        "timestamp": self.virtual_time,
+                        "node_id": node_id,
+                        "message": msg,
+                    })
+
                 target = graph.target(node_id, result.handle)
                 if target is None:
                     self.status = "completed"
@@ -1339,3 +1360,40 @@ class FlowSimulatorSession:
         self.visited_nodes = []
         self.trace = []
         return self.start()
+
+    def simulate_sale_approved(self) -> dict[str, Any]:
+        """Simulate an approved sale webhook: removes 'Venda pendente', adds 'Cliente'."""
+        curr_tags = list(self.virtual_contact.get("tags") or [])
+        # Remove pending recovery tags
+        new_tags = [t for t in curr_tags if str(t).strip().lower() not in ("venda pendente", "venda_pendente", "carrinho abandonado", "boleto gerado")]
+        if "Cliente" not in new_tags:
+            new_tags.append("Cliente")
+        self.virtual_contact["tags"] = new_tags
+
+        self.trace.append({
+            "type": "system",
+            "kind": "sale_approved",
+            "timestamp": self.virtual_time,
+            "message": "⚡ Webhook de Venda Aprovada simulado: etiqueta 'Venda pendente' removida, etiqueta 'Cliente' adicionada.",
+        })
+        self.save()
+        return self.to_dict()
+
+    def update_virtual_contact(self, contact_data: dict[str, Any]) -> dict[str, Any]:
+        """Update virtual contact attributes (tags, fields) on the fly in simulator."""
+        if isinstance(contact_data, dict):
+            for k, v in contact_data.items():
+                if k == "tags" and isinstance(v, (list, tuple)):
+                    self.virtual_contact["tags"] = list(v)
+                elif k in ("first_name", "last_name", "phone", "email", "username", "is_follower"):
+                    self.virtual_contact[k] = v
+                elif k == "custom_fields" and isinstance(v, dict):
+                    self.virtual_contact.setdefault("custom_fields", {}).update(v)
+            self.trace.append({
+                "type": "system",
+                "kind": "contact_update",
+                "timestamp": self.virtual_time,
+                "message": "Dados do contato virtual atualizados na simulação.",
+            })
+            self.save()
+        return self.to_dict()

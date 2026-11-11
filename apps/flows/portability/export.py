@@ -348,6 +348,7 @@ def export_document(flow: Flow, *, bundle: bool = False) -> dict[str, Any]:
             "key": key,
             "name": row.name,
             "folder": row.folder,
+            **({"is_independent": True} if getattr(row, "is_independent", False) else {}),
             "graph": _rewrite_graph(graph, table, key),
             "triggers": [_export_trigger(trigger, table, key, index) for index, trigger in enumerate(triggers)],
         }

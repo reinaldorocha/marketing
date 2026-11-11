@@ -109,6 +109,14 @@ def tag(name: str) -> dict[str, Any]:
     return {"verb": "add_tag", "tag": name}
 
 
+def untag(name: str) -> dict[str, Any]:
+    return {"verb": "remove_tag", "tag": name}
+
+
+def has_tag(name: str) -> dict[str, Any]:
+    return {"source": "tag", "tag_name": name, "op": "has"}
+
+
 def field(name: str, value: str) -> dict[str, Any]:
     return {"verb": "set_field", "field": name, "value": value}
 
@@ -602,6 +610,123 @@ TEMPLATES: list[dict[str, Any]] = [
         ],
         "edges": chain("hello", "tag_new", "hold", "offer"),
     },
+    {
+        "slug": "whatsapp-recuperacao-pix",
+        "name": "Recuperação de Pix Pendente",
+        "folder": "Recuperação",
+        "is_independent": True,
+        "triggers": [
+            ("api", None, {}),
+            ("keyword", "whatsapp", keyword("pix", "teste_pix")),
+        ],
+        "nodes": [
+            wait("aguardo_15m", 15, "minutes"),
+            branch("checa_pix", has_tag("Venda pendente")),
+            send(
+                "lembrete_pix",
+                text(
+                    "Olá, {{first_name}}! Notamos que o seu Pix ainda não foi concluído.",
+                    "Seu pedido está reservado por pouco tempo. Segue o código Pix para pagamento:",
+                    "{{pix_code}}",
+                    "Assim que o pagamento for confirmado, seu acesso será liberado imediatamente!",
+                ),
+            ),
+        ],
+        "edges": [
+            ("aguardo_15m", "default", "checa_pix"),
+            ("checa_pix", "cond:true", "lembrete_pix"),
+        ],
+    },
+    {
+        "slug": "whatsapp-recuperacao-boleto",
+        "name": "Recuperação de Boleto",
+        "folder": "Recuperação",
+        "is_independent": True,
+        "triggers": [
+            ("api", None, {}),
+            ("keyword", "whatsapp", keyword("boleto", "teste_boleto")),
+        ],
+        "nodes": [
+            wait("aguardo_24h", 24, "hours"),
+            branch("checa_boleto", has_tag("Boleto pendente")),
+            send(
+                "lembrete_boleto",
+                text(
+                    "Olá, {{first_name}}! Lembramos que o seu boleto vence hoje.",
+                    "Copie a linha digitável abaixo para pagar no aplicativo do seu banco:",
+                    "{{boleto_barcode}}",
+                    "Qualquer dúvida ou se precisar de 2ª via, responda a esta mensagem!",
+                ),
+            ),
+        ],
+        "edges": [
+            ("aguardo_24h", "default", "checa_boleto"),
+            ("checa_boleto", "cond:true", "lembrete_boleto"),
+        ],
+    },
+    {
+        "slug": "whatsapp-recuperacao-carrinho",
+        "name": "Recuperação de Carrinho Abandonado",
+        "folder": "Recuperação",
+        "is_independent": True,
+        "triggers": [
+            ("api", None, {}),
+            ("keyword", "whatsapp", keyword("carrinho", "teste_carrinho")),
+        ],
+        "nodes": [
+            wait("aguardo_30m", 30, "minutes"),
+            branch("checa_carrinho", has_tag("Carrinho abandonado")),
+            send(
+                "lembrete_carrinho",
+                text(
+                    "Olá, {{first_name}}! Vimos que você deixou itens no carrinho.",
+                    "Preparamos uma condição especial para você concluir seu pedido com segurança:",
+                    "{{checkout_url}}",
+                    "Se precisar de suporte com o pagamento, estamos à disposição por aqui!",
+                ),
+            ),
+        ],
+        "edges": [
+            ("aguardo_30m", "default", "checa_carrinho"),
+            ("checa_carrinho", "cond:true", "lembrete_carrinho"),
+        ],
+    },
+    {
+        "slug": "whatsapp-pos-venda-entrega",
+        "name": "Pós-Venda e Entrega de Acesso",
+        "folder": "Pós-venda",
+        "is_independent": True,
+        "triggers": [
+            ("api", None, {}),
+            ("keyword", "whatsapp", keyword("acesso", "teste_posvenda")),
+        ],
+        "nodes": [
+            act("atualiza_tags", untag("Venda pendente"), tag("Cliente")),
+            send(
+                "entrega_acesso",
+                text(
+                    "Parabéns pela compra, {{first_name}}! 🎉",
+                    "Seu pagamento foi confirmado com sucesso e seu acesso já está liberado.",
+                    "Os dados de acesso foram enviados para o seu e-mail cadastrado.",
+                    "Qualquer dúvida, nossa equipe está pronta para te atender por aqui!",
+                ),
+            ),
+            wait("aguardo_2d", 2, "days"),
+            send(
+                "pesquisa_satisfacao",
+                text(
+                    "Olá, {{first_name}}! Tudo bem com você?",
+                    "Já se passaram 2 dias desde que seu pedido foi entregue.",
+                    "Como está sendo sua experiência até agora? Se tiver sugestões ou dúvidas, é só responder esta mensagem!",
+                ),
+            ),
+        ],
+        "edges": [
+            ("atualiza_tags", "default", "entrega_acesso"),
+            ("entrega_acesso", "default", "aguardo_2d"),
+            ("aguardo_2d", "default", "pesquisa_satisfacao"),
+        ],
+    },
 ]
 
 
@@ -654,9 +779,28 @@ def connection_for(workspace: Workspace, platform: str) -> Any:
 
 def build(workspace: Workspace, spec: dict[str, Any]) -> Flow:
     """One template as a real Flow row, so the real exporter can read it."""
+    from apps.contacts.models import Tag
+
+    # Resolve any symbolic tag_name in condition nodes to a real Tag in workspace
+    nodes_copy = []
+    for node in spec["nodes"]:
+        node_copy = dict(node)
+        if node_copy.get("type") == "condition":
+            cfg = dict(node_copy.get("config", {}))
+            rules = []
+            for r in cfg.get("rules", []):
+                r_copy = dict(r)
+                if r_copy.get("source") == "tag" and "tag_name" in r_copy:
+                    tag_obj, _ = Tag.objects.get_or_create(workspace=workspace, name=r_copy.pop("tag_name"))
+                    r_copy["key"] = str(tag_obj.pk)
+                rules.append(r_copy)
+            cfg["rules"] = rules
+            node_copy["config"] = cfg
+        nodes_copy.append(node_copy)
+
     graph = {
         "schema": 1,
-        "nodes": positioned(spec["nodes"]),
+        "nodes": positioned(nodes_copy),
         "edges": [
             {
                 "id": f"{source}-{handle.replace(':', '-')}-{target}",
@@ -667,7 +811,13 @@ def build(workspace: Workspace, spec: dict[str, Any]) -> Flow:
             for source, handle, target in spec["edges"]
         ],
     }
-    flow = Flow(workspace=workspace, name=spec["name"], folder=FOLDER, status=FlowStatus.DRAFT)
+    flow = Flow(
+        workspace=workspace,
+        name=spec["name"],
+        folder=spec.get("folder", FOLDER),
+        is_independent=spec.get("is_independent", False),
+        status=FlowStatus.DRAFT,
+    )
     flow.save()
     FlowVersion(workspace=workspace, flow=flow, version=1, graph_json=graph).save()
     for priority, (trigger_type, platform, config) in enumerate(spec["triggers"]):

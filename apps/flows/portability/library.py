@@ -337,6 +337,22 @@ TEMPLATE_COPY: dict[str, TemplateCopy] = {
         category="Engage",
         summary=("Asks for the order number, looks it up, and says where it is."),
     ),
+    "whatsapp-recuperacao-pix": TemplateCopy(
+        category="Starters",
+        summary=("Lembrete automático após 15 minutos se o Pix continuar pendente, com código copia-e-cola e sem reenviar se já estiver pago."),
+    ),
+    "whatsapp-recuperacao-boleto": TemplateCopy(
+        category="Convert",
+        summary=("Lembrete amigável com código de barras após 24 horas caso o boleto ainda esteja pendente de pagamento."),
+    ),
+    "whatsapp-recuperacao-carrinho": TemplateCopy(
+        category="Convert",
+        summary=("Lembrete após 30 minutos com link direto para recuperar compras com carrinho abandonado."),
+    ),
+    "whatsapp-pos-venda-entrega": TemplateCopy(
+        category="Engage",
+        summary=("Atualiza as tags de compra aprovada, entrega o acesso imediato via WhatsApp e envia acompanhamento de satisfação em 2 dias."),
+    ),
 }
 
 

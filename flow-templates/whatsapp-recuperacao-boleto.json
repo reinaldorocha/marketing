@@ -1,0 +1,137 @@
+{
+  "app": "brightbean-chat",
+  "entry": "flow-1",
+  "flows": [
+    {
+      "folder": "Recuperação",
+      "is_independent": true,
+      "graph": {
+        "edges": [
+          {
+            "id": "aguardo_24h-default-checa_boleto",
+            "source": "aguardo_24h",
+            "sourceHandle": "default",
+            "target": "checa_boleto"
+          },
+          {
+            "id": "checa_boleto-cond-true-lembrete_boleto",
+            "source": "checa_boleto",
+            "sourceHandle": "cond:true",
+            "target": "lembrete_boleto"
+          }
+        ],
+        "nodes": [
+          {
+            "config": {
+              "duration": {
+                "unit": "hours",
+                "value": 24
+              },
+              "mode": "duration"
+            },
+            "id": "aguardo_24h",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "type": "smart_delay"
+          },
+          {
+            "config": {
+              "match": "all",
+              "rules": [
+                {
+                  "key": "e01ff3eb-0d5b-5831-9800-838789472640",
+                  "op": "has",
+                  "source": "tag"
+                }
+              ]
+            },
+            "id": "checa_boleto",
+            "position": {
+              "x": 300,
+              "y": 0
+            },
+            "type": "condition"
+          },
+          {
+            "config": {
+              "blocks": [
+                {
+                  "text": "Olá, {{first_name}}! Lembramos que o seu boleto vence hoje.\nCopie a linha digitável abaixo para pagar no aplicativo do seu banco:\n{{boleto_barcode}}\nQualquer dúvida ou se precisar de 2ª via, responda a esta mensagem!",
+                  "type": "text"
+                }
+              ]
+            },
+            "id": "lembrete_boleto",
+            "position": {
+              "x": 600,
+              "y": 0
+            },
+            "type": "send_message"
+          }
+        ],
+        "schema": 1
+      },
+      "key": "flow-1",
+      "name": "Recuperação de Boleto",
+      "triggers": [
+        {
+          "config": {},
+          "platform": null,
+          "type": "api"
+        },
+        {
+          "config": {
+            "keywords": [
+              {
+                "mode": "any_word",
+                "text": "boleto"
+              },
+              {
+                "mode": "any_word",
+                "text": "teste_boleto"
+              }
+            ]
+          },
+          "platform": "whatsapp",
+          "type": "keyword"
+        }
+      ]
+    }
+  ],
+  "format": 1,
+  "requirements": {
+    "comment_posts": [],
+    "custom_field": [],
+    "flow": [],
+    "from_override": [],
+    "link_handle": [],
+    "media": [],
+    "member": [],
+    "platform": [
+      {
+        "key": "whatsapp",
+        "name": "whatsapp",
+        "used_by": [
+          "flow-1:trigger-1"
+        ]
+      }
+    ],
+    "request_header": [],
+    "segment": [],
+    "sequence": [],
+    "tag": [
+      {
+        "key": "boleto-pendente",
+        "name": "Boleto pendente",
+        "ref": "e01ff3eb-0d5b-5831-9800-838789472640",
+        "used_by": [
+          "flow-1:checa_boleto"
+        ]
+      }
+    ],
+    "whatsapp_template": []
+  },
+  "schema": 1
+}

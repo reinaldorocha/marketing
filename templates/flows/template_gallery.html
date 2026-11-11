@@ -14,7 +14,7 @@ keystroke buys nothing; it also sidesteps the $nextTick trap documented in
 list.html, which exists only because htmx has to serialise a form first.
 {% endcomment %}
 
-{% block title %}Templates · BrightBean Chat{% endblock %}
+{% block title %}Modelos · Marketing{% endblock %}
 
 {% comment %}
 The Templates tab lands here, so the strip it was clicked in has to survive the
@@ -32,14 +32,14 @@ cancel.
 {% block page_header %}
 <div class="page-header max-w-[1060px]">
     <div class="page-header-text">
-        <h1 class="page-title">Templates</h1>
+        <h1 class="page-title">Modelos</h1>
         <p class="page-lede">
-            Ready-made flows. Pick one and change the words to suit you — you will see exactly what it needs before anything is created.
+            Fluxos prontos para usar. Escolha um e personalize o conteúdo — você verá exatamente o que ele precisa antes de qualquer criação.
         </p>
     </div>
     <div class="page-header-actions">
         <a href="{{ upload_url }}" class="btn-pill-secondary">
-            {% include "partials/_nav_icon.html" with name="upload" icon_size=16 %} Upload a file
+            {% include "partials/_nav_icon.html" with name="upload" icon_size=16 %} Enviar arquivo
         </a>
     </div>
 </div>
@@ -80,10 +80,10 @@ cancel.
     <div class="list-toolbar">
         <label class="search-field w-full sm:w-64">
             {% include "partials/_nav_icon.html" with name="search" icon_size=16 %}
-            <input type="search" x-model="q" placeholder="Search {{ cards|length }} templates"
-                   class="search-input" aria-label="Search templates">
+            <input type="search" x-model="q" placeholder="Buscar em {{ cards|length }} modelos"
+                   class="search-input" aria-label="Buscar modelos">
         </label>
-        {% filter_popover groups=filter_groups noun="template" %}
+        {% filter_popover groups=filter_groups noun="modelo" %}
     </div>
     {% filter_chips groups=filter_groups %}
     </div>
@@ -96,8 +96,8 @@ cancel.
 
     <div class="rounded-lg p-3 mt-6" style="background: var(--surface-2);">
         <p class="text-xs" style="color: var(--text-secondary);">
-            Every template arrives as an <strong>unpublished draft</strong> with its triggers switched off,
-            and its links and tags are placeholders. Nothing runs until you edit it and publish it yourself.
+            Cada modelo é importado como um <strong>rascunho não publicado</strong> com seus gatilhos desativados,
+            e seus links e etiquetas são modelos de exemplo. Nada é executado até você editar e publicar você mesmo.
         </p>
     </div>
 </div>

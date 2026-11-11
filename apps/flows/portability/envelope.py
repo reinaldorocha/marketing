@@ -191,6 +191,9 @@ _FLOW = f.obj(
         ),
         "name": f.string(min_length=1, max_length=200),
         "folder": f.string(max_length=200),
+        "is_independent": f.boolean(
+            description="Whether executions of this flow run independently without being cancelled by conversational flows.",
+        ),
         "graph": f.any_json(description="Validated against the flow-graph schema, not against this one."),
         "triggers": f.array(_TRIGGER, max_items=MAX_TRIGGERS_PER_FLOW),
     },

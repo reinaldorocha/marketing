@@ -193,3 +193,19 @@ export function resetSimulator(
   const url = `${env.detailUrl.replace(/\/$/, "")}/simulator/reset/`;
   return request<SimulatorState>(url, { method: "POST", body: payload });
 }
+
+export function simulateSaleApproved(
+  env: BuilderEnv,
+  payload: { session_id: string },
+): Promise<SimulatorState> {
+  const url = `${env.detailUrl.replace(/\/$/, "")}/simulator/sale-approved/`;
+  return request<SimulatorState>(url, { method: "POST", body: payload });
+}
+
+export function updateSimulatorContact(
+  env: BuilderEnv,
+  payload: { session_id: string; contact: Record<string, unknown> },
+): Promise<SimulatorState> {
+  const url = `${env.detailUrl.replace(/\/$/, "")}/simulator/update-contact/`;
+  return request<SimulatorState>(url, { method: "POST", body: payload });
+}

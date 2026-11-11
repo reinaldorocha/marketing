@@ -292,9 +292,11 @@ class InboundLeadWebhook(WorkspaceScopedModel):
     name = models.CharField(max_length=200)
     target_flow = models.ForeignKey(
         "flows.Flow",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="inbound_lead_webhooks",
-        help_text="The flow initiated when a lead is received.",
+        help_text="O fluxo iniciado ao receber um lead ou evento (opcional).",
     )
     channel_connection = models.ForeignKey(
         "channels.ChannelConnection",
@@ -326,6 +328,21 @@ class InboundLeadWebhook(WorkspaceScopedModel):
         blank=True,
         help_text="List of tag names automatically added to contacts created or updated via this webhook.",
     )
+    remove_tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Lista de etiquetas para remover do contato ao receber este webhook (ex: 'Venda pendente').",
+    )
+    event_rules = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Regras de múltiplos eventos por tipo/status (ex: pix_generated, order_approved).",
+    )
+    recent_test_payload = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Último payload de teste capturado para facilitar o mapeamento visual.",
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -335,7 +352,8 @@ class InboundLeadWebhook(WorkspaceScopedModel):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.name} -> {self.target_flow.name}"
+        target = self.target_flow.name if self.target_flow else "Apenas Etiquetas"
+        return f"{self.name} -> {target}"
 
     def rotate_secret(self) -> str:
         import secrets

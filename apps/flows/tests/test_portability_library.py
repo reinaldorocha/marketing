@@ -96,6 +96,10 @@ EXPECTED = (
     "waitlist-signup.json",
     "whatsapp-opening-hours.json",
     "whatsapp-order-status.json",
+    "whatsapp-pos-venda-entrega.json",
+    "whatsapp-recuperacao-boleto.json",
+    "whatsapp-recuperacao-carrinho.json",
+    "whatsapp-recuperacao-pix.json",
 )
 
 
