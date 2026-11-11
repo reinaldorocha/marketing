@@ -78,13 +78,13 @@ export function handleLabel(handle: string, config: unknown): string {
     case "default":
       return "";
     case "timeout":
-      return "Timeout";
+      return "Tempo esgotado";
     case "error":
-      return "Error";
+      return "Erro";
     case "cond:true":
-      return "Yes";
+      return "Sim";
     case "cond:false":
-      return "No";
+      return "Não";
     // The trigger card's one edge. Unlabelled: the card it leaves already says
     // "When", and the step it reaches is badged "Starts here", so a word on the
     // line between them would be the third telling. Not a graph handle — see

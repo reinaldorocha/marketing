@@ -1,0 +1,167 @@
+{
+  "app": "brightbean-chat",
+  "entry": "flow-1",
+  "flows": [
+    {
+      "folder": "Pós-venda",
+      "is_independent": true,
+      "graph": {
+        "edges": [
+          {
+            "id": "atualiza_tags-default-entrega_acesso",
+            "source": "atualiza_tags",
+            "sourceHandle": "default",
+            "target": "entrega_acesso"
+          },
+          {
+            "id": "entrega_acesso-default-aguardo_2d",
+            "source": "entrega_acesso",
+            "sourceHandle": "default",
+            "target": "aguardo_2d"
+          },
+          {
+            "id": "aguardo_2d-default-pesquisa_satisfacao",
+            "source": "aguardo_2d",
+            "sourceHandle": "default",
+            "target": "pesquisa_satisfacao"
+          }
+        ],
+        "nodes": [
+          {
+            "config": {
+              "actions": [
+                {
+                  "tag": "Venda pendente",
+                  "verb": "remove_tag"
+                },
+                {
+                  "tag": "Cliente",
+                  "verb": "add_tag"
+                }
+              ]
+            },
+            "id": "atualiza_tags",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "type": "action"
+          },
+          {
+            "config": {
+              "blocks": [
+                {
+                  "text": "Parabéns pela compra, {{first_name}}! 🎉\nSeu pagamento foi confirmado com sucesso e seu acesso já está liberado.\nOs dados de acesso foram enviados para o seu e-mail cadastrado.\nQualquer dúvida, nossa equipe está pronta para te atender por aqui!",
+                  "type": "text"
+                }
+              ]
+            },
+            "id": "entrega_acesso",
+            "position": {
+              "x": 300,
+              "y": 0
+            },
+            "type": "send_message"
+          },
+          {
+            "config": {
+              "duration": {
+                "unit": "days",
+                "value": 2
+              },
+              "mode": "duration"
+            },
+            "id": "aguardo_2d",
+            "position": {
+              "x": 600,
+              "y": 0
+            },
+            "type": "smart_delay"
+          },
+          {
+            "config": {
+              "blocks": [
+                {
+                  "text": "Olá, {{first_name}}! Tudo bem com você?\nJá se passaram 2 dias desde que seu pedido foi entregue.\nComo está sendo sua experiência até agora? Se tiver sugestões ou dúvidas, é só responder esta mensagem!",
+                  "type": "text"
+                }
+              ]
+            },
+            "id": "pesquisa_satisfacao",
+            "position": {
+              "x": 900,
+              "y": 0
+            },
+            "type": "send_message"
+          }
+        ],
+        "schema": 1
+      },
+      "key": "flow-1",
+      "name": "Pós-Venda e Entrega de Acesso",
+      "triggers": [
+        {
+          "config": {},
+          "platform": null,
+          "type": "api"
+        },
+        {
+          "config": {
+            "keywords": [
+              {
+                "mode": "any_word",
+                "text": "acesso"
+              },
+              {
+                "mode": "any_word",
+                "text": "teste_posvenda"
+              }
+            ]
+          },
+          "platform": "whatsapp",
+          "type": "keyword"
+        }
+      ]
+    }
+  ],
+  "format": 1,
+  "requirements": {
+    "comment_posts": [],
+    "custom_field": [],
+    "flow": [],
+    "from_override": [],
+    "link_handle": [],
+    "media": [],
+    "member": [],
+    "platform": [
+      {
+        "key": "whatsapp",
+        "name": "whatsapp",
+        "used_by": [
+          "flow-1:trigger-1"
+        ]
+      }
+    ],
+    "request_header": [],
+    "segment": [],
+    "sequence": [],
+    "tag": [
+      {
+        "key": "venda-pendente",
+        "name": "Venda pendente",
+        "used_by": [
+          "flow-1:atualiza_tags"
+        ]
+      },
+      {
+        "key": "cliente",
+        "name": "Cliente",
+        "used_by": [
+          "flow-1:atualiza_tags"
+        ]
+      }
+    ],
+    "whatsapp_template": []
+  },
+  "schema": 1
+}

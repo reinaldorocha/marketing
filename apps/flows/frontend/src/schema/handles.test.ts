@@ -75,10 +75,10 @@ describe("handleLabel", () => {
 
   it.each([
     ["default", ""],
-    ["timeout", "Timeout"],
-    ["error", "Error"],
-    ["cond:true", "Yes"],
-    ["cond:false", "No"],
+    ["timeout", "Tempo esgotado"],
+    ["error", "Erro"],
+    ["cond:true", "Sim"],
+    ["cond:false", "Não"],
     ["btn:a", "Book a call"],
     ["qr:q", "Later"],
     ["rand:p", "30%"],

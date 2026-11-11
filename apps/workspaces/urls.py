@@ -18,4 +18,7 @@ urlpatterns = [
     path("switch/", views.switch, name="switch"),
     path("settings/", views.settings_view, name="settings"),
     path("settings/update/", views.update_settings, name="update_settings"),
+    path("settings/operational/", views.operational_settings, name="operational_settings"),
+    path("settings/operational/meta-app/", views.operational_meta_app_save, name="operational_meta_app_save"),
+    path("settings/operational/smtp-test/", views.operational_smtp_test, name="operational_smtp_test"),
 ]

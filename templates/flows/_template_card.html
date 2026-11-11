@@ -25,7 +25,7 @@ inside Alpine's evaluator on every card, on every render of the core Flows page.
             <span class="pi-chip {{ platform.key|platform_class }} w-4 h-4 flex-shrink-0">{% include "partials/_platform_icon.html" with platform=platform.key size="sm" %}</span>
             <span class="truncate">{{ platform.label }}</span>
             {% empty %}
-            <span class="truncate">Any channel</span>
+            <span class="truncate">Qualquer canal</span>
             {% endfor %}
         </span>
         {% if entry.triggers %}<span class="tpl-tag">{{ entry.triggers.0 }}</span>{% endif %}
@@ -47,7 +47,7 @@ inside Alpine's evaluator on every card, on every render of the core Flows page.
     Only the missing ones are listed: a connected channel is already named in
     the card's head, and repeating it as a chip was noise.
     {% endcomment %}
-    <div class="flex flex-wrap items-center gap-1.5 empty:hidden">{% for platform in entry.platforms %}{% if not platform.connected %}<span class="status-pill status-pill-warning">Needs {{ platform.label }}</span>{% endif %}{% endfor %}{% for need in entry.needs %}<span class="status-pill">Needs {{ need|lower }}</span>{% endfor %}{% if entry.card.calls_out %}<span class="status-pill" title="This template contains a step that sends a request to another service.">Calls out to the internet</span>{% endif %}</div>
+    <div class="flex flex-wrap items-center gap-1.5 empty:hidden">{% for platform in entry.platforms %}{% if not platform.connected %}<span class="status-pill status-pill-warning">Requer {{ platform.label }}</span>{% endif %}{% endfor %}{% for need in entry.needs %}<span class="status-pill">Requer {{ need|lower }}</span>{% endfor %}{% if entry.card.calls_out %}<span class="status-pill" title="Este modelo contém uma etapa que envia requisições para outro serviço.">Faz chamadas externas</span>{% endif %}</div>
     {% comment %}
       "Calls out to the internet": installing a template only ever touches your
       own workspace — except for this. An external_request node sends whatever
@@ -62,7 +62,7 @@ inside Alpine's evaluator on every card, on every render of the core Flows page.
     {% endcomment %}
     <form method="post" action="{{ entry.start_url }}" class="mt-auto flex items-center justify-between gap-3 pt-1">
         {% csrf_token %}
-        <span class="text-[12px]" style="color: var(--text-tertiary);">{{ entry.card.step_count }} step{{ entry.card.step_count|pluralize }}{% if not entry.triggers %} · started by another flow{% endif %}</span>
-        <button type="submit" class="btn-pill-secondary btn-pill-sm">Use template</button>
+        <span class="text-[12px]" style="color: var(--text-tertiary);">{{ entry.card.step_count }} passo{{ entry.card.step_count|pluralize:"s" }}{% if not entry.triggers %} · iniciado por outro fluxo{% endif %}</span>
+        <button type="submit" class="btn-pill-secondary btn-pill-sm">Usar modelo</button>
     </form>
 </article>

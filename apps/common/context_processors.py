@@ -236,6 +236,15 @@ SETTINGS_NAV: list[NavGroup] = [
                 workspace_scoped=True,
             ),
             NavItem(
+                key="ws_operational",
+                permission="manage_workspace_settings",
+                label="Configurações Operacionais",
+                icon="settings",
+                url_name="workspaces:operational_settings",
+                url_names=frozenset({"workspaces:operational_settings"}),
+                workspace_scoped=True,
+            ),
+            NavItem(
                 key="ws_channels",
                 permission="manage_channels",
                 label="Canais",

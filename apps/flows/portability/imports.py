@@ -997,6 +997,7 @@ def _create_flow(workspace: Any, entry: dict[str, Any], *, user: Any) -> Flow:
         workspace=workspace,
         name=str(entry["name"])[:200],
         folder=str(entry.get("folder") or "")[:200],
+        is_independent=bool(entry.get("is_independent", False)),
         user=user,
     )
 

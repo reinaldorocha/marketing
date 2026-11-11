@@ -190,7 +190,8 @@ def start_flow(
                 f"to start (SPEC §9.1). Publishing validates this; a draft preview does not."
             )
 
-        superseded = _supersede(contact)
+        is_independent = getattr(flow, "is_independent", False)
+        superseded = _supersede(contact, flow=flow, is_independent=is_independent)
         execution = FlowExecution(
             workspace=flow.workspace,
             flow=flow,
@@ -203,6 +204,7 @@ def start_flow(
             blocks_since_pause=_carry_blocks,
             started_by=started_by,
             preview=(not version.published) if preview is None else preview,
+            is_independent=is_independent,
         )
         execution.save()
         logger.info(
@@ -633,22 +635,24 @@ def _resolve_version(flow: Flow, flow_version: FlowVersion | None) -> FlowVersio
     return version
 
 
-def _supersede(contact: Any) -> int:
-    """Expire every live execution this contact has, and disarm their timers.
+def _supersede(contact: Any, flow: Flow | None = None, is_independent: bool = False) -> int:
+    """Expire every live execution that this start supersedes, and disarm their timers.
 
-    SPEC §22's decision, written out: "One live execution per contact across all
-    flows; new start supersedes." Doing it here, under the lock the new
-    execution is about to be created under, is what makes it atomic — the
-    database's partial unique index only covers (contact, flow), so the
-    cross-flow half of the rule is this function.
-
-    The queue rows go too. A superseded execution's followup timer would
-    otherwise fire hours later; :func:`resume_execution`'s status check would
-    catch it, but a cancelled row is one that never wakes a worker at all.
+    SPEC §22's rule adapted for independent automations:
+    - Conversational flows (is_independent=False) supersede other conversational executions.
+      They do NOT cancel independent background automations (e.g. cart recovery, post-sale).
+    - Independent automations only supersede previous live executions of the SAME flow.
+    Doing it here, under the lock the new execution is about to be created under,
+    is what makes it atomic.
     """
-    live = FlowExecution.objects.for_workspace(contact.workspace_id).filter(
-        contact=contact, status__in=sorted(LIVE_STATUSES)
-    )
+    if is_independent and flow is not None:
+        live = FlowExecution.objects.for_workspace(contact.workspace_id).filter(
+            contact=contact, flow=flow, status__in=sorted(LIVE_STATUSES)
+        )
+    else:
+        live = FlowExecution.objects.for_workspace(contact.workspace_id).filter(
+            contact=contact, is_independent=False, status__in=sorted(LIVE_STATUSES)
+        )
     return _expire(live, contact.workspace_id, timezone.now(), contact_id=contact.pk)
 
 
@@ -658,18 +662,18 @@ _RESUMING_ACTIONS = (ActionType.RESUME_EXECUTION, ActionType.FOLLOWUP_TIMER)
 
 
 def _expire(live: Any, workspace_id: Any, now: datetime, **timers: Any) -> int:
-    """Expire the executions in ``live`` and cancel the resume timers ``timers`` selects.
+    """Expire the executions in ``live`` and cancel the resume timers of those executions."""
+    execution_ids = [str(pk) for pk in live.values_list("pk", flat=True)]
+    if not execution_ids:
+        return 0
 
-    What expiring means, in one place: the status, the wait config cleared, and
-    the queue rows that would have woken the run cancelled — a stale timer would
-    be caught by :func:`resume_execution`'s status check, but a cancelled row
-    never wakes a worker at all. :func:`_supersede` and
-    :func:`expire_flow_executions` differ only in which executions and whose
-    timers. Expired, not failed: nothing went wrong, somebody ended the run.
-    """
     expired = live.update(status=ExecutionStatus.EXPIRED, wait_config={}, updated_at=now)
     if expired:
-        cancel_pending(workspace_id, type__in=_RESUMING_ACTIONS, **timers)
+        cancel_pending(
+            workspace_id,
+            type__in=_RESUMING_ACTIONS,
+            payload__execution_id__in=execution_ids,
+        )
     return expired
 
 

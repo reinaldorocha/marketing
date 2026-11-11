@@ -1,18 +1,21 @@
 {% extends "layouts/workspace_settings.html" %}
 {% load common_extras %}
-{% block title %}{{ webhook.name }} · BrightBean{% endblock %}
+{% block title %}{{ webhook.name }} · Marketing{% endblock %}
 {% block content_wrap %}{% endblock %}
 
 {% block content %}
-<div class="max-w-[1060px] w-full">
-    <div class="page-header mb-6">
+<div class="max-w-[1060px] w-full space-y-6">
+    <div class="page-header mb-4">
         <div class="page-header-text">
             <h1 class="page-title">{{ webhook.name }}</h1>
             <p class="page-lede">
-                URL de endpoint, credenciais de autenticação e logs de entregas.
+                URL de endpoint, mapeamento visual de campos e recuperação baseada em etiquetas.
             </p>
         </div>
         <div class="flex items-center gap-2">
+            <button type="button" class="btn-pill-primary text-xs" @click="$modal('edit-webhook')">
+                Editar Configurações
+            </button>
             <form method="post" action="{% url 'lead_webhooks:rotate_secret' workspace_id=request.workspace.id webhook_id=webhook.id %}">
                 {% csrf_token %}
                 <button type="submit" class="btn-pill-secondary text-xs">Rotacionar Segredo</button>
@@ -24,72 +27,231 @@
         </div>
     </div>
 
-    <section class="card p-6 mb-5">
+    {% modal "edit-webhook" title="Editar Configurações do Webhook" size="lg" %}
+    <form method="post" action="{% url 'lead_webhooks:update' workspace_id=request.workspace.id webhook_id=webhook.id %}">
+        {% csrf_token %}
+        <div class="bb-modal-body space-y-4">
+            <div class="field">
+                <label class="field-label" for="edit-webhook-name">Nome da Integração</label>
+                <input class="form-input-styled" id="edit-webhook-name" type="text" name="name" required value="{{ webhook.name }}">
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="edit-target-flow">Fluxo a Iniciar (Opcional)</label>
+                <select class="form-input-styled" id="edit-target-flow" name="target_flow">
+                    <option value="">Nenhum (Apenas cadastrar/atualizar contato e etiquetas)</option>
+                    {% for flow in flows %}
+                    <option value="{{ flow.id }}" {% if webhook.target_flow_id == flow.id %}selected{% endif %}>{{ flow.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="field-hint mt-1">Selecione o fluxo a disparar ou deixe vazio para apenas atualizar etiquetas no banco (ex: Venda Aprovada).</p>
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="edit-channel-connection">Canal de Envio (WhatsApp / Instagram)</label>
+                <select class="form-input-styled" id="edit-channel-connection" name="channel_connection">
+                    <option value="">Nenhum canal pré-definido</option>
+                    {% for conn in connections %}
+                    <option value="{{ conn.id }}" {% if webhook.channel_connection_id == conn.id %}selected{% endif %}>{{ conn.display_name }} ({{ conn.get_platform_display }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-3">
+                <div class="field">
+                    <label class="field-label" for="edit-default-tags">Adicionar Etiquetas (separadas por vírgula)</label>
+                    <input class="form-input-styled" id="edit-default-tags" type="text" name="default_tags" value="{{ webhook.default_tags|join:', ' }}" placeholder="Venda pendente, Pix gerado">
+                    <p class="field-hint mt-1">Etiquetas aplicadas ao contato quando este webhook é recebido.</p>
+                </div>
+                <div class="field">
+                    <label class="field-label" for="edit-remove-tags">Remover Etiquetas (separadas por vírgula)</label>
+                    <input class="form-input-styled" id="edit-remove-tags" type="text" name="remove_tags" value="{{ webhook.remove_tags|join:', ' }}" placeholder="Venda pendente">
+                    <p class="field-hint mt-1">Etiquetas retiradas do contato (ex: remove 'Venda pendente' no webhook de Venda Aprovada).</p>
+                </div>
+            </div>
+
+            <h3 class="text-sm font-semibold pt-2" style="color: var(--text-primary);">Mapeamento de Campos do JSON Recebido</h3>
+            <div class="grid sm:grid-cols-2 gap-3">
+                <div class="field">
+                    <label class="field-label" for="edit-map-name">Chave do Nome (caminho)</label>
+                    <input class="form-input-styled" id="edit-map-name" type="text" name="name_field" value="{{ webhook.field_mapping.name_field|default:'name' }}" placeholder="Customer.full_name, name ou nome">
+                </div>
+                <div class="field">
+                    <label class="field-label" for="edit-map-phone">Chave do Telefone (caminho)</label>
+                    <input class="form-input-styled" id="edit-map-phone" type="text" name="phone_field" value="{{ webhook.field_mapping.phone_field|default:'phone' }}" placeholder="Customer.mobile, phone ou telefone">
+                </div>
+                <div class="field">
+                    <label class="field-label" for="edit-map-email">Chave do E-mail (caminho)</label>
+                    <input class="form-input-styled" id="edit-map-email" type="text" name="email_field" value="{{ webhook.field_mapping.email_field|default:'email' }}" placeholder="Customer.email ou email">
+                </div>
+                <div class="field">
+                    <label class="field-label" for="edit-map-optin">Chave de Consentimento (Opt-in)</label>
+                    <input class="form-input-styled" id="edit-map-optin" type="text" name="opt_in_field" value="{{ webhook.field_mapping.opt_in_field|default:'opt_in' }}" placeholder="opt_in, consentimento">
+                </div>
+            </div>
+        </div>
+        <div class="bb-modal-actions mt-5">
+            <button type="button" class="btn-pill-secondary" @click="close()">Cancelar</button>
+            <button type="submit" class="btn-pill-primary">Salvar Alterações</button>
+        </div>
+    </form>
+    {% endmodal %}
+
+    <!-- Endpoint Card -->
+    <section class="card p-6">
         <h2 class="section-title mb-3">Endpoint e Autenticação</h2>
         <div class="space-y-4">
             <div>
                 <label class="field-label text-xs font-semibold">URL DO WEBHOOK (POST)</label>
                 <div class="flex items-center gap-2 mt-1">
-                    <input class="form-input-styled font-mono text-sm bg-gray-50 flex-1" readonly value="{{ endpoint_url }}">
+                    <input class="form-input-styled font-mono text-sm bg-gray-50 flex-1" readonly value="{{ endpoint_url }}" id="webhook-endpoint-url">
+                    <button type="button" class="btn-pill-secondary text-xs" onclick="navigator.clipboard.writeText(document.getElementById('webhook-endpoint-url').value); alert('URL copiada!');">Copiar</button>
                 </div>
+                <p class="field-hint mt-1">Cole esta URL no checkout (Kiwify, Hotmart, Braip, Appmax, etc.).</p>
             </div>
 
             <div>
                 <label class="field-label text-xs font-semibold">TOKEN DE AUTENTICAÇÃO (X-Webhook-Secret ou Bearer)</label>
                 <div class="flex items-center gap-2 mt-1">
-                    <input class="form-input-styled font-mono text-sm bg-gray-50 flex-1" readonly value="{{ webhook.secret_token }}">
+                    <input class="form-input-styled font-mono text-sm bg-gray-50 flex-1" readonly value="{{ webhook.secret_token }}" id="webhook-secret-token">
+                    <button type="button" class="btn-pill-secondary text-xs" onclick="navigator.clipboard.writeText(document.getElementById('webhook-secret-token').value); alert('Token copiado!');">Copiar</button>
                 </div>
                 <p class="field-hint mt-1">Envie este token no cabeçalho <code>X-Webhook-Secret: &lt;token&gt;</code> ou <code>Authorization: Bearer &lt;token&gt;</code>.</p>
             </div>
         </div>
     </section>
 
-    <section class="card p-6 mb-5">
-        <h2 class="section-title mb-3">Configurações Vinculadas</h2>
-        <div class="grid sm:grid-cols-2 gap-4 text-sm">
-            <div class="p-3 bg-gray-50 rounded-lg">
+    <!-- Operational State & Tag Actions -->
+    <section class="card p-6">
+        <h2 class="section-title mb-3">Configuração Operacional e Regras de Etiqueta</h2>
+        <div class="grid sm:grid-cols-2 gap-4 text-sm mb-4">
+            <div class="p-3 bg-gray-50 dark:bg-slate-800/60 rounded-lg">
                 <span class="text-xs font-semibold text-gray-500 uppercase">Fluxo Acionado</span>
-                <p class="font-medium text-gray-900 mt-1">{{ webhook.target_flow.name }}</p>
+                <p class="font-medium text-gray-900 dark:text-gray-100 mt-1">
+                    {% if webhook.target_flow %}
+                        {{ webhook.target_flow.name }}
+                    {% else %}
+                        <span class="text-amber-600 dark:text-amber-400 font-semibold">Nenhum (Apenas atualização de contato e etiquetas)</span>
+                    {% endif %}
+                </p>
             </div>
-            <div class="p-3 bg-gray-50 rounded-lg">
+            <div class="p-3 bg-gray-50 dark:bg-slate-800/60 rounded-lg">
                 <span class="text-xs font-semibold text-gray-500 uppercase">Canal de Envio</span>
-                <p class="font-medium text-gray-900 mt-1">
+                <p class="font-medium text-gray-900 dark:text-gray-100 mt-1">
                     {% if webhook.channel_connection %}
                         {{ webhook.channel_connection.display_name }} ({{ webhook.channel_connection.get_platform_display }})
                     {% else %}
-                        Nenhum (usa canal da execução)
+                        Nenhum pré-definido
                     {% endif %}
                 </p>
             </div>
         </div>
 
-        {% if webhook.default_tags %}
-        <div class="mt-4">
-            <span class="text-xs font-semibold text-gray-500 uppercase">Tags automáticas:</span>
-            <div class="flex flex-wrap gap-1.5 mt-1">
-                {% for tag in webhook.default_tags %}
-                <span class="inline-block bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded font-medium">{{ tag }}</span>
-                {% endfor %}
+        <div class="grid sm:grid-cols-2 gap-4 border-t pt-4">
+            <div>
+                <span class="text-xs font-semibold text-emerald-600 uppercase block mb-1">➕ Etiquetas Adicionadas ao Contato:</span>
+                {% if webhook.default_tags %}
+                    <div class="flex flex-wrap gap-1.5">
+                        {% for tag in webhook.default_tags %}
+                        <span class="inline-block bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded font-medium border border-emerald-200">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <span class="text-xs text-gray-400">Nenhuma</span>
+                {% endif %}
+            </div>
+            <div>
+                <span class="text-xs font-semibold text-rose-600 uppercase block mb-1">➖ Etiquetas Removidas do Contato:</span>
+                {% if webhook.remove_tags %}
+                    <div class="flex flex-wrap gap-1.5">
+                        {% for tag in webhook.remove_tags %}
+                        <span class="inline-block bg-rose-50 text-rose-700 text-xs px-2.5 py-1 rounded font-medium border border-rose-200">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <span class="text-xs text-gray-400">Nenhuma</span>
+                {% endif %}
             </div>
         </div>
+    </section>
+
+    <!-- Visual Mapping Assistant & Test Event Receiver -->
+    <section class="card p-6">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="section-title">Mapeamento Visual e Teste de Evento</h2>
+                <p class="text-xs text-gray-500">
+                    Envie um evento de teste do seu checkout ou carregue um exemplo de plataforma para verificar os campos extraídos.
+                </p>
+            </div>
+            <form method="post" action="{% url 'lead_webhooks:test_event' workspace_id=request.workspace.id webhook_id=webhook.id %}" class="flex items-center gap-2">
+                {% csrf_token %}
+                <select name="sample_type" class="form-input-styled text-xs py-1">
+                    <option value="kiwify_pix">Exemplo Kiwify (PIX Gerado)</option>
+                    <option value="kiwify_approved">Exemplo Kiwify (Venda Aprovada)</option>
+                    <option value="hotmart_pix">Exemplo Hotmart (Boleto/PIX)</option>
+                    <option value="cart_abandoned">Exemplo Carrinho Abandonado</option>
+                </select>
+                <button type="submit" class="btn-pill-secondary text-xs">Carregar Exemplo</button>
+            </form>
+        </div>
+
+        {% if webhook.recent_test_payload %}
+            <div class="grid md:grid-cols-2 gap-4 mt-3">
+                <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
+                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 block mb-2 uppercase">🎯 Prévia de Extração com Mapeamento Atual</span>
+                    <dl class="space-y-2 text-xs">
+                        <div class="flex justify-between border-b pb-1">
+                            <dt class="text-gray-500">Nome (<code>{{ webhook.field_mapping.name_field|default:'name' }}</code>):</dt>
+                            <dd class="font-bold text-gray-900 dark:text-gray-100">{{ extracted_preview.name|default:'(vazio)' }}</dd>
+                        </div>
+                        <div class="flex justify-between border-b pb-1">
+                            <dt class="text-gray-500">Telefone (<code>{{ webhook.field_mapping.phone_field|default:'phone' }}</code>):</dt>
+                            <dd class="font-bold text-emerald-600 font-mono">{{ extracted_preview.phone|default:'(vazio)' }}</dd>
+                        </div>
+                        <div class="flex justify-between border-b pb-1">
+                            <dt class="text-gray-500">E-mail (<code>{{ webhook.field_mapping.email_field|default:'email' }}</code>):</dt>
+                            <dd class="font-bold text-gray-900 dark:text-gray-100 font-mono">{{ extracted_preview.email|default:'(vazio)' }}</dd>
+                        </div>
+                        <div class="flex justify-between border-b pb-1">
+                            <dt class="text-gray-500">Consentimento (<code>{{ webhook.field_mapping.opt_in_field|default:'opt_in' }}</code>):</dt>
+                            <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ extracted_preview.opt_in|default:'(não enviado)' }}</dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <div class="bg-gray-900 text-gray-100 rounded-lg p-4 font-mono text-xs overflow-x-auto max-h-60">
+                    <span class="text-gray-400 block mb-1">// Último payload JSON recebido:</span>
+                    <pre>{{ webhook.recent_test_payload|pprint }}</pre>
+                </div>
+            </div>
+        {% else %}
+            <div class="text-center py-6 border-2 border-dashed rounded-lg bg-gray-50 dark:bg-slate-800/40">
+                <p class="text-xs text-gray-500 mb-2">Nenhum payload foi recebido ainda por este webhook.</p>
+                <p class="text-xs text-gray-400">Clique em "Carregar Exemplo" acima ou dispare um webhook de teste do seu checkout para mapear os campos.</p>
+            </div>
         {% endif %}
     </section>
 
-    <section class="card p-6 mb-5">
+    <!-- cURL Example -->
+    <section class="card p-6">
         <h2 class="section-title mb-2">Exemplo de Requisição (cURL)</h2>
         <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto font-mono">curl -X POST "{{ endpoint_url }}" \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Secret: {{ webhook.secret_token }}" \
   -d '{
-    "name": "Maria Silva",
-    "phone": "+5511999999999",
-    "email": "maria@exemplo.com",
-    "tags": ["lead-campanha", "vip"],
-    "opt_in": true
+    "Customer": {
+      "full_name": "Maria Silva",
+      "mobile": "+5511999999999",
+      "email": "maria@exemplo.com"
+    },
+    "event": "pix_generated",
+    "order_status": "waiting_payment"
   }'</pre>
     </section>
 
-    <section class="card p-6 mb-5">
+    <!-- Logs -->
+    <section class="card p-6">
         <h2 class="section-title mb-3">Logs de Entregas Recentes</h2>
         {% if logs %}
         <div class="overflow-x-auto">
@@ -100,7 +262,7 @@
                         <th class="py-2">Status</th>
                         <th class="py-2">Contato</th>
                         <th class="py-2">Execução</th>
-                        <th class="py-2">Idempotência</th>
+                        <th class="py-2">Detalhes</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
@@ -109,45 +271,40 @@
                         <td class="py-2.5 text-xs font-mono text-gray-600">{{ log.received_at|date:"d/m/Y H:i:s" }}</td>
                         <td class="py-2.5">
                             {% if log.status == "success" %}
-                                <span class="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-semibold">Sucesso</span>
-                            {% elif log.status == "duplicate" %}
-                                <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded font-semibold">Duplicado</span>
+                                <span class="status-pill status-pill-active">Sucesso</span>
+                            {% elif log.status == "pending" %}
+                                <span class="status-pill status-pill-warning">Processando</span>
                             {% else %}
-                                <span class="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded font-semibold">{{ log.status }}</span>
+                                <span class="status-pill status-pill-disabled">Erro</span>
                             {% endif %}
                         </td>
-                        <td class="py-2.5">
+                        <td class="py-2.5 text-xs">
                             {% if log.contact %}
-                                {{ log.contact.first_name }} {{ log.contact.last_name }} ({{ log.contact.phone|default:log.contact.email }})
+                                <a href="{% url 'contacts:detail' workspace_id=request.workspace.id contact_id=log.contact.id %}" class="text-blue-600 hover:underline">
+                                    {{ log.contact.name|default:log.contact.phone }}
+                                </a>
                             {% else %}
-                                <span class="text-gray-400">&mdash;</span>
+                                <span class="text-gray-400">—</span>
                             {% endif %}
                         </td>
-                        <td class="py-2.5 font-mono text-xs text-gray-600">
+                        <td class="py-2.5 text-xs font-mono">
                             {% if log.execution %}
-                                #{{ log.execution.pk|stringformat:".8s" }}
+                                <span class="text-emerald-700 font-semibold">{{ log.execution.id|slice:":8" }}...</span>
                             {% else %}
-                                &mdash;
+                                <span class="text-gray-400">—</span>
                             {% endif %}
                         </td>
-                        <td class="py-2.5 font-mono text-xs text-gray-500 truncate max-w-[150px]">{{ log.idempotency_key }}</td>
+                        <td class="py-2.5 text-xs text-gray-500 truncate max-w-xs">
+                            {{ log.error_message|default:"Processado com sucesso" }}
+                        </td>
                     </tr>
-                    {% if log.error_message %}
-                    <tr class="bg-red-50 text-xs text-red-700">
-                        <td colspan="5" class="py-1 px-2 font-mono">Erro: {{ log.error_message }}</td>
-                    </tr>
-                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         {% else %}
-        <p class="text-sm text-gray-500 py-4 text-center">Nenhuma entrega recebida ainda.</p>
+        <p class="text-xs text-gray-500">Nenhum evento registrado ainda.</p>
         {% endif %}
     </section>
-
-    <a class="cn-back" href="{% url 'lead_webhooks:list' workspace_id=request.workspace.id %}">
-        &larr; Voltar para webhooks de leads
-    </a>
 </div>
 {% endblock %}

@@ -1,0 +1,137 @@
+{
+  "app": "brightbean-chat",
+  "entry": "flow-1",
+  "flows": [
+    {
+      "folder": "Recuperação",
+      "is_independent": true,
+      "graph": {
+        "edges": [
+          {
+            "id": "aguardo_30m-default-checa_carrinho",
+            "source": "aguardo_30m",
+            "sourceHandle": "default",
+            "target": "checa_carrinho"
+          },
+          {
+            "id": "checa_carrinho-cond-true-lembrete_carrinho",
+            "source": "checa_carrinho",
+            "sourceHandle": "cond:true",
+            "target": "lembrete_carrinho"
+          }
+        ],
+        "nodes": [
+          {
+            "config": {
+              "duration": {
+                "unit": "minutes",
+                "value": 30
+              },
+              "mode": "duration"
+            },
+            "id": "aguardo_30m",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "type": "smart_delay"
+          },
+          {
+            "config": {
+              "match": "all",
+              "rules": [
+                {
+                  "key": "e01ff3eb-0d5b-5831-9800-838789472640",
+                  "op": "has",
+                  "source": "tag"
+                }
+              ]
+            },
+            "id": "checa_carrinho",
+            "position": {
+              "x": 300,
+              "y": 0
+            },
+            "type": "condition"
+          },
+          {
+            "config": {
+              "blocks": [
+                {
+                  "text": "Olá, {{first_name}}! Vimos que você deixou itens no carrinho.\nPreparamos uma condição especial para você concluir seu pedido com segurança:\n{{checkout_url}}\nSe precisar de suporte com o pagamento, estamos à disposição por aqui!",
+                  "type": "text"
+                }
+              ]
+            },
+            "id": "lembrete_carrinho",
+            "position": {
+              "x": 600,
+              "y": 0
+            },
+            "type": "send_message"
+          }
+        ],
+        "schema": 1
+      },
+      "key": "flow-1",
+      "name": "Recuperação de Carrinho Abandonado",
+      "triggers": [
+        {
+          "config": {},
+          "platform": null,
+          "type": "api"
+        },
+        {
+          "config": {
+            "keywords": [
+              {
+                "mode": "any_word",
+                "text": "carrinho"
+              },
+              {
+                "mode": "any_word",
+                "text": "teste_carrinho"
+              }
+            ]
+          },
+          "platform": "whatsapp",
+          "type": "keyword"
+        }
+      ]
+    }
+  ],
+  "format": 1,
+  "requirements": {
+    "comment_posts": [],
+    "custom_field": [],
+    "flow": [],
+    "from_override": [],
+    "link_handle": [],
+    "media": [],
+    "member": [],
+    "platform": [
+      {
+        "key": "whatsapp",
+        "name": "whatsapp",
+        "used_by": [
+          "flow-1:trigger-1"
+        ]
+      }
+    ],
+    "request_header": [],
+    "segment": [],
+    "sequence": [],
+    "tag": [
+      {
+        "key": "carrinho-abandonado",
+        "name": "Carrinho abandonado",
+        "ref": "e01ff3eb-0d5b-5831-9800-838789472640",
+        "used_by": [
+          "flow-1:checa_carrinho"
+        ]
+      }
+    ],
+    "whatsapp_template": []
+  },
+  "schema": 1
+}

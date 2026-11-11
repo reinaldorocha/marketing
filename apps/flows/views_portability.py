@@ -263,10 +263,10 @@ def _gallery_context(workspace: Any, workspace_id: str, *, errors: list[str] | N
         "cards": entries,
         "categories": categories,
         "filter_groups": [
-            {"key": "category", "label": "Category", "options": categories},
+            {"key": "category", "label": "Categoria", "options": categories},
             {
                 "key": "channel",
-                "label": "Channel",
+                "label": "Canal",
                 "options": [{"value": key, "label": label, "icon": key} for key, label in platforms.items()],
             },
         ],

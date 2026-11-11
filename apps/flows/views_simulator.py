@@ -21,7 +21,9 @@ __all__ = [
     "simulator_advance",
     "simulator_reply",
     "simulator_reset",
+    "simulator_sale_approved",
     "simulator_start",
+    "simulator_update_contact",
 ]
 
 require_workspace_member = require_workspace_role(WorkspaceRole.VIEWER)
@@ -160,4 +162,65 @@ def simulator_reset(request: WorkspaceRequest, workspace_id: str, flow_id: str) 
         )
 
     result = session.reset()
+    return JsonResponse(result)
+
+
+@login_required
+@require_workspace_member
+@require_POST
+def simulator_sale_approved(request: WorkspaceRequest, workspace_id: str, flow_id: str) -> HttpResponse:
+    """Simulate an approved sale webhook event (removing 'Venda pendente', adding 'Cliente')."""
+    payload = _read_json(request)
+    if isinstance(payload, JsonResponse):
+        return payload
+
+    session_id = str(payload.get("session_id") or "")
+    session = FlowSimulatorSession.load(session_id)
+    if not session or session.flow_id != str(flow_id):
+        return JsonResponse(
+            {"error": {"code": "session_not_found", "message": "Sessão de simulação expirada ou não encontrada."}},
+            status=404,
+        )
+
+    if session.workspace_id != str(request.workspace.id) or (session.user_id and session.user_id != str(request.user.id)):
+        return JsonResponse(
+            {"error": {"code": "forbidden", "message": "Acesso não autorizado a esta sessão de simulação."}},
+            status=403,
+        )
+
+    result = session.simulate_sale_approved()
+    return JsonResponse(result)
+
+
+@login_required
+@require_workspace_member
+@require_POST
+def simulator_update_contact(request: WorkspaceRequest, workspace_id: str, flow_id: str) -> HttpResponse:
+    """Update contact attributes (such as tags) in the active simulation session."""
+    payload = _read_json(request)
+    if isinstance(payload, JsonResponse):
+        return payload
+
+    session_id = str(payload.get("session_id") or "")
+    session = FlowSimulatorSession.load(session_id)
+    if not session or session.flow_id != str(flow_id):
+        return JsonResponse(
+            {"error": {"code": "session_not_found", "message": "Sessão de simulação expirada ou não encontrada."}},
+            status=404,
+        )
+
+    if session.workspace_id != str(request.workspace.id) or (session.user_id and session.user_id != str(request.user.id)):
+        return JsonResponse(
+            {"error": {"code": "forbidden", "message": "Acesso não autorizado a esta sessão de simulação."}},
+            status=403,
+        )
+
+    contact_data = payload.get("contact")
+    if not isinstance(contact_data, dict):
+        return JsonResponse(
+            {"error": {"code": "bad_request", "message": "Dados de contato ausentes ou inválidos."}},
+            status=400,
+        )
+
+    result = session.update_virtual_contact(contact_data)
     return JsonResponse(result)

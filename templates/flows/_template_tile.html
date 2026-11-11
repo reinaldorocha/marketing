@@ -25,7 +25,7 @@ channel is connected, none of which fit a tile this size.
           nothing to anyone not already fluent in the palette.
         {% endcomment %}
         <span class="block text-xs leading-relaxed mt-1" style="color: var(--text-tertiary);">
-            {{ template.steps }} step{{ template.steps|pluralize }} · {{ template.platform_label }}
+            {{ template.steps }} passo{{ template.steps|pluralize:"s" }} · {{ template.platform_label }}
         </span>
         <span class="flex gap-1 mt-3" aria-hidden="true">
             {% for platform in template.platforms %}

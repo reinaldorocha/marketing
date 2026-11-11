@@ -1,0 +1,239 @@
+{% extends "layouts/workspace_settings.html" %}
+{% block title %}Configurações Operacionais · Marketing{% endblock %}
+{% block content_wrap %}{% endblock %}
+
+{% block content %}
+<div class="max-w-[1060px] w-full space-y-6">
+    <div class="page-header mb-4">
+        <div class="page-header-text">
+            <h1 class="page-title">Configurações Operacionais</h1>
+            <p class="page-lede">
+                Gerencie credenciais do Meta App, WhatsApp (Evolution GO / Cloud API), Instagram, SMTP e Webhooks diretamente pela interface web.
+            </p>
+        </div>
+    </div>
+
+    <!-- 1. Meta App Credentials (Instagram & Facebook) -->
+    <section class="card p-6">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="section-title">Meta App (Instagram & Facebook Messenger)</h2>
+                <p class="text-xs text-gray-500">
+                    Credenciais do aplicativo Meta para login OAuth, sincronização de Direct, Comentários e Stories.
+                </p>
+            </div>
+            {% if meta_is_configured %}
+                <span class="status-pill status-pill-active">Configurado ({{ meta_source }})</span>
+            {% else %}
+                <span class="status-pill status-pill-disabled">Pendente</span>
+            {% endif %}
+        </div>
+
+        <form method="post" action="{% url 'workspaces:operational_meta_app_save' workspace_id=request.workspace.id %}" class="space-y-4">
+            {% csrf_token %}
+            <div class="grid sm:grid-cols-2 gap-4">
+                <div class="field">
+                    <label class="field-label" for="meta-client-id">App ID / Client ID</label>
+                    <input class="form-input-styled font-mono" id="meta-client-id" type="text" name="client_id" required value="{% if meta_masked.client_id %}{{ meta_masked.client_id }}{% endif %}" placeholder="Ex: 123456789012345">
+                    <p class="field-hint">ID do seu aplicativo criado no Meta for Developers.</p>
+                </div>
+                <div class="field">
+                    <label class="field-label" for="meta-client-secret">App Secret / Client Secret</label>
+                    <input class="form-input-styled font-mono" id="meta-client-secret" type="password" name="client_secret" required value="{% if meta_masked.client_secret %}{{ meta_masked.client_secret }}{% endif %}" placeholder="••••••••••••••••">
+                    <p class="field-hint">Chave secreta do aplicativo Meta (criptografada no banco).</p>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="meta-verify-token">Token de Verificação do Webhook (Opcional)</label>
+                <input class="form-input-styled font-mono" id="meta-verify-token" type="text" name="verify_token" value="{% if meta_masked.verify_token %}{{ meta_masked.verify_token }}{% endif %}" placeholder="Ex: meu_token_secreto_webhook">
+                <p class="field-hint">Token informado no painel do Meta ao configurar o Webhook.</p>
+            </div>
+
+            <div class="rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 text-xs space-y-2">
+                <span class="font-semibold block uppercase text-gray-700 dark:text-gray-300">URLs para colar no Meta Developer Portal:</span>
+                <div class="flex items-center justify-between gap-2 border-b pb-1 font-mono">
+                    <span class="text-gray-500">OAuth Callback URI:</span>
+                    <span class="text-gray-900 dark:text-gray-100 select-all">{{ meta_callback_url }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-2 font-mono">
+                    <span class="text-gray-500">Webhook Callback URL:</span>
+                    <span class="text-gray-900 dark:text-gray-100 select-all">{{ meta_webhook_url }}</span>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="btn-pill-primary">Salvar Credenciais do Meta App</button>
+            </div>
+        </form>
+    </section>
+
+    <!-- 2. WhatsApp Connections (Evolution GO & Cloud API) -->
+    <section class="card p-6">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="section-title">Canais WhatsApp</h2>
+                <p class="text-xs text-gray-500">Instâncias Evolution GO (não oficial) e WhatsApp Cloud API oficial.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="{% url 'channels:whatsapp_evolution_connect' workspace_id=request.workspace.id %}" class="btn-pill-primary text-xs">
+                    + Conectar Evolution GO (QR Code)
+                </a>
+                <a href="{% url 'channels:whatsapp_connect' workspace_id=request.workspace.id %}" class="btn-pill-secondary text-xs">
+                    + WhatsApp Cloud API
+                </a>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            {% if whatsapp_evolution_conns or whatsapp_cloud_conns %}
+                {% for conn in whatsapp_evolution_conns %}
+                    <div class="flex items-center justify-between p-3.5 border rounded-lg bg-slate-50 dark:bg-slate-900">
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">🟢</span>
+                            <div>
+                                <span class="font-semibold text-sm">{{ conn.display_name }}</span>
+                                <span class="text-xs text-gray-500 block">Evolution GO • Instância: {{ conn.external_id }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="status-pill status-pill-active">{{ conn.get_status_display }}</span>
+                            <a href="{% url 'channels:whatsapp_evolution_detail' workspace_id=request.workspace.id connection_id=conn.id %}" class="btn-pill-secondary text-xs">
+                                Gerenciar / QR Code
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+
+                {% for conn in whatsapp_cloud_conns %}
+                    <div class="flex items-center justify-between p-3.5 border rounded-lg bg-slate-50 dark:bg-slate-900">
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">📱</span>
+                            <div>
+                                <span class="font-semibold text-sm">{{ conn.display_name }}</span>
+                                <span class="text-xs text-gray-500 block">WhatsApp Cloud API • Número: {{ conn.external_id }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="status-pill status-pill-active">{{ conn.get_status_display }}</span>
+                            <a href="{% url 'channels:detail' workspace_id=request.workspace.id connection_id=conn.id %}" class="btn-pill-secondary text-xs">
+                                Detalhes
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-5 border border-dashed rounded-lg bg-gray-50 dark:bg-slate-800/40 text-xs text-gray-500">
+                    Nenhuma conexão de WhatsApp ativa. Clique nos botões acima para conectar um número.
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- 3. Instagram Direct & Profile Settings -->
+    <section class="card p-6">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="section-title">Contas e Ferramentas do Instagram</h2>
+                <p class="text-xs text-gray-500">Menu Persistente, Ice Breakers (Perguntas Frequentes) e Follower Gate.</p>
+            </div>
+            <a href="{% url 'channels:instagram_connect' workspace_id=request.workspace.id %}" class="btn-pill-primary text-xs">
+                + Conectar Perfil Instagram
+            </a>
+        </div>
+
+        <div class="space-y-3">
+            {% if instagram_conns %}
+                {% for conn in instagram_conns %}
+                    <div class="p-4 border rounded-lg bg-slate-50 dark:bg-slate-900 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">🟣</span>
+                                <div>
+                                    <span class="font-semibold text-sm">{{ conn.display_name }}</span>
+                                    <span class="text-xs text-gray-500 block">Instagram Professional Account (ID: {{ conn.external_id }})</span>
+                                </div>
+                            </div>
+                            <span class="status-pill status-pill-active">{{ conn.get_status_display }}</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2 pt-2 border-t">
+                            <a href="{% url 'channels:instagram_ice_breakers' workspace_id=request.workspace.id connection_id=conn.id %}" class="btn-pill-secondary text-xs">
+                                💬 Ice Breakers (Perguntas Frequentes)
+                            </a>
+                            <a href="{% url 'channels:instagram_persistent_menu' workspace_id=request.workspace.id connection_id=conn.id %}" class="btn-pill-secondary text-xs">
+                                📑 Menu Persistente
+                            </a>
+                            <a href="{% url 'channels:instagram_follower_settings' workspace_id=request.workspace.id connection_id=conn.id %}" class="btn-pill-secondary text-xs">
+                                🛡️ Follower Gate (Seguidores)
+                            </a>
+                            <a href="{% url 'channels:instagram_diagnostics' workspace_id=request.workspace.id connection_id=conn.id %}" class="btn-pill-secondary text-xs">
+                                🩺 Diagnóstico de Token
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-5 border border-dashed rounded-lg bg-gray-50 dark:bg-slate-800/40 text-xs text-gray-500">
+                    Nenhum perfil de Instagram conectado. Configure as credenciais do Meta App acima e conecte seu perfil.
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- 4. SMTP / E-mail Settings -->
+    <section class="card p-6">
+        <h2 class="section-title mb-2">Serviço de E-mail (SMTP)</h2>
+        <p class="text-xs text-gray-500 mb-4">
+            Teste a conectividade e entrega de e-mails transacionais (verificação, recuperação, avisos e etapas de e-mail).
+        </p>
+
+        <form method="post" action="{% url 'workspaces:operational_smtp_test' workspace_id=request.workspace.id %}" class="flex flex-col sm:flex-row items-end gap-3">
+            {% csrf_token %}
+            <div class="flex-1 w-full">
+                <label class="field-label" for="test-email">E-mail para Receber Teste</label>
+                <input class="form-input-styled text-sm" id="test-email" type="email" name="test_email" required value="{{ request.user.email }}" placeholder="seu.email@exemplo.com">
+            </div>
+            <button type="submit" class="btn-pill-primary text-xs shrink-0 py-2.5">
+                Enviar E-mail de Teste
+            </button>
+        </form>
+    </section>
+
+    <!-- 5. Webhooks Summary -->
+    <section class="card p-6">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h2 class="section-title">Webhooks de Integração</h2>
+                <p class="text-xs text-gray-500">Integrações de entrada (Leads e Checkout) e webhooks de saída.</p>
+            </div>
+            <a href="{% url 'lead_webhooks:list' workspace_id=request.workspace.id %}" class="btn-pill-secondary text-xs">
+                Ver Todos os Webhooks de Leads
+            </a>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+            <div class="p-3 border rounded-lg bg-slate-50 dark:bg-slate-900">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-400">Entrada de Leads / Checkout</span>
+                    <span class="text-xs font-bold">{{ lead_webhooks.count }} configurados</span>
+                </div>
+                <p class="text-xs text-gray-500 mb-3">Recebimento de carrinhos abandonados, PIX gerado e vendas aprovadas.</p>
+                <a href="{% url 'lead_webhooks:list' workspace_id=request.workspace.id %}" class="text-xs text-blue-600 font-semibold hover:underline">
+                    Gerenciar Webhooks de Leads →
+                </a>
+            </div>
+
+            <div class="p-3 border rounded-lg bg-slate-50 dark:bg-slate-900">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-400">Webhooks de Saída</span>
+                    <span class="text-xs font-bold">{{ outbound_webhooks.count }} configurados</span>
+                </div>
+                <p class="text-xs text-gray-500 mb-3">Notificações enviadas a sistemas externos em eventos de mensagens e contatos.</p>
+                <a href="{% url 'api_webhooks:list' workspace_id=request.workspace.id %}" class="text-xs text-blue-600 font-semibold hover:underline">
+                    Gerenciar Webhooks de Saída →
+                </a>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

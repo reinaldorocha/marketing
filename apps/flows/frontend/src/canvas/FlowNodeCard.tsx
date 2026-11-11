@@ -23,7 +23,13 @@ import { selectEntryIds, type CardData } from "../store/selectors";
 import { worstSeverity } from "../validation/normalize";
 import { NodePreview } from "./previews";
 
-const HANDLE_COPY: Record<string, string> = { default: "Next" };
+const HANDLE_COPY: Record<string, string> = {
+  default: "Continuar",
+  timeout: "Tempo esgotado",
+  error: "Erro",
+  "cond:true": "Sim",
+  "cond:false": "Não",
+};
 
 function FlowNodeCardInner({
   id,
