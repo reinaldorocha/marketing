@@ -5,7 +5,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('flows', '0008_flow_follower_gate'),
+        ('flows', '0009_alter_flow_status'),
         ('channels', '0001_initial'),
     ]
 
