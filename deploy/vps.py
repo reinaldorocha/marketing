@@ -235,9 +235,12 @@ def wait_healthy():
 
 def verify_public(env):
     domain = env["APP_DOMAIN"]
+    # Allow NPM/nginx workers to complete config reload before verifying
+    time.sleep(2)
     # Verify TLS hostname/chain and redirect using the real local nginx listener,
     # even when public DNS is behind a CDN. Nothing bypasses TLS verification.
     headers = run(["curl", "--fail", "--silent", "--show-error", "--max-time", "30",
+                   "--retry", "3", "--retry-all-errors", "--retry-delay", "2",
                    "--resolve", f"{domain}:443:127.0.0.1", "-D", "-", f"https://{domain}/healthz"])
     if '"database": "ok"' not in headers:
         raise RuntimeError("Public health endpoint did not confirm the database")
