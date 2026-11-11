@@ -395,7 +395,7 @@ def operational_settings(request: WorkspaceRequest, workspace_id: str) -> HttpRe
     # 1. Meta App credentials (Instagram / Messenger)
     resolution = resolve_platform_credentials(Platform.INSTAGRAM.value, workspace=request.workspace)
     meta_is_configured = bool(resolution)
-    meta_source = resolution.source
+    meta_source = resolution.source if meta_is_configured else ""
     meta_masked = mask_credentials(resolution.credentials) if meta_is_configured else {}
 
     # Check if configured at organization level
@@ -423,9 +423,9 @@ def operational_settings(request: WorkspaceRequest, workspace_id: str) -> HttpRe
     outbound_webhooks = OutboundWebhook.objects.for_workspace(request.workspace).order_by("-created_at")[:10]
 
     # Meta webhook callback URLs to show operator
-    callback_path = reverse("channels:instagram_callback")
+    callback_path = reverse("instagram_callback")
     meta_callback_url = request.build_absolute_uri(callback_path)
-    meta_webhook_url = request.build_absolute_uri("/webhooks/instagram/")
+    meta_webhook_url = request.build_absolute_uri(reverse("webhook_platform", kwargs={"platform": "instagram"}))
 
     return render(
         request,
