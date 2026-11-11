@@ -137,9 +137,9 @@ describe("Publish and a flush that did not land", () => {
     http.route("/publish/", { body: published });
 
     renderWith(makeStore(makeDetail(makeSampleGraph())), <Toolbar autosave={null} />);
-    fireEvent.click(screen.getByRole("button", { name: "Set live" }));
+    fireEvent.click(screen.getByRole("button", { name: /Set live|Ativar/i }));
 
-    await waitFor(() => expect(screen.getByText(/^Live v\d+$/)).toBeTruthy(), SETTLE);
+    await waitFor(() => expect(screen.getByText(/^(Live|Ativo) v\d+$/)).toBeTruthy(), SETTLE);
   });
 
   it("stops saying Archived once the publish that un-archived it lands", async () => {
@@ -154,11 +154,11 @@ describe("Publish and a flush that did not land", () => {
     const store = makeStore({ ...detail, flow: { ...detail.flow, status: "archived" } });
 
     renderWith(store, <Toolbar autosave={null} />);
-    expect(screen.getByText("Archived")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Set live" }));
+    expect(screen.getByText(/Archived|Arquivado/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Set live|Ativar/i }));
 
-    await waitFor(() => expect(screen.queryByText("Archived")).toBeNull(), SETTLE);
-    expect(screen.getByText(/^Live v\d+$/)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/Archived|Arquivado/i)).toBeNull(), SETTLE);
+    expect(screen.getByText(/^(Live|Ativo) v\d+$/)).toBeTruthy();
     expect(store.getState().flow?.status).toBe("active");
   });
 
@@ -177,8 +177,8 @@ describe("Publish and a flush that did not land", () => {
 
     renderWith(makeStore(detail), <Toolbar autosave={null} />);
 
-    expect(screen.getByText(/^Live v\d+ · No triggers$/)).toBeTruthy();
-    expect(screen.queryByText(/Draft v2/)).toBeNull();
+    expect(screen.getByText(/^(Live|Ativo) v\d+ · (No triggers|Sem gatilhos)$/)).toBeTruthy();
+    expect(screen.queryByText(/(Draft|Rascunho) v2/)).toBeNull();
   });
 
   it("offers Set offline instead of a repeat publish for a version that is already live", () => {
@@ -190,8 +190,8 @@ describe("Publish and a flush that did not land", () => {
 
     renderWith(makeStore(detail), <Toolbar autosave={null} />);
 
-    expect(screen.queryByRole("button", { name: "Set live" })).toBeNull();
-    const button = screen.getByRole("button", { name: "Set offline" });
+    expect(screen.queryByRole("button", { name: /^(Set live|Ativar)$/i })).toBeNull();
+    const button = screen.getByRole("button", { name: /Set offline|Desativar/i });
     expect(button.hasAttribute("disabled")).toBe(false);
     // Not dressed as the call to action.
     expect(button.className).toContain("btn-pill-secondary");
@@ -208,12 +208,12 @@ describe("Publish and a flush that did not land", () => {
     http.route("/publish/", { body: { ...published, triggers: makeTriggers(2) } });
 
     renderWith(store, <Toolbar autosave={null} />);
-    expect(screen.getByText(/^Live v\d+ · Triggers off$/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Turn on triggers" }));
+    expect(screen.getByText(/^(Live|Ativo) v\d+ · (Triggers off|Gatilhos desativados)$/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Turn on triggers|Ativar gatilhos/i }));
 
-    await waitFor(() => expect(screen.getByText(/^Live v\d+$/)).toBeTruthy(), SETTLE);
+    await waitFor(() => expect(screen.getByText(/^(Live|Ativo) v\d+$/)).toBeTruthy(), SETTLE);
     expect(store.getState().triggers.every((trigger) => trigger.enabled)).toBe(true);
-    expect(screen.getByRole("button", { name: "Set offline" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Set offline|Desativar/i })).toBeTruthy();
   });
 
   it("offers it again the moment an edit is pending", async () => {
@@ -229,9 +229,9 @@ describe("Publish and a flush that did not land", () => {
     // is no autosave mounted here, so drive the same transition directly.
     store.getState().setSave({ state: "dirty" });
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Set live" }).hasAttribute("disabled")).toBe(false));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Set live|Ativar/i }).hasAttribute("disabled")).toBe(false));
     // Still offered, beside it: the flow is live until the edit is published.
-    expect(screen.getByRole("button", { name: "Set offline" }).className).toContain("btn-pill-secondary");
+    expect(screen.getByRole("button", { name: /Set offline|Desativar/i }).className).toContain("btn-pill-secondary");
   });
 
   it("fires a success toast the page's global host can render", async () => {
@@ -242,7 +242,7 @@ describe("Publish and a flush that did not land", () => {
 
     try {
       renderWith(makeStore(makeDetail(makeSampleGraph())), <Toolbar autosave={null} />);
-      fireEvent.click(screen.getByRole("button", { name: "Set live" }));
+      fireEvent.click(screen.getByRole("button", { name: /Set live|Ativar/i }));
 
       await waitFor(() => expect(seen).toHaveLength(1), SETTLE);
       const detail = seen[0]?.detail as { tone: string; title: string };
@@ -266,7 +266,7 @@ describe("Publish and a flush that did not land", () => {
 
     renderWith(makeStore(detail), <Toolbar autosave={null} />);
 
-    expect(screen.getByRole("button", { name: "Set live" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: /Set live|Ativar/i }).hasAttribute("disabled")).toBe(false);
   });
 });
 
@@ -294,9 +294,9 @@ describe("Set offline", () => {
     const store = makeStore(liveDetail());
 
     renderWith(store, <Toolbar autosave={null} />);
-    fireEvent.click(screen.getByRole("button", { name: "Set offline" }));
+    fireEvent.click(screen.getByRole("button", { name: /Set offline|Desativar/i }));
 
-    await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy(), SETTLE);
+    await waitFor(() => expect(screen.getByText(/Offline|Desativado/i)).toBeTruthy(), SETTLE);
     expect(confirm).toHaveBeenCalledOnce();
     const posted = http.requests.filter((request) => request.url.includes("/offline/"));
     expect(posted).toHaveLength(1);
@@ -304,7 +304,7 @@ describe("Set offline", () => {
     expect(posted[0]?.headers["x-csrftoken"]).toBeTruthy();
     expect(store.getState().flow?.status).toBe("offline");
     expect(store.getState().save.publishedVersion).toBeNull();
-    expect(screen.getByRole("button", { name: "Set live" }).className).toContain("btn-pill-primary");
+    expect(screen.getByRole("button", { name: /Set live|Ativar/i }).className).toContain("btn-pill-primary");
   });
 
   it("does nothing when the confirmation is declined", () => {
@@ -312,7 +312,7 @@ describe("Set offline", () => {
     const store = makeStore(liveDetail());
 
     renderWith(store, <Toolbar autosave={null} />);
-    fireEvent.click(screen.getByRole("button", { name: "Set offline" }));
+    fireEvent.click(screen.getByRole("button", { name: /Set offline|Desativar/i }));
 
     expect(http.requests.filter((request) => request.url.includes("/offline/"))).toHaveLength(0);
     expect(store.getState().flow?.status).toBe("active");
@@ -327,7 +327,7 @@ describe("Set offline", () => {
 
     try {
       renderWith(makeStore(liveDetail()), <Toolbar autosave={null} />);
-      fireEvent.click(screen.getByRole("button", { name: "Set offline" }));
+      fireEvent.click(screen.getByRole("button", { name: /Set offline|Desativar/i }));
 
       await waitFor(() => expect(seen).toHaveLength(1), SETTLE);
       expect(seen[0]?.detail).toEqual({
@@ -358,12 +358,12 @@ describe("Set offline", () => {
     const store = makeStore(detail);
 
     renderWith(store, <Toolbar autosave={null} />);
-    fireEvent.click(screen.getByRole("button", { name: "Set offline" }));
+    fireEvent.click(screen.getByRole("button", { name: /Set offline|Desativar/i }));
 
-    await waitFor(() => expect(screen.getByText("Offline")).toBeTruthy(), SETTLE);
+    await waitFor(() => expect(screen.getByText(/Offline|Desativado/i)).toBeTruthy(), SETTLE);
     expect(store.getState().save.message).toBe("Only a live flow can be set offline.");
-    expect(screen.queryByRole("button", { name: "Set offline" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Set live" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Set offline|Desativar/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /Set live|Ativar/i })).toBeTruthy();
   });
 
   it("works with a draft pending, without saving it first or overwriting its version", async () => {
@@ -377,9 +377,9 @@ describe("Set offline", () => {
     store.getState().setSave({ state: "dirty" });
     const pendingVersion = store.getState().save.version;
     // Wait for the relabel: until it lands, the first button still says "Set offline".
-    await screen.findByRole("button", { name: "Set live" });
+    await screen.findByRole("button", { name: /Set live|Ativar/i });
 
-    fireEvent.click(screen.getByRole("button", { name: "Set offline" }));
+    fireEvent.click(screen.getByRole("button", { name: /Set offline|Desativar/i }));
 
     await waitFor(() => expect(store.getState().flow?.status).toBe("offline"), SETTLE);
     expect(autosave.flush).not.toHaveBeenCalled();
@@ -393,12 +393,12 @@ describe("Set offline", () => {
     const store = makeStore({ ...liveDetail(), triggers: makeTriggers(1, { enabled: false }) });
 
     renderWith(store, <Toolbar autosave={null} />);
-    expect(screen.getByRole("button", { name: "Turn on triggers" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Set offline" }));
+    expect(screen.getByRole("button", { name: /Turn on triggers|Ativar gatilhos/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Set offline|Desativar/i }));
 
     await waitFor(() => expect(store.getState().flow?.status).toBe("offline"), SETTLE);
     expect(http.requests.some((request) => request.url.includes("/publish/"))).toBe(false);
-    expect(screen.queryByRole("button", { name: "Turn on triggers" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Turn on triggers|Ativar gatilhos/i })).toBeNull();
   });
 });
 
@@ -446,10 +446,10 @@ describe("the top bar", () => {
     });
 
     renderWith(makeStore(makeDetail(makeSampleGraph())), <Toolbar autosave={null} />);
-    expect(screen.queryByRole("dialog", { name: "Problems" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Set live" }));
+    expect(screen.queryByRole("dialog", { name: /Problems|Problemas/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Set live|Ativar/i }));
 
-    await waitFor(() => expect(screen.getByRole("dialog", { name: "Problems" })).toBeTruthy(), SETTLE);
+    await waitFor(() => expect(screen.getByRole("dialog", { name: /Problems|Problemas/i })).toBeTruthy(), SETTLE);
     expect(screen.getByText("This message is empty.")).toBeTruthy();
   });
 

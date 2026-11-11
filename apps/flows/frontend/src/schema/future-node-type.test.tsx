@@ -136,7 +136,7 @@ describe("a node type this bundle has never seen", () => {
     const item = await screen.findByRole("menuitem", { name: /escalate/i });
     expect(item).toBeInTheDocument();
     // GROUP_PHRASE's reader-facing word for the fallback group, not "Other".
-    expect(item.closest("div")?.querySelector("p")?.textContent).toBe("Also");
+    expect(item.closest("div")?.querySelector("p")?.textContent).toMatch(/Also|Outros/);
   });
 
   it("draws a card on the canvas", () => {

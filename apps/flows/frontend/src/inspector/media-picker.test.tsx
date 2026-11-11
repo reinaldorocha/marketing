@@ -72,7 +72,7 @@ describe("the picker", () => {
     http.route("/media/picker/", { body: { results: [asset("a1")], folders: [], next_cursor: null } });
     const store = openMessageWithImageBlock();
 
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
     fireEvent.click(await screen.findByRole("button", { name: /Asset a1/ }, SETTLE));
 
     const block = (store.getState().config["n1"] as { blocks: Record<string, unknown>[] }).blocks[0];
@@ -85,11 +85,11 @@ describe("the picker", () => {
     http.route("/media/picker/", { body: { results: [asset("a1")], folders: [], next_cursor: null } });
     const store = openMessageWithImageBlock();
 
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
     fireEvent.click(await screen.findByRole("button", { name: /Asset a1/ }, SETTLE));
-    fireEvent.click(screen.getByRole("button", { name: /remove the chosen library asset/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove the chosen library asset|remover o arquivo selecionado da biblioteca/i }));
 
-    fireEvent.change(screen.getByLabelText(/direct url/i), { target: { value: "https://example.com/a.png" } });
+    fireEvent.change(screen.getByLabelText(/direct url|url direta/i), { target: { value: "https://example.com/a.png" } });
 
     const block = (store.getState().config["n1"] as { blocks: Record<string, unknown>[] }).blocks[0];
     expect(block).toHaveProperty("url", "https://example.com/a.png");
@@ -100,7 +100,7 @@ describe("the picker", () => {
     http.route("/media/picker/", { body: { results: [], folders: [{ id: "f1", name: "Brand", parent_id: null }], next_cursor: null } });
     openMessageWithImageBlock();
 
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
     await waitFor(() => expect(pickerRequests().length).toBeGreaterThan(0), SETTLE);
 
     // The kind comes from the block's own type, so the list is pre-filtered.
@@ -121,7 +121,7 @@ describe("the picker", () => {
     );
     openMessageWithImageBlock();
 
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
     fireEvent.click(await screen.findByRole("button", { name: /load more/i }, SETTLE));
 
     expect(await screen.findByRole("button", { name: /Asset a2/ }, SETTLE)).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("the picker", () => {
     });
     openMessageWithImageBlock();
 
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
     const choice = await screen.findByRole("button", { name: /Asset a1/ }, SETTLE);
 
     expect(choice).not.toBeDisabled();
@@ -155,7 +155,7 @@ describe("the picker", () => {
     );
     openMessageWithImageBlock();
 
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
     fireEvent.change(await screen.findByLabelText("Folder", {}, SETTLE), { target: { value: "stale" } });
 
     // Not an error the user can act on — the folder simply no longer exists.
@@ -167,7 +167,7 @@ describe("the picker", () => {
     http.route("/media/picker/", { body: { results: [], folders: [], next_cursor: null } });
     openMessageWithImageBlock();
 
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
     await waitFor(() => expect(pickerRequests().length).toBeGreaterThan(0), SETTLE);
 
     expect(pickerRequests()[0]?.method).toBe("GET");
@@ -201,7 +201,7 @@ describe("overlapping picker requests", () => {
     }) as typeof fetch;
 
     openMessageWithImageBlock();
-    fireEvent.click(screen.getByRole("button", { name: /choose from the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose from the library|escolher da biblioteca/i }));
 
     fireEvent.change(screen.getByLabelText("Search the library"), { target: { value: "early" } });
     await waitFor(() => expect(release.length).toBeGreaterThan(0), SETTLE);

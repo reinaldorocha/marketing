@@ -1,7 +1,7 @@
 /** Toolbar labels keep publication and trigger reachability separate from saves. */
 import { describe, expect, it } from "vitest";
 
-import { publishView } from "./publishState";
+import { OFFLINE_HINT, publishView } from "./publishState";
 import type { SaveSlice } from "./store/store";
 
 const version = (n: number, published: boolean, published_at: string | null = published ? "2026-10-01" : null) => ({
@@ -25,7 +25,7 @@ describe("publishView", () => {
     expect(view.statusLabel).toBe("Ativo v2");
     expect(view.action).toBe("offline");
     expect(view.publishLabel).toBe("Desativar");
-    expect(view.publishHint).toBe("Stops this flow now, including conversations already in it.");
+    expect(view.publishHint).toBe(OFFLINE_HINT);
     expect(view.secondary).toBeNull();
   });
 
@@ -34,7 +34,7 @@ describe("publishView", () => {
 
     expect(view.statusLabel).toBe("Ativo v2 · Gatilhos desativados");
     expect(view.action).toBe("enable");
-    expect(view.publishLabel).toBe("Turn on triggers");
+    expect(view.publishLabel).toBe("Ativar gatilhos");
     // Still live for the API, sequences and other flows, so it still needs a way out.
     expect(view.secondary).toBe("offline");
   });
@@ -53,7 +53,7 @@ describe("publishView", () => {
     expect(view.action).toBe("publish");
     expect(view.publishLabel).toBe("Ativar");
     expect(view.publishHint).toBeNull();
-    expect(view.saveLabel).toBe("Unsaved changes");
+    expect(view.saveLabel).toMatch(/Unsaved changes|Alterações não salvas/);
     // The flow is still live while the edit waits, so it can still be switched off.
     expect(view.secondary).toBe("offline");
   });
@@ -78,7 +78,7 @@ describe("publishView", () => {
   it("says Archived even when a published version exists", () => {
     const view = publishView(published, "archived", 2, 1);
 
-    expect(view.statusLabel).toBe("Archived");
+    expect(view.statusLabel).toMatch(/Archived|Arquivado/);
     expect(view.action).toBe("publish");
   });
 

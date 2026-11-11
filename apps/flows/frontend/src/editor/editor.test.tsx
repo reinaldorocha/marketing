@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { AddStep } from "../canvas/AddStep";
 import { nodeSpec } from "../schema/artifact";
+import { nodeCopy } from "../schema/plain";
 import { Preview } from "../preview/Preview";
 import { makeDetail, makeSampleGraph, makeTriggers } from "../test/fixtures";
 import { makeStore, renderWith } from "../test/render";
@@ -115,7 +116,7 @@ describe("the step list", () => {
     // Read from the registry rather than typed out: the labels are copy now
     // ("Send a message", not "Send Message"), and a test that hard-codes one
     // fails on the next wording change without a bug behind it.
-    expect(titleOf("send_message", { blocks: [] })).toBe(nodeSpec("send_message")?.label);
+    expect(titleOf("send_message", { blocks: [] })).toBe(nodeCopy(nodeSpec("send_message"), "send_message").label);
   });
 });
 
@@ -155,9 +156,9 @@ describe("the seam between the list and the editor", () => {
     const { container } = selectStep();
     const body = container.querySelector(".fb-editor-body") as HTMLElement;
 
-    fireEvent.click(screen.getByRole("tab", { name: "Prévia" }));
+    fireEvent.click(screen.getByRole("tab", { name: /Prévia|Preview/i }));
     body.scrollTop = 400;
-    fireEvent.click(screen.getByRole("tab", { name: "Configurações" }));
+    fireEvent.click(screen.getByRole("tab", { name: /Configurações|Settings/i }));
 
     expect(body.scrollTop).toBe(0);
     expect(screen.getByText("Editing step 1")).toBeInTheDocument();
@@ -197,11 +198,12 @@ describe("a step's problems", () => {
 
 describe("adding a step", () => {
   it("offers the kinds grouped in the reader's words", () => {
-    renderWith(makeStore(oneStep()), <AddStep />);
+    const { container } = renderWith(makeStore(oneStep()), <AddStep />);
 
     fireEvent.click(screen.getByRole("button", { name: /add a step/i }));
 
-    expect(screen.getByText("Then send")).toBeInTheDocument();
+    const groups = Array.from(container.querySelectorAll(".fb-addstep-group")).map((el) => el.textContent?.trim());
+    expect(groups).toEqual(expect.arrayContaining(["Enviar", "Executar"]));
   });
 
   it("places the new step clear of the others and selects it", () => {

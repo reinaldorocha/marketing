@@ -201,7 +201,7 @@ describe("what the server answers", () => {
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
 
     expect(store.getState().save.state).toBe("error");
-    expect(store.getState().save.message).toContain("permission");
+    expect(store.getState().save.message).toMatch(/permission|permissão/i);
     autosave.stop();
   });
 
@@ -214,7 +214,7 @@ describe("what the server answers", () => {
     edit("a");
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
 
-    expect(store.getState().save.message).toContain("session expired");
+    expect(store.getState().save.message).toMatch(/session expired|sessão expirou/i);
     autosave.stop();
   });
 

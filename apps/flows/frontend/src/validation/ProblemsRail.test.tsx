@@ -67,7 +67,7 @@ describe("ProblemsRail", () => {
     window.addEventListener("toggle-triggers", opened);
     try {
       renderWith(store, <ProblemsRail />);
-      fireEvent.click(screen.getByRole("button", { name: /Open trigger settings/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Open trigger settings|Abrir configurações do gatilho/i }));
       expect(opened).toHaveBeenCalledOnce();
     } finally {
       window.removeEventListener("toggle-triggers", opened);

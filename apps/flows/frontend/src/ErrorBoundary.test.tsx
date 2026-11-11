@@ -26,7 +26,7 @@ describe("the error boundary", () => {
       </ErrorBoundary>,
     );
 
-    expect(screen.getByText(/stopped working/i)).toBeInTheDocument();
+    expect(screen.getByText(/stopped working|parou de funcionar/i)).toBeInTheDocument();
     expect(screen.getByText(/the canvas fell over/)).toBeInTheDocument();
   });
 

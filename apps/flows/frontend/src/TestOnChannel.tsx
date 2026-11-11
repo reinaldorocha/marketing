@@ -56,7 +56,7 @@ export function TestOnChannel() {
     <span className="fb-test-channel inline-flex items-center gap-2">
       <button
         type="button"
-        aria-label="Test this flow"
+        aria-label="Testar no canal"
         className="btn-link text-xs"
         disabled={state.kind === "loading"}
         onClick={() => void press()}
