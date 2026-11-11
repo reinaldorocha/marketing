@@ -47,7 +47,7 @@ export function TestOnChannel() {
       setState({
         kind: "error",
         message:
-          error instanceof ApiError ? error.message : "Não foi possível criar o link de teste. Tente novamente.",
+          error instanceof ApiError ? error.message : "The test link could not be created. Try again.",
       });
     }
   };
@@ -56,11 +56,12 @@ export function TestOnChannel() {
     <span className="fb-test-channel inline-flex items-center gap-2">
       <button
         type="button"
+        aria-label="Test this flow"
         className="btn-link text-xs"
         disabled={state.kind === "loading"}
         onClick={() => void press()}
       >
-        {state.kind === "loading" ? "Preparando…" : "Testar este fluxo"}
+        {state.kind === "loading" ? "Preparando…" : "Testar no canal"}
       </button>
 
       {state.kind === "ready" ? (
@@ -73,7 +74,7 @@ export function TestOnChannel() {
           // window.opener.
           rel="noopener noreferrer"
         >
-          Abrir {state.link.account} no {state.link.platform_label} →
+          Open {state.link.account} on {state.link.platform_label} →
         </a>
       ) : null}
 
@@ -94,7 +95,7 @@ export function TestOnChannel() {
           {state.settingsUrl ? (
             <>
               {" "}
-              <a href={state.settingsUrl}>Conectar um canal</a>
+              <a href={state.settingsUrl}>Connect one</a>
             </>
           ) : null}
         </span>

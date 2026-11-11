@@ -14,7 +14,7 @@ import {
 } from "@xyflow/react";
 import { memo, useEffect, useMemo } from "react";
 
-import { nodeCopy, plainKind } from "../schema/plain";
+import { plainKind } from "../schema/plain";
 import { groupOf, nodeSpec } from "../schema/artifact";
 import { handleLabel, sourceHandles } from "../schema/handles";
 import { chipValues } from "../stats/chip";
@@ -123,10 +123,10 @@ function FlowNodeCardInner({
           </span>
         ) : null}
         {isEntry && !isNote ? (
-          <span className="fb-entry-flag ml-auto">Início</span>
+          <span className="fb-entry-flag ml-auto">Inicia aqui</span>
         ) : null}
       </div>
-      <div className="fb-node-title truncate">{nodeCopy(spec, type).label}</div>
+      <div className="fb-node-title truncate">{spec?.label ?? type}</div>
 
       <div className="fb-node-body">
         <NodePreview type={type} config={config} picklists={picklists} />
@@ -136,7 +136,7 @@ function FlowNodeCardInner({
         <div className="fb-node-footer">
           {severity ? (
             <span className={`fb-badge fb-badge-${severity}`}>
-              {issues?.length} {severity === "error" ? "erro" : "aviso"}
+              {issues?.length} {severity === "error" ? "error" : "warning"}
               {(issues?.length ?? 0) === 1 ? "" : "s"}
             </span>
           ) : null}
@@ -151,15 +151,15 @@ function FlowNodeCardInner({
               {chip.failed > 0 ? (
                 <span
                   className="fb-badge fb-badge-error"
-                  title="Envios que falharam"
+                  title="Envios com falha"
                 >
-                  {chip.failed} falhou
+                  {chip.failed} com falha
                 </span>
               ) : null}
-              <span className="fb-pill" title="Sent · delivered · clicked">
+              <span className="fb-pill" title="Enviado · entregue · clicado">
                 {chip.sent} · {chip.delivered} · {chip.clicked}
                 {chip.ctr === null ? null : (
-                  <span className="fb-pill-rate" title="Cliques por envio">
+                  <span className="fb-pill-rate" title="Clicks per send">
                     {" "}
                     {chip.ctr}%
                   </span>
@@ -167,7 +167,7 @@ function FlowNodeCardInner({
               </span>
             </>
           ) : stats && !stats.available && !isNote ? (
-            <span className="fb-pill">Sem dados</span>
+            <span className="fb-pill">No stats</span>
           ) : null}
         </div>
       ) : null}

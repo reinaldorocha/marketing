@@ -10,7 +10,7 @@ summary and (for ref triggers) its per-connection links.
             </span>
             <span class="text-xs" style="color: var(--text-tertiary);">#{{ row.trigger.priority }}</span>
             {% if not row.trigger.enabled %}
-            <span class="status-pill status-pill-disabled">Paused</span>
+            <span class="status-pill status-pill-disabled">Pausado</span>
             {% endif %}
         </div>
 
@@ -43,31 +43,20 @@ summary and (for ref triggers) its per-connection links.
     </div>
 
     {% if can_edit %}
-    {% comment %}
-      Compact on purpose: the drawer is w-96, which leaves a row about 326px
-      once its paddings are gone. Full-size .btn-outline buttons came to about
-      350px and pushed Delete past the card. Same pieces as the inbox rule rows
-      (inbox/_rule_rows.html): round icon buttons to reorder, small pills for
-      the words.
-
-      Always on a line of its own (w-full). Once the controls fitted beside the
-      text, the text column — min-w-0 so long summaries can truncate — gave up
-      its width to them and wrapped one word per line.
-    {% endcomment %}
     <div class="flex w-full flex-wrap items-center gap-1.5">
-        <label class="switch" title="{% if row.trigger.enabled %}Pause{% else %}Enable{% endif %} this trigger">
+        <label class="switch" title="{% if row.trigger.enabled %}Pausar{% else %}Ativar{% endif %} este gatilho">
             <input type="checkbox" role="switch" {% if row.trigger.enabled %}checked{% endif %}
-                   aria-label="Trigger enabled"
+                   aria-label="Gatilho ativado"
                    hx-post="{% url 'flows:trigger_toggle' workspace_id=request.workspace.id flow_id=flow.id trigger_id=row.trigger.id %}"
                    hx-swap="none">
             <span class="switch-track"></span>
         </label>
-        <button type="button" class="btn-icon-round" title="Run this trigger earlier"
+        <button type="button" class="btn-icon-round" title="Aumentar prioridade (executar antes)"
                 hx-post="{% url 'flows:trigger_move' workspace_id=request.workspace.id flow_id=flow.id trigger_id=row.trigger.id %}"
-                hx-vals='{"direction": "up"}' hx-swap="none" aria-label="Move up">↑</button>
-        <button type="button" class="btn-icon-round" title="Run this trigger later"
+                hx-vals='{"direction": "up"}' hx-swap="none" aria-label="Mover para cima">↑</button>
+        <button type="button" class="btn-icon-round" title="Diminuir prioridade (executar depois)"
                 hx-post="{% url 'flows:trigger_move' workspace_id=request.workspace.id flow_id=flow.id trigger_id=row.trigger.id %}"
-                hx-vals='{"direction": "down"}' hx-swap="none" aria-label="Move down">↓</button>
+                hx-vals='{"direction": "down"}' hx-swap="none" aria-label="Mover para baixo">↓</button>
         <button type="button" class="btn-pill-secondary btn-pill-sm"
                 hx-get="{% url 'flows:trigger_form' workspace_id=request.workspace.id flow_id=flow.id %}?trigger={{ row.trigger.id }}"
                 hx-target="#trigger-form" hx-swap="innerHTML">Editar</button>

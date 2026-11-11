@@ -42,19 +42,19 @@ export function Preview() {
   const config = useBuilder((state) => (nodeId ? state.config[nodeId] : undefined));
 
   return (
-    <section className="fb-preview" aria-label="Prévia">
-      <p className="fb-section-label">Prévia</p>
+    <section className="fb-preview" aria-label="Preview">
+      <p className="fb-section-label">Pré-visualização</p>
       <div className="fb-phone">
         <div className="fb-phone-screen">
           {nodeId && nodeType ? (
             <Bubbles type={nodeType} config={config} />
           ) : (
-            <p className="fb-phone-empty">Selecione uma etapa para vê-la como o contato verá.</p>
+            <p className="fb-phone-empty">Selecione uma etapa para visualizar como o contato a verá.</p>
           )}
         </div>
       </div>
       <p className="fb-preview-note">
-        Variáveis como <code>{"{{ first_name }}"}</code> são preenchidas quando a mensagem é enviada.
+        Variáveis como <code>{"{{ first_name }}"}</code> serão preenchidas automaticamente no momento do envio.
       </p>
     </section>
   );
@@ -71,7 +71,7 @@ function Bubbles({ type, config }: { type: string; config: unknown }) {
       return <Bubble text={prompt} />;
     }
     const label = nodeSpec(type)?.label ?? type;
-    return <p className="fb-phone-empty">{label} não envia uma mensagem, então não há nada para mostrar.</p>;
+    return <p className="fb-phone-empty">{label} não envia mensagens (does not send anything), portanto não há pré-visualização.</p>;
   }
 
   return (
@@ -98,7 +98,7 @@ function Bubble({ text: body, buttons = [] }: { text: string; buttons?: string[]
   return (
     <div className="fb-phone-turn">
       <div className="fb-phone-bubble">
-        {body || <span className="fb-phone-placeholder">Nenhuma mensagem ainda</span>}
+        {body || <span className="fb-phone-placeholder">Nenhuma mensagem definida</span>}
       </div>
       {buttons.length > 0 ? (
         <div className="fb-phone-buttons">

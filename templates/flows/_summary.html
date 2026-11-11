@@ -16,7 +16,7 @@
             @click="filters.status = (filters.status.length === 1 && filters.status[0] === '{{ card.status }}') ? [] : ['{{ card.status }}']; reload()">
         <span class="dot dot-{{ card.tone }}" aria-hidden="true"></span>
         <span class="summary-card-value">{{ card.count }}</span>
-        <span class="summary-card-label">{{ card.label }}</span>
+        <span class="summary-card-label">{% if card.label == "Live" %}Ativos{% elif card.label == "Offline" %}Desativados{% elif card.label == "Draft" %}Rascunhos{% elif card.label == "Archived" %}Arquivados{% else %}{{ card.label }}{% endif %}</span>
     </button>
     {% endfor %}
 </div>

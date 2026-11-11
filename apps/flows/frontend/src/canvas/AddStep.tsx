@@ -87,6 +87,7 @@ export function AddStep() {
       <button
         type="button"
         className="fb-addstep-button"
+        aria-label="Add a step"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}

@@ -1,3 +1,4 @@
+import { useBuilder } from "../store/context";
 /**
  * The compact summary on each node card.
  *
@@ -56,6 +57,12 @@ function SendMessagePreview({ config }: PreviewProps) {
   const text = blocks.find((block) => block["type"] === "text");
   const recipientType = isRecord(config) && typeof config["recipient_type"] === "string" ? config["recipient_type"] : "contact";
 
+  const flow = useBuilder((state) => state.flow);
+  const triggers = useBuilder((state) => state.triggers);
+  const channel = flow?.channel_platform?.toLowerCase() || "";
+  const isInstagram = channel === "instagram" || (!channel && triggers.some((t) => t.connection?.platform === "instagram" || t.platforms.includes("instagram")));
+  const isWhatsapp = channel === "whatsapp" || channel.includes("whatsapp") || (!channel && !isInstagram);
+
   let mainPreview: ReactNode = null;
   if (text && typeof text["text"] === "string") {
     mainPreview = <p>{truncate(text["text"])}</p>;
@@ -80,7 +87,7 @@ function SendMessagePreview({ config }: PreviewProps) {
       );
     }
   } else {
-    mainPreview = <Empty>Nada para enviar ainda</Empty>;
+    mainPreview = <Empty>Nothing to send yet</Empty>;
   }
 
   const listRows: string[] = [];
@@ -101,14 +108,26 @@ function SendMessagePreview({ config }: PreviewProps) {
   return (
     <>
       {recipientType === "group" ? (
-        <span className="text-[10px] uppercase font-semibold tracking-wider text-emerald-600 block mb-1">
-          👥 Grupo WhatsApp
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 px-2 py-0.5 rounded mb-1.5 border border-emerald-200 dark:border-emerald-800/50">
+          👥 WhatsApp • Grupo
         </span>
       ) : recipientType === "custom" ? (
-        <span className="text-[10px] uppercase font-semibold tracking-wider text-blue-600 block mb-1">
-          📞 Telefone específico
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 dark:bg-blue-950/50 dark:text-blue-300 px-2 py-0.5 rounded mb-1.5 border border-blue-200 dark:border-blue-800/50">
+          📞 WhatsApp • Telefone específico
         </span>
-      ) : null}
+      ) : isInstagram ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-fuchsia-700 bg-fuchsia-50 dark:bg-fuchsia-950/50 dark:text-fuchsia-300 px-2 py-0.5 rounded mb-1.5 border border-fuchsia-200 dark:border-fuchsia-800/50">
+          🟣 Instagram • Seguidor no Direct
+        </span>
+      ) : isWhatsapp ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 px-2 py-0.5 rounded mb-1.5 border border-emerald-200 dark:border-emerald-800/50">
+          🟢 WhatsApp • Contato da conversa
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-50 dark:bg-slate-900 dark:text-slate-300 px-2 py-0.5 rounded mb-1.5 border border-slate-200 dark:border-slate-800">
+          💬 Contato da conversa
+        </span>
+      )}
       {mainPreview}
       <Pills items={list(isRecord(config) ? config["buttons"] : undefined).map((b) => String(b["label"] ?? ""))} />
       <Pills
@@ -142,9 +161,9 @@ export function operatorCopy(op: unknown): string {
 
 function ConditionPreview({ config }: PreviewProps) {
   const rules = list(isRecord(config) ? config["rules"] : undefined);
-  const match = isRecord(config) && config["match"] === "any" ? "Qualquer regra" : "Todas as regras";
+  const match = isRecord(config) && config["match"] === "any" ? "Any of" : "All of";
   if (rules.length === 0) {
-    return <Empty>Nada para verificar ainda</Empty>;
+    return <Empty>Nothing to check yet</Empty>;
   }
   return (
     <>
@@ -166,7 +185,7 @@ function RandomizerPreview({ config }: PreviewProps) {
   const paths = list(isRecord(config) ? config["paths"] : undefined);
   const total = paths.reduce((sum, path) => sum + (typeof path["weight"] === "number" ? path["weight"] : 0), 0);
   if (paths.length === 0) {
-    return <Empty>Nenhum caminho definido ainda</Empty>;
+    return <Empty>No paths to split down yet</Empty>;
   }
   return (
     <>
@@ -188,22 +207,22 @@ function RandomizerPreview({ config }: PreviewProps) {
 }
 
 const VERB_COPY: Record<string, string> = {
-  add_tag: "Adicionar etiqueta",
-  remove_tag: "Remover etiqueta",
+  add_tag: "Adicionar tag",
+  remove_tag: "Remover tag",
   set_field: "Definir campo",
   clear_field: "Limpar campo",
-  subscribe_sequence: "Inscrever",
-  unsubscribe_sequence: "Remover inscrição",
+  subscribe_sequence: "Inscrever na sequência",
+  unsubscribe_sequence: "Cancelar inscrição",
   open_conversation: "Abrir conversa",
   close_conversation: "Fechar conversa",
-  assign_conversation: "Atribuir",
-  notify_members: "Notificar",
+  assign_conversation: "Atribuir a",
+  notify_members: "Notificar membros",
 };
 
 function ActionPreview({ config }: PreviewProps) {
   const actions = list(isRecord(config) ? config["actions"] : undefined);
   if (actions.length === 0) {
-    return <Empty>Nenhuma ação definida ainda</Empty>;
+    return <Empty>Nothing to do yet</Empty>;
   }
   return (
     <Pills
@@ -218,11 +237,11 @@ function ActionPreview({ config }: PreviewProps) {
 
 function SmartDelayPreview({ config }: PreviewProps) {
   if (!isRecord(config)) {
-    return <Empty>Nada definido ainda</Empty>;
+    return <Empty>Nothing set yet</Empty>;
   }
   if (config["mode"] === "date" && isRecord(config["date"])) {
     const date = config["date"];
-    return <p>Aguardar até {String(date["field"] ?? date["datetime"] ?? "uma data")}</p>;
+    return <p>Wait until {String(date["field"] ?? date["datetime"] ?? "a date")}</p>;
   }
   if (isRecord(config["duration"])) {
     const duration = config["duration"];
@@ -232,17 +251,17 @@ function SmartDelayPreview({ config }: PreviewProps) {
       const unit = String(duration["unit"] ?? "seconds");
       return (
         <p>
-          Aguardar de {String(minVal)} a {String(maxVal)} {unit}
+          Wait {String(minVal)} to {String(maxVal)} {unit}
         </p>
       );
     }
     return (
       <p>
-        Aguardar {String(duration["value"] ?? "?")} {String(duration["unit"] ?? "")}
+        Wait {String(duration["value"] ?? "?")} {String(duration["unit"] ?? "")}
       </p>
     );
   }
-  return <Empty>Nada definido ainda</Empty>;
+  return <Empty>Nothing set yet</Empty>;
 }
 
 function DataCollectionPreview({ config }: PreviewProps) {
@@ -282,15 +301,15 @@ function StartFlowPreview({ config, picklists }: PreviewProps) {
   const id = isRecord(config) ? String(config["flow_id"] ?? "") : "";
   const target = picklists.flows.find((flow) => flow.id === id);
   if (!id) {
-    return <Empty>Nenhum fluxo selecionado ainda</Empty>;
+    return <Empty>No flow picked yet</Empty>;
   }
-  return target ? <p>{target.label}</p> : <Empty>Fluxo desconhecido ({truncate(id, 20)})</Empty>;
+  return target ? <p>{target.label}</p> : <Empty>Unknown flow ({truncate(id, 20)})</Empty>;
 }
 
 function TextFieldPreview(key: string) {
   return function Preview({ config }: PreviewProps) {
     const value = isRecord(config) ? config[key] : undefined;
-    return typeof value === "string" && value ? <p>{truncate(value)}</p> : <Empty>Vazio</Empty>;
+    return typeof value === "string" && value ? <p>{truncate(value)}</p> : <Empty>Empty</Empty>;
   };
 }
 
@@ -319,7 +338,7 @@ export function DefaultPreview({ config, type }: PreviewProps & { type: string }
     .slice(0, 3)
     .map((key) => `${key}: ${String(config[key] ?? "")}`);
 
-  return shown.length > 0 ? <Pills items={shown} /> : <Empty>Pronto</Empty>;
+  return shown.length > 0 ? <Pills items={shown} /> : <Empty>Ready</Empty>;
 }
 
 const PREVIEWS: Record<string, (props: PreviewProps) => ReactNode> = {

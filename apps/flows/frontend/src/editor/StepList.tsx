@@ -45,8 +45,8 @@ export function StepList() {
                 <span className="fb-steplist-title block truncate">{titleOf(type, config[id])}</span>
               </span>
               {broken ? (
-                <span className="fb-step-flag" title="This step needs something before the flow can go live">
-                  Needs a fix
+                <span className="fb-step-flag" title="Esta etapa precisa de correção antes de publicar o fluxo">
+                  Precisa de correção
                 </span>
               ) : null}
             </button>

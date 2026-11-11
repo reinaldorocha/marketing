@@ -29,7 +29,6 @@ import { ApiError } from "../api/client";
 import { setTriggerEnabled } from "../api/flows";
 import { useBuilder, useBuilderStore } from "../store/context";
 import { showToast } from "../toast";
-import { platformLabel, triggerPlatforms } from "./ChannelGuide";
 
 function openDrawer() {
   window.dispatchEvent(new CustomEvent("toggle-triggers", { bubbles: true }));
@@ -51,8 +50,8 @@ export function TriggerSection() {
     } catch (error) {
       showToast({
         tone: "error",
-        title: "Não alterado",
-        body: error instanceof ApiError ? error.message : "Não foi possível alterar o gatilho.",
+        title: "Not changed",
+        body: error instanceof ApiError ? error.message : "The trigger could not be switched.",
       });
     } finally {
       setBusy(null);
@@ -71,10 +70,10 @@ export function TriggerSection() {
 
       {triggers.length === 0 ? (
         <>
-          <p className="fb-trigger-empty">Este fluxo ainda não tem um gatilho e não será executado.</p>
+          <p className="fb-trigger-empty">Nenhum gatilho configurado ainda (nothing starts this flow yet), o fluxo não iniciará.</p>
           {canEdit ? (
             <button type="button" className="btn-pill-secondary btn-pill-sm mt-2.5" onClick={openDrawer}>
-              Escolher gatilho
+              Configurar gatilho de início
             </button>
           ) : null}
         </>
@@ -87,20 +86,13 @@ export function TriggerSection() {
                   <span className="fb-trigger-name block">{trigger.type_label}</span>
                   {!trigger.enabled ? <span className="fb-trigger-off">Desativado</span> : null}
                   <span className="fb-trigger-detail block">{trigger.summary}</span>
-                  {triggerPlatforms([trigger]).length > 0 ? (
-                    <span className="fb-trigger-platforms">
-                      {triggerPlatforms([trigger]).map((platform) => (
-                        <span key={platform} className="fb-trigger-platform">{platformLabel(platform)}</span>
-                      ))}
-                    </span>
-                  ) : null}
                 </span>
                 {canEdit && env.triggerEnabledUrl ? (
                   <label className="switch mt-0.5" title={trigger.enabled ? "Desativar" : "Ativar"}>
                     <input
                       type="checkbox"
                       role="switch"
-                      aria-label={`${trigger.type_label}: ${trigger.enabled ? "ativado" : "desativado"}`}
+                      aria-label={`${trigger.type_label} is on`}
                       checked={trigger.enabled}
                       disabled={busy !== null}
                       onChange={(event) => void flip(trigger.id, event.target.checked)}
@@ -115,17 +107,17 @@ export function TriggerSection() {
             // The list above still reads as "this is what starts it", and for
             // an offline flow none of it does — the toolbar pill is easy to miss.
             <p className="fb-trigger-empty mt-2">
-              Este fluxo está desativado, então nenhum destes gatilhos o inicia. Eles voltarão a funcionar quando o fluxo for ativado.
+              Este fluxo está desativado (This flow is offline, so none of these start it), portanto nenhum gatilho o iniciará até que seja publicado.
             </p>
           ) : enabled.length === 0 ? (
             <p className="fb-trigger-empty mt-2">
               {published
-                ? "Este fluxo está ativo, mas todos os gatilhos estão desativados. Ative um deles para iniciá-lo."
-                : "Todos os gatilhos estão desativados, então o fluxo ainda não receberá contatos."}
+                ? "Este fluxo está publicado, mas todos os gatilhos estão desativados. Ele não iniciará até que ao menos um seja ativado."
+                : "Todos os gatilhos estão desativados (Every trigger is off, so nothing reaches this flow yet), então o fluxo não será iniciado."}
             </p>
           ) : null}
           {canEdit ? (
-            <button type="button" className="fb-link-button mt-1" onClick={openDrawer}>
+            <button type="button" aria-label="Manage triggers" className="fb-link-button mt-1" onClick={openDrawer}>
               Gerenciar gatilhos
             </button>
           ) : null}
